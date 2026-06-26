@@ -16,6 +16,7 @@ import { Route as CobranzaRouteImport } from './routes/cobranza'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ClientesIndexRouteImport } from './routes/clientes.index'
 import { Route as ClientesNuevoRouteImport } from './routes/clientes.nuevo'
+import { Route as ClientesClienteIdRouteImport } from './routes/clientes.$clienteId'
 
 const RutasRoute = RutasRouteImport.update({
   id: '/rutas',
@@ -52,6 +53,11 @@ const ClientesNuevoRoute = ClientesNuevoRouteImport.update({
   path: '/clientes/nuevo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClientesClienteIdRoute = ClientesClienteIdRouteImport.update({
+  id: '/clientes/$clienteId',
+  path: '/clientes/$clienteId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
   '/rutas': typeof RutasRoute
+  '/clientes/$clienteId': typeof ClientesClienteIdRoute
   '/clientes/nuevo': typeof ClientesNuevoRoute
   '/clientes/': typeof ClientesIndexRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
   '/rutas': typeof RutasRoute
+  '/clientes/$clienteId': typeof ClientesClienteIdRoute
   '/clientes/nuevo': typeof ClientesNuevoRoute
   '/clientes': typeof ClientesIndexRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
   '/rutas': typeof RutasRoute
+  '/clientes/$clienteId': typeof ClientesClienteIdRoute
   '/clientes/nuevo': typeof ClientesNuevoRoute
   '/clientes/': typeof ClientesIndexRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/configuracion'
     | '/creditos'
     | '/rutas'
+    | '/clientes/$clienteId'
     | '/clientes/nuevo'
     | '/clientes/'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/configuracion'
     | '/creditos'
     | '/rutas'
+    | '/clientes/$clienteId'
     | '/clientes/nuevo'
     | '/clientes'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/configuracion'
     | '/creditos'
     | '/rutas'
+    | '/clientes/$clienteId'
     | '/clientes/nuevo'
     | '/clientes/'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   ConfiguracionRoute: typeof ConfiguracionRoute
   CreditosRoute: typeof CreditosRoute
   RutasRoute: typeof RutasRoute
+  ClientesClienteIdRoute: typeof ClientesClienteIdRoute
   ClientesNuevoRoute: typeof ClientesNuevoRoute
   ClientesIndexRoute: typeof ClientesIndexRoute
 }
@@ -172,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClientesNuevoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/clientes/$clienteId': {
+      id: '/clientes/$clienteId'
+      path: '/clientes/$clienteId'
+      fullPath: '/clientes/$clienteId'
+      preLoaderRoute: typeof ClientesClienteIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -181,9 +201,20 @@ const rootRouteChildren: RootRouteChildren = {
   ConfiguracionRoute: ConfiguracionRoute,
   CreditosRoute: CreditosRoute,
   RutasRoute: RutasRoute,
+  ClientesClienteIdRoute: ClientesClienteIdRoute,
   ClientesNuevoRoute: ClientesNuevoRoute,
   ClientesIndexRoute: ClientesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

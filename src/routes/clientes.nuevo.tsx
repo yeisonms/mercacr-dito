@@ -1,14 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, Save, User, MapPin, FileImage } from "lucide-react";
+import {
+  CheckCircle2,
+  FileImage,
+  Loader2,
+  MapPin,
+  Save,
+  Upload,
+  User,
+  X,
+} from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Card,
   CardContent,
@@ -23,7 +33,6 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from "@/components/ui/form";
 import {
   Select,
@@ -32,32 +41,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  crearCliente,
-  listarRutas,
-  type Ruta,
-} from "@/services/cliente.service";
+import { Badge } from "@/components/ui/badge";
 
-export const Route = createFileRoute("/clientes/nuevo")({
-  head: () => ({
-    meta: [
-      { title: "Nuevo Cliente — Mercacrédito" },
-      {
-        name: "description",
-        content:
-          "Formulario de registro de nuevos clientes en el ERP Mercacrédito.",
-      },
-    ],
-  }),
-  component: NuevoClientePage,
-});
+import { crearCliente, listarRutas, type Ruta } from "@/services/cliente.service";
+import { subirDocumentosCliente, type TipoDocumento } from "@/services/storage.service";
+
+// ─── Constantes ──────────────────────────────────────────────────────────────
+
+const ARCHIVOS_MAX_MB = 5;
+const ARCHIVOS_MAX_BYTES = ARCHIVOS_MAX_MB * 1024 * 1024;
+
+// ─── Schema Zod ──────────────────────────────────────────────────────────────
 
 const soloDigitos = (msg: string) =>
-  z
-    .string()
-    .trim()
-    .min(1, { message: msg })
-    .regex(/^\d+$/, { message: "Solo se permiten números" });
+  z.string().trim().min(1, { message: msg }).regex(/^\d+$/, {
+    message: "Solo se permiten números",
+  });
 
 const formSchema = z.object({
   // Datos personales
@@ -74,9 +73,10 @@ const formSchema = z.object({
   cedula: soloDigitos("La cédula es requerida").max(15, {
     message: "Máximo 15 dígitos",
   }),
-  telefono_principal: soloDigitos("El teléfono principal es requerido").max(15, {
-    message: "Máximo 15 dígitos",
-  }),
+  telefono_principal: soloDigitos("El teléfono principal es requerido").max(
+    15,
+    { message: "Máximo 15 dígitos" },
+  ),
   telefono_alterno: z
     .string()
     .trim()
@@ -91,8 +91,16 @@ const formSchema = z.object({
     .trim()
     .min(3, { message: "La dirección es requerida" })
     .max(150),
-  barrio: z.string().trim().min(2, { message: "El barrio es requerido" }).max(80),
-  ciudad: z.string().trim().min(2, { message: "La ciudad es requerida" }).max(80),
+  barrio: z
+    .string()
+    .trim()
+    .min(2, { message: "El barrio es requerido" })
+    .max(80),
+  ciudad: z
+    .string()
+    .trim()
+    .min(2, { message: "La ciudad es requerida" })
+    .max(80),
   lugar_trabajo: z.string().trim().max(120).optional().or(z.literal("")),
   telefono_trabajo: z
     .string()
@@ -106,7 +114,7 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-const valoresIniciales: FormValues = {
+const VALORES_INICIALES: FormValues = {
   nombres: "",
   apellidos: "",
   cedula: "",
@@ -120,47 +128,175 @@ const valoresIniciales: FormValues = {
   ruta_id: "",
 };
 
+// ─── Estado de subida ─────────────────────────────────────────────────────────
+
+type FaseEnvio =
+  | "idle"
+  | "subiendo_documentos"
+  | "guardando_cliente"
+  | "completado";
+
+const ETIQUETAS_FASE: Record<FaseEnvio, string> = {
+  idle: "Guardar cliente",
+  subiendo_documentos: "Subiendo documentos…",
+  guardando_cliente: "Guardando cliente…",
+  completado: "¡Guardado!",
+};
+
+// ─── Componente principal ─────────────────────────────────────────────────────
+
+export const Route = createFileRoute("/clientes/nuevo")({
+  head: () => ({
+    meta: [
+      { title: "Nuevo Cliente — Mercacrédito" },
+      {
+        name: "description",
+        content:
+          "Formulario de registro de nuevos clientes en el ERP Mercacrédito.",
+      },
+    ],
+  }),
+  component: NuevoClientePage,
+});
+
 function NuevoClientePage() {
   const navigate = useNavigate();
+
   const [rutas, setRutas] = useState<Ruta[]>([]);
-  const [enviando, setEnviando] = useState(false);
-  const [archivos, setArchivos] = useState<{
-    foto: File | null;
-    cedulaFrente: File | null;
-    cedulaRespaldo: File | null;
-  }>({ foto: null, cedulaFrente: null, cedulaRespaldo: null });
+  const [cargandoRutas, setCargandoRutas] = useState(true);
+  const [fase, setFase] = useState<FaseEnvio>("idle");
+  const [progresoSubida, setProgresoSubida] = useState(0); // 0-100
+
+  /** Archivos seleccionados por el usuario */
+  const [archivos, setArchivos] = useState<
+    Record<TipoDocumento, File | null>
+  >({
+    foto: null,
+    cedula_frente: null,
+    cedula_respaldo: null,
+  });
+
+  const enviando = fase !== "idle";
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: valoresIniciales,
+    defaultValues: VALORES_INICIALES,
   });
 
+  // Cargar rutas al montar
   useEffect(() => {
-    listarRutas().then(setRutas).catch(() => setRutas([]));
+    setCargandoRutas(true);
+    listarRutas()
+      .then(setRutas)
+      .catch(() => {
+        toast.error("No se pudieron cargar las rutas");
+        setRutas([]);
+      })
+      .finally(() => setCargandoRutas(false));
   }, []);
 
+  // ── Lógica de submit ────────────────────────────────────────────────────────
   const onSubmit = async (values: FormValues) => {
-    setEnviando(true);
+    setFase("subiendo_documentos");
+    setProgresoSubida(0);
+
+    // Detectar cuántos archivos hay que subir para calcular progreso
+    const archivosASubir = Object.values(archivos).filter(Boolean);
+    const totalArchivos = archivosASubir.length;
+    let subidosCount = 0;
+
+    let urlsDocumentos: Partial<Record<TipoDocumento, string>> = {};
+
+    // ── PASO 1: Subir documentos al Storage ──────────────────────────────────
+    if (totalArchivos > 0) {
+      try {
+        // Subir cada archivo secuencialmente para poder actualizar el progreso
+        for (const [tipo, file] of Object.entries(archivos) as [
+          TipoDocumento,
+          File | null,
+        ][]) {
+          if (!file) continue;
+
+          // Validar tamaño antes de subir
+          if (file.size > ARCHIVOS_MAX_BYTES) {
+            throw new Error(
+              `El archivo "${file.name}" supera el límite de ${ARCHIVOS_MAX_MB} MB`,
+            );
+          }
+
+          const resultado = await subirDocumentosCliente(values.cedula, {
+            [tipo]: file,
+          });
+          urlsDocumentos = { ...urlsDocumentos, ...resultado };
+
+          subidosCount++;
+          setProgresoSubida(Math.round((subidosCount / totalArchivos) * 80));
+        }
+      } catch (error) {
+        const msg =
+          error instanceof Error
+            ? error.message
+            : "Error desconocido al subir archivos";
+        toast.error("Fallo al subir documentos", {
+          description: msg,
+          duration: 6000,
+        });
+        setFase("idle");
+        setProgresoSubida(0);
+        return; // ← Detener: NO insertar en BD
+      }
+    }
+
+    // ── PASO 2: Insertar en la base de datos ─────────────────────────────────
+    setFase("guardando_cliente");
+    setProgresoSubida(90);
+
     try {
       await crearCliente({
         ...values,
         telefono_alterno: values.telefono_alterno || null,
         lugar_trabajo: values.lugar_trabajo || null,
         telefono_trabajo: values.telefono_trabajo || null,
+        foto_cliente_url: urlsDocumentos.foto ?? null,
+        foto_cedula_frente_url: urlsDocumentos.cedula_frente ?? null,
+        foto_cedula_respaldo_url: urlsDocumentos.cedula_respaldo ?? null,
       });
-      toast.success("Cliente registrado correctamente");
-      form.reset(valoresIniciales);
-      setArchivos({ foto: null, cedulaFrente: null, cedulaRespaldo: null });
-      navigate({ to: "/clientes" });
+
+      setFase("completado");
+      setProgresoSubida(100);
+
+      toast.success("✅ Cliente registrado correctamente", {
+        description: `${values.nombres} ${values.apellidos} fue agregado a la ruta.`,
+        duration: 4000,
+      });
+
+      // Reset y navegar después de un breve delay
+      setTimeout(() => {
+        form.reset(VALORES_INICIALES);
+        setArchivos({ foto: null, cedula_frente: null, cedula_respaldo: null });
+        setFase("idle");
+        setProgresoSubida(0);
+        navigate({ to: "/clientes" });
+      }, 800);
     } catch (error) {
       const msg =
         error instanceof Error ? error.message : "Error al guardar el cliente";
-      toast.error("No se pudo registrar el cliente", { description: msg });
-    } finally {
-      setEnviando(false);
+      toast.error("No se pudo registrar el cliente", {
+        description: msg,
+        duration: 6000,
+      });
+      setFase("idle");
+      setProgresoSubida(0);
     }
   };
 
+  const resetForm = () => {
+    form.reset(VALORES_INICIALES);
+    setArchivos({ foto: null, cedula_frente: null, cedula_respaldo: null });
+    setFase("idle");
+  };
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <AppShell
       title="Nuevo Cliente"
@@ -171,7 +307,27 @@ function NuevoClientePage() {
           onSubmit={form.handleSubmit(onSubmit)}
           className="mx-auto max-w-4xl space-y-6"
         >
-          {/* ============== 1. DATOS PERSONALES ============== */}
+          {/* ── Barra de progreso de subida ── */}
+          {enviando && (
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="pt-5 pb-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+                  <p className="text-sm font-medium text-primary">
+                    {fase === "subiendo_documentos"
+                      ? "Subiendo documentos al servidor…"
+                      : "Guardando cliente en la base de datos…"}
+                  </p>
+                </div>
+                <Progress value={progresoSubida} className="h-2" />
+                <p className="mt-1 text-xs text-muted-foreground text-right">
+                  {progresoSubida}%
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── 1. DATOS PERSONALES ── */}
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -194,7 +350,11 @@ function NuevoClientePage() {
                   <FormItem>
                     <FormLabel>Nombres *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Juan Carlos" {...field} />
+                      <Input
+                        placeholder="Juan Carlos"
+                        disabled={enviando}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -207,7 +367,11 @@ function NuevoClientePage() {
                   <FormItem>
                     <FormLabel>Apellidos *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Pérez Gómez" {...field} />
+                      <Input
+                        placeholder="Pérez Gómez"
+                        disabled={enviando}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -223,6 +387,7 @@ function NuevoClientePage() {
                       <Input
                         inputMode="numeric"
                         placeholder="1023456789"
+                        disabled={enviando}
                         {...field}
                       />
                     </FormControl>
@@ -240,6 +405,7 @@ function NuevoClientePage() {
                       <Input
                         inputMode="tel"
                         placeholder="3001234567"
+                        disabled={enviando}
                         {...field}
                       />
                     </FormControl>
@@ -257,6 +423,7 @@ function NuevoClientePage() {
                       <Input
                         inputMode="tel"
                         placeholder="Opcional"
+                        disabled={enviando}
                         {...field}
                       />
                     </FormControl>
@@ -267,7 +434,7 @@ function NuevoClientePage() {
             </CardContent>
           </Card>
 
-          {/* ============== 2. UBICACIÓN Y TRABAJO ============== */}
+          {/* ── 2. UBICACIÓN Y TRABAJO ── */}
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -290,7 +457,11 @@ function NuevoClientePage() {
                   <FormItem className="md:col-span-2">
                     <FormLabel>Dirección *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Calle 5 # 4-23" {...field} />
+                      <Input
+                        placeholder="Calle 5 # 4-23"
+                        disabled={enviando}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -303,7 +474,11 @@ function NuevoClientePage() {
                   <FormItem>
                     <FormLabel>Barrio *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Centro" {...field} />
+                      <Input
+                        placeholder="Centro"
+                        disabled={enviando}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -316,7 +491,11 @@ function NuevoClientePage() {
                   <FormItem>
                     <FormLabel>Ciudad *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Muzo" {...field} />
+                      <Input
+                        placeholder="Muzo"
+                        disabled={enviando}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -329,7 +508,11 @@ function NuevoClientePage() {
                   <FormItem>
                     <FormLabel>Lugar de trabajo</FormLabel>
                     <FormControl>
-                      <Input placeholder="Opcional" {...field} />
+                      <Input
+                        placeholder="Opcional"
+                        disabled={enviando}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -345,6 +528,7 @@ function NuevoClientePage() {
                       <Input
                         inputMode="tel"
                         placeholder="Opcional"
+                        disabled={enviando}
                         {...field}
                       />
                     </FormControl>
@@ -361,10 +545,17 @@ function NuevoClientePage() {
                     <Select
                       onValueChange={field.onChange}
                       value={field.value}
+                      disabled={enviando || cargandoRutas}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una ruta" />
+                          <SelectValue
+                            placeholder={
+                              cargandoRutas
+                                ? "Cargando rutas…"
+                                : "Selecciona una ruta"
+                            }
+                          />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -382,7 +573,7 @@ function NuevoClientePage() {
             </CardContent>
           </Card>
 
-          {/* ============== 3. DOCUMENTACIÓN ============== */}
+          {/* ── 3. DOCUMENTACIÓN ── */}
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -390,60 +581,79 @@ function NuevoClientePage() {
                   <FileImage className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <CardTitle>Documentación</CardTitle>
+                  <CardTitle>Documentación fotográfica</CardTitle>
                   <CardDescription>
-                    Fotos del cliente y de su cédula (la subida al Storage se
-                    implementará luego)
+                    Los archivos se suben automáticamente al guardar · Máx{" "}
+                    {ARCHIVOS_MAX_MB} MB por imagen · Solo imágenes
                   </CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
               <FileFieldUI
+                id="foto-cliente"
                 label="Foto del cliente"
                 file={archivos.foto}
+                disabled={enviando}
                 onChange={(file) =>
                   setArchivos((prev) => ({ ...prev, foto: file }))
                 }
-              />
-              <FileFieldUI
-                label="Cédula (frente)"
-                file={archivos.cedulaFrente}
-                onChange={(file) =>
-                  setArchivos((prev) => ({ ...prev, cedulaFrente: file }))
+                onClear={() =>
+                  setArchivos((prev) => ({ ...prev, foto: null }))
                 }
               />
               <FileFieldUI
-                label="Cédula (respaldo)"
-                file={archivos.cedulaRespaldo}
+                id="cedula-frente"
+                label="Cédula (frente)"
+                file={archivos.cedula_frente}
+                disabled={enviando}
                 onChange={(file) =>
-                  setArchivos((prev) => ({ ...prev, cedulaRespaldo: file }))
+                  setArchivos((prev) => ({ ...prev, cedula_frente: file }))
+                }
+                onClear={() =>
+                  setArchivos((prev) => ({ ...prev, cedula_frente: null }))
+                }
+              />
+              <FileFieldUI
+                id="cedula-respaldo"
+                label="Cédula (respaldo)"
+                file={archivos.cedula_respaldo}
+                disabled={enviando}
+                onChange={(file) =>
+                  setArchivos((prev) => ({
+                    ...prev,
+                    cedula_respaldo: file,
+                  }))
+                }
+                onClear={() =>
+                  setArchivos((prev) => ({
+                    ...prev,
+                    cedula_respaldo: null,
+                  }))
                 }
               />
             </CardContent>
           </Card>
 
+          {/* ── Acciones ── */}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="outline"
               disabled={enviando}
-              onClick={() => {
-                form.reset(valoresIniciales);
-                setArchivos({
-                  foto: null,
-                  cedulaFrente: null,
-                  cedulaRespaldo: null,
-                });
-              }}
+              onClick={resetForm}
             >
               Limpiar
             </Button>
-            <Button type="submit" disabled={enviando}>
+            <Button
+              type="submit"
+              disabled={enviando}
+              className="min-w-[160px]"
+            >
               {enviando ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Guardando…
+                  {ETIQUETAS_FASE[fase]}
                 </>
               ) : (
                 <>
@@ -459,27 +669,116 @@ function NuevoClientePage() {
   );
 }
 
+// ─── Componente FileFieldUI ───────────────────────────────────────────────────
+
 interface FileFieldUIProps {
+  id: string;
   label: string;
   file: File | null;
+  disabled?: boolean;
   onChange: (file: File | null) => void;
+  onClear: () => void;
 }
 
-function FileFieldUI({ label, file, onChange }: FileFieldUIProps) {
+function FileFieldUI({
+  id,
+  label,
+  file,
+  disabled,
+  onChange,
+  onClear,
+}: FileFieldUIProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(e.target.files?.[0] ?? null);
+  };
+
+  const handleClear = () => {
+    if (inputRef.current) inputRef.current.value = "";
+    onClear();
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
-    <FormItem>
-      <FormLabel>{label}</FormLabel>
-      <FormControl>
-        <Input
-          type="file"
-          accept="image/*"
-          onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-          className="cursor-pointer file:mr-3 file:rounded file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:font-medium"
-        />
-      </FormControl>
-      <FormDescription className="truncate">
-        {file ? file.name : "Sin archivo seleccionado"}
-      </FormDescription>
-    </FormItem>
+    <div className="flex flex-col gap-1.5">
+      {/* Etiqueta nativa — no depende del contexto de FormField */}
+      <label
+        htmlFor={id}
+        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+      >
+        {label}
+      </label>
+
+      {file ? (
+        /* Vista previa cuando hay archivo seleccionado */
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-foreground">
+                {file.name}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {formatBytes(file.size)}
+              </p>
+            </div>
+            {!disabled && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive"
+                aria-label="Quitar archivo"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {/* Miniatura para imágenes */}
+          <img
+            src={URL.createObjectURL(file)}
+            alt={label}
+            className="mt-2 h-20 w-full rounded object-cover"
+          />
+        </div>
+      ) : (
+        /* Zona de drop / click cuando no hay archivo */
+        <label
+          htmlFor={id}
+          className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border p-4 text-center transition-colors hover:border-primary/50 hover:bg-primary/5 ${
+            disabled ? "pointer-events-none opacity-50" : ""
+          }`}
+        >
+          <Upload className="h-6 w-6 text-muted-foreground" />
+          <div>
+            <p className="text-xs font-medium text-foreground">
+              Seleccionar imagen
+            </p>
+            <p className="text-xs text-muted-foreground">
+              JPG, PNG, WEBP · máx {ARCHIVOS_MAX_MB} MB
+            </p>
+          </div>
+          <Badge variant="secondary" className="text-xs">
+            Opcional
+          </Badge>
+        </label>
+      )}
+
+      {/* Input oculto — accesible con el label htmlFor={id} de arriba */}
+      <input
+        ref={inputRef}
+        id={id}
+        type="file"
+        accept="image/*"
+        disabled={disabled}
+        onChange={handleChange}
+        className="sr-only"
+      />
+    </div>
   );
 }

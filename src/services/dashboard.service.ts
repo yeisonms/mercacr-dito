@@ -34,20 +34,20 @@ export async function obtenerKpisDashboard(): Promise<DashboardKpis> {
       supabase
         .from("creditos")
         .select("saldo_pendiente")
-        .eq("estado", "activo"),
+        .not("estado", "in", '("Cancelado","Finalizado")'),
       supabase
         .from("recaudos")
         .select("valor_recibido")
-        .gte("created_at", `${hoy}T00:00:00`)
-        .lte("created_at", `${hoy}T23:59:59`),
+        .gte("fecha_recaudo", `${hoy}T00:00:00`)
+        .lte("fecha_recaudo", `${hoy}T23:59:59`),
       supabase
         .from("clientes")
         .select("id", { count: "exact", head: true })
-        .eq("estado", "activo"),
+        .eq("estado", "Activo"),
       supabase
         .from("clientes")
         .select("id", { count: "exact", head: true })
-        .eq("estado", "mora"),
+        .eq("estado", "Moroso"),
     ]);
 
     return {

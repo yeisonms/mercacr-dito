@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Users,
+  UserPlus,
   Banknote,
   HandCoins,
   Map,
@@ -24,6 +25,7 @@ import {
 const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Clientes", url: "/clientes", icon: Users },
+  { title: "Nuevo Cliente", url: "/clientes/nuevo", icon: UserPlus },
   { title: "Créditos", url: "/creditos", icon: Banknote },
   { title: "Cobranza", url: "/cobranza", icon: HandCoins },
   { title: "Rutas", url: "/rutas", icon: Map },

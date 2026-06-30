@@ -10,17 +10,31 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RutasRouteImport } from './routes/rutas'
+import { Route as ProductosRouteImport } from './routes/productos'
+import { Route as NuevaVentaRouteImport } from './routes/nueva-venta'
 import { Route as CreditosRouteImport } from './routes/creditos'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as CobranzaRouteImport } from './routes/cobranza'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ClientesIndexRouteImport } from './routes/clientes.index'
+import { Route as ConfiguracionMoraRouteImport } from './routes/configuracion_.mora'
+import { Route as CobranzaAprobacionRouteImport } from './routes/cobranza_.aprobacion'
 import { Route as ClientesNuevoRouteImport } from './routes/clientes.nuevo'
 import { Route as ClientesClienteIdRouteImport } from './routes/clientes.$clienteId'
 
 const RutasRoute = RutasRouteImport.update({
   id: '/rutas',
   path: '/rutas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductosRoute = ProductosRouteImport.update({
+  id: '/productos',
+  path: '/productos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NuevaVentaRoute = NuevaVentaRouteImport.update({
+  id: '/nueva-venta',
+  path: '/nueva-venta',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CreditosRoute = CreditosRouteImport.update({
@@ -48,6 +62,16 @@ const ClientesIndexRoute = ClientesIndexRouteImport.update({
   path: '/clientes/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConfiguracionMoraRoute = ConfiguracionMoraRouteImport.update({
+  id: '/configuracion_/mora',
+  path: '/configuracion/mora',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CobranzaAprobacionRoute = CobranzaAprobacionRouteImport.update({
+  id: '/cobranza_/aprobacion',
+  path: '/cobranza/aprobacion',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ClientesNuevoRoute = ClientesNuevoRouteImport.update({
   id: '/clientes/nuevo',
   path: '/clientes/nuevo',
@@ -64,9 +88,13 @@ export interface FileRoutesByFullPath {
   '/cobranza': typeof CobranzaRoute
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
+  '/nueva-venta': typeof NuevaVentaRoute
+  '/productos': typeof ProductosRoute
   '/rutas': typeof RutasRoute
   '/clientes/$clienteId': typeof ClientesClienteIdRoute
   '/clientes/nuevo': typeof ClientesNuevoRoute
+  '/cobranza/aprobacion': typeof CobranzaAprobacionRoute
+  '/configuracion/mora': typeof ConfiguracionMoraRoute
   '/clientes/': typeof ClientesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -74,9 +102,13 @@ export interface FileRoutesByTo {
   '/cobranza': typeof CobranzaRoute
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
+  '/nueva-venta': typeof NuevaVentaRoute
+  '/productos': typeof ProductosRoute
   '/rutas': typeof RutasRoute
   '/clientes/$clienteId': typeof ClientesClienteIdRoute
   '/clientes/nuevo': typeof ClientesNuevoRoute
+  '/cobranza/aprobacion': typeof CobranzaAprobacionRoute
+  '/configuracion/mora': typeof ConfiguracionMoraRoute
   '/clientes': typeof ClientesIndexRoute
 }
 export interface FileRoutesById {
@@ -85,9 +117,13 @@ export interface FileRoutesById {
   '/cobranza': typeof CobranzaRoute
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
+  '/nueva-venta': typeof NuevaVentaRoute
+  '/productos': typeof ProductosRoute
   '/rutas': typeof RutasRoute
   '/clientes/$clienteId': typeof ClientesClienteIdRoute
   '/clientes/nuevo': typeof ClientesNuevoRoute
+  '/cobranza_/aprobacion': typeof CobranzaAprobacionRoute
+  '/configuracion_/mora': typeof ConfiguracionMoraRoute
   '/clientes/': typeof ClientesIndexRoute
 }
 export interface FileRouteTypes {
@@ -97,9 +133,13 @@ export interface FileRouteTypes {
     | '/cobranza'
     | '/configuracion'
     | '/creditos'
+    | '/nueva-venta'
+    | '/productos'
     | '/rutas'
     | '/clientes/$clienteId'
     | '/clientes/nuevo'
+    | '/cobranza/aprobacion'
+    | '/configuracion/mora'
     | '/clientes/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -107,9 +147,13 @@ export interface FileRouteTypes {
     | '/cobranza'
     | '/configuracion'
     | '/creditos'
+    | '/nueva-venta'
+    | '/productos'
     | '/rutas'
     | '/clientes/$clienteId'
     | '/clientes/nuevo'
+    | '/cobranza/aprobacion'
+    | '/configuracion/mora'
     | '/clientes'
   id:
     | '__root__'
@@ -117,9 +161,13 @@ export interface FileRouteTypes {
     | '/cobranza'
     | '/configuracion'
     | '/creditos'
+    | '/nueva-venta'
+    | '/productos'
     | '/rutas'
     | '/clientes/$clienteId'
     | '/clientes/nuevo'
+    | '/cobranza_/aprobacion'
+    | '/configuracion_/mora'
     | '/clientes/'
   fileRoutesById: FileRoutesById
 }
@@ -128,9 +176,13 @@ export interface RootRouteChildren {
   CobranzaRoute: typeof CobranzaRoute
   ConfiguracionRoute: typeof ConfiguracionRoute
   CreditosRoute: typeof CreditosRoute
+  NuevaVentaRoute: typeof NuevaVentaRoute
+  ProductosRoute: typeof ProductosRoute
   RutasRoute: typeof RutasRoute
   ClientesClienteIdRoute: typeof ClientesClienteIdRoute
   ClientesNuevoRoute: typeof ClientesNuevoRoute
+  CobranzaAprobacionRoute: typeof CobranzaAprobacionRoute
+  ConfiguracionMoraRoute: typeof ConfiguracionMoraRoute
   ClientesIndexRoute: typeof ClientesIndexRoute
 }
 
@@ -141,6 +193,20 @@ declare module '@tanstack/react-router' {
       path: '/rutas'
       fullPath: '/rutas'
       preLoaderRoute: typeof RutasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/productos': {
+      id: '/productos'
+      path: '/productos'
+      fullPath: '/productos'
+      preLoaderRoute: typeof ProductosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nueva-venta': {
+      id: '/nueva-venta'
+      path: '/nueva-venta'
+      fullPath: '/nueva-venta'
+      preLoaderRoute: typeof NuevaVentaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/creditos': {
@@ -178,6 +244,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClientesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/configuracion_/mora': {
+      id: '/configuracion_/mora'
+      path: '/configuracion/mora'
+      fullPath: '/configuracion/mora'
+      preLoaderRoute: typeof ConfiguracionMoraRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cobranza_/aprobacion': {
+      id: '/cobranza_/aprobacion'
+      path: '/cobranza/aprobacion'
+      fullPath: '/cobranza/aprobacion'
+      preLoaderRoute: typeof CobranzaAprobacionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/clientes/nuevo': {
       id: '/clientes/nuevo'
       path: '/clientes/nuevo'
@@ -200,9 +280,13 @@ const rootRouteChildren: RootRouteChildren = {
   CobranzaRoute: CobranzaRoute,
   ConfiguracionRoute: ConfiguracionRoute,
   CreditosRoute: CreditosRoute,
+  NuevaVentaRoute: NuevaVentaRoute,
+  ProductosRoute: ProductosRoute,
   RutasRoute: RutasRoute,
   ClientesClienteIdRoute: ClientesClienteIdRoute,
   ClientesNuevoRoute: ClientesNuevoRoute,
+  CobranzaAprobacionRoute: CobranzaAprobacionRoute,
+  ConfiguracionMoraRoute: ConfiguracionMoraRoute,
   ClientesIndexRoute: ClientesIndexRoute,
 }
 export const routeTree = rootRouteImport

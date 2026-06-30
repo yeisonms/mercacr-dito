@@ -129,7 +129,10 @@ export async function listarClientes(): Promise<Cliente[]> {
     .order("fecha_creacion", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as Cliente[];
+  return (data ?? []).map((raw: any) => {
+    const ruta = Array.isArray(raw.ruta) ? raw.ruta[0] : raw.ruta;
+    return { ...raw, ruta } as unknown as Cliente;
+  });
 }
 
 // ─── Clientes — Escritura ────────────────────────────────────────────────────
@@ -230,7 +233,9 @@ export async function obtenerCliente(id: string): Promise<Cliente> {
     .single();
 
   if (error) throw error;
-  return data as Cliente;
+  if (!data) return null as any;
+  const ruta = Array.isArray(data.ruta) ? data.ruta[0] : data.ruta;
+  return { ...data, ruta } as unknown as Cliente;
 }
 
 // ─── Actualizar ───────────────────────────────────────────────────────────────

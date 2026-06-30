@@ -5,9 +5,13 @@ import {
   UserPlus,
   Banknote,
   HandCoins,
+  ClipboardCheck,
   Map,
+  Package,
   Settings,
   Wallet,
+  ShoppingCart,
+  Sliders,
 } from "lucide-react";
 
 import {
@@ -24,13 +28,18 @@ import {
 
 const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Nueva Venta", url: "/nueva-venta", icon: ShoppingCart },
   { title: "Clientes", url: "/clientes", icon: Users },
   { title: "Nuevo Cliente", url: "/clientes/nuevo", icon: UserPlus },
+  { title: "Productos", url: "/productos", icon: Package },
   { title: "Créditos", url: "/creditos", icon: Banknote },
   { title: "Cobranza", url: "/cobranza", icon: HandCoins },
+  { title: "Aprobar Recaudos", url: "/cobranza/aprobacion", icon: ClipboardCheck },
   { title: "Rutas", url: "/rutas", icon: Map },
+  { title: "Configuración de Mora", url: "/configuracion/mora", icon: Sliders },
   { title: "Configuración", url: "/configuracion", icon: Settings },
 ];
+
 
 export function AppSidebar() {
   const pathname = useRouterState({

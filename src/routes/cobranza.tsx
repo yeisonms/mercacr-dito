@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -18,6 +18,8 @@ import {
   DollarSign,
   Info,
   Calendar,
+  List,
+  Map,
 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -118,6 +120,94 @@ function CobranzaPage() {
   const [fotoSoporte, setFotoSoporte] = useState<File | null>(null);
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
 
+  // Vista activa: "lista" | "mapa"
+  const [vistaActiva, setVistaActiva] = useState<"lista" | "mapa">("lista");
+
+  // Geolocalización y mapa
+  const [leafletLoaded, setLeafletLoaded] = useState(false);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+  const polylineRef = useRef<any>(null);
+  const cobradorMarkerRef = useRef<any>(null);
+  const [posicionCobrador, setPosicionCobrador] = useState<[number, number] | null>(null);
+
+  // Cargar scripts de Leaflet (solo cliente, SSR safe)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Agregar CSS de Leaflet si no existe
+    if (!document.getElementById("leaflet-css")) {
+      const link = document.createElement("link");
+      link.id = "leaflet-css";
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
+
+    const checkLReady = () => {
+      if ((window as any).L) {
+        setLeafletLoaded(true);
+        return true;
+      }
+      return false;
+    };
+
+    let intervalId: any = null;
+
+    // Agregar JS de Leaflet si no existe
+    if (!document.getElementById("leaflet-js")) {
+      const script = document.createElement("script");
+      script.id = "leaflet-js";
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.async = true;
+      script.onload = () => {
+        intervalId = setInterval(() => {
+          if (checkLReady()) {
+            clearInterval(intervalId);
+          }
+        }, 50);
+      };
+      document.body.appendChild(script);
+    } else {
+      if (!checkLReady()) {
+        intervalId = setInterval(() => {
+          if (checkLReady()) {
+            intervalId && clearInterval(intervalId);
+          }
+        }, 50);
+      }
+    }
+
+    // Obtener ubicación actual del cobrador
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setPosicionCobrador([pos.coords.latitude, pos.coords.longitude]);
+        },
+        () => {
+          // Muzo como fallback
+          setPosicionCobrador([5.5310, -74.1080]);
+        },
+        { enableHighAccuracy: true }
+      );
+    } else {
+      setPosicionCobrador([5.5310, -74.1080]);
+    }
+
+    return () => {
+      // Limpieza al desmontar
+      if (intervalId) clearInterval(intervalId);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markersRef.current = [];
+        polylineRef.current = null;
+        cobradorMarkerRef.current = null;
+      }
+    };
+  }, []);
+
   // 1. Cargar datos con React Query
   const {
     data: creditos = [],
@@ -197,6 +287,178 @@ function CobranzaPage() {
     }
   };
 
+  // Efecto para inicializar y actualizar el mapa Leaflet
+  useEffect(() => {
+    if (!leafletLoaded || vistaActiva !== "mapa" || !mapContainerRef.current) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    // Centro inicial: ubicación del cobrador o del primer cliente de la ruta
+    let centerLat = 5.5310;
+    let centerLng = -74.1080;
+
+    if (posicionCobrador) {
+      centerLat = posicionCobrador[0];
+      centerLng = posicionCobrador[1];
+    } else {
+      const primerClienteGps = creditosFiltrados.find(
+        (c) => c.cliente.latitud !== null && c.cliente.longitud !== null
+      );
+      if (primerClienteGps) {
+        centerLat = primerClienteGps.cliente.latitud!;
+        centerLng = primerClienteGps.cliente.longitud!;
+      }
+    }
+
+    // Si el mapa aún no existe, lo inicializamos
+    if (!mapInstanceRef.current) {
+      const map = L.map(mapContainerRef.current, { zoomControl: false }).setView(
+        [centerLat, centerLng],
+        14
+      );
+
+      L.control.zoom({ position: "bottomright" }).addTo(map);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+      // Evento global para capturar clics en botones generados por HTML dentro de popups
+      map.on("popupopen", (e: any) => {
+        const popup = e.popup;
+        const container = popup.getElement();
+        if (container) {
+          const btn = container.querySelector(".btn-cobrar-mapa");
+          if (btn) {
+            const idCredito = btn.getAttribute("data-credito-id");
+            btn.addEventListener("click", () => {
+              const credito = creditosFiltrados.find((c) => c.id === idCredito);
+              if (credito) {
+                abrirDrawer(credito);
+                map.closePopup();
+              }
+            });
+          }
+        }
+      });
+
+      mapInstanceRef.current = map;
+    }
+
+    const map = mapInstanceRef.current;
+
+    // Limpiar marcadores antiguos
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    if (polylineRef.current) {
+      polylineRef.current.remove();
+      polylineRef.current = null;
+    }
+
+    if (cobradorMarkerRef.current) {
+      cobradorMarkerRef.current.remove();
+      cobradorMarkerRef.current = null;
+    }
+
+    // 1. Dibujar ubicación del cobrador (Punto azul con halo)
+    if (posicionCobrador) {
+      // Halo externo
+      L.circle(posicionCobrador, {
+        radius: 35,
+        color: "#3b82f6",
+        fillColor: "#3b82f6",
+        fillOpacity: 0.25,
+        weight: 1
+      }).addTo(map);
+
+      // Círculo central
+      const markerCobrador = L.circleMarker(posicionCobrador, {
+        radius: 6,
+        color: "#ffffff",
+        weight: 2,
+        fillColor: "#3b82f6",
+        fillOpacity: 1
+      }).addTo(map);
+
+      markerCobrador.bindPopup("<strong class='text-xs'>Mi ubicación actual</strong>");
+      cobradorMarkerRef.current = markerCobrador;
+    }
+
+    // 2. Dibujar marcadores de los clientes
+    const latlngsRuta: [number, number][] = [];
+
+    creditosFiltrados.forEach((item) => {
+      if (item.cliente.latitud !== null && item.cliente.longitud !== null) {
+        const lat = Number(item.cliente.latitud);
+        const lng = Number(item.cliente.longitud);
+        latlngsRuta.push([lat, lng]);
+
+        // Color según estado del crédito
+        let colorMarker = "#10b981"; // Al día
+        if (item.estado === "En mora") colorMarker = "#ef4444";
+        else if (item.estado === "Próximo a vencer") colorMarker = "#f59e0b";
+
+        // Crear marcador personalizado usando L.divIcon
+        const customIcon = L.divIcon({
+          className: "custom-div-icon",
+          html: `<div class="relative flex items-center justify-center">
+                   <div class="absolute h-8 w-8 rounded-full opacity-20 animate-ping" style="background-color: ${colorMarker}"></div>
+                   <div class="h-6 w-6 rounded-full border-2 border-white flex items-center justify-center font-bold text-[10px] text-white shadow-md" style="background-color: ${colorMarker}">
+                     ${item.cliente.secuencia_visita || 0}
+                   </div>
+                 </div>`,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+
+        const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
+
+        // Contenido del Popup
+        const popupContent = `
+          <div class="p-1 space-y-1.5 min-w-[150px]">
+            <div class="font-bold text-sm text-foreground leading-tight">
+              ${item.cliente.secuencia_visita}. ${item.cliente.nombres} ${item.cliente.apellidos}
+            </div>
+            <div class="text-2xs text-muted-foreground font-mono">
+              Barrio: ${item.cliente.barrio}
+            </div>
+            <div class="text-xs font-bold text-foreground">
+              Saldo: ${formatearMoneda(item.saldo_pendiente)}
+            </div>
+            <button 
+              type="button" 
+              class="btn-cobrar-mapa bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-1.5 px-3 rounded-lg text-2xs mt-2 w-full text-center cursor-pointer border-0 shadow-sm"
+              data-credito-id="${item.id}"
+            >
+              Registrar Pago
+            </button>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        markersRef.current.push(marker);
+      }
+    });
+
+    // 3. Dibujar polilínea que conecta a los clientes secuencialmente
+    if (latlngsRuta.length > 1) {
+      const polyline = L.polyline(latlngsRuta, {
+        color: "#10b981", // Emerald 500
+        weight: 3,
+        opacity: 0.7,
+        dashArray: "6, 6"
+      }).addTo(map);
+
+      polylineRef.current = polyline;
+      
+      // Auto-ajustar mapa para mostrar toda la ruta
+      map.fitBounds(polyline.getBounds(), { padding: [40, 40] });
+    } else if (latlngsRuta.length === 1) {
+      map.setView(latlngsRuta[0], 15);
+    }
+  }, [leafletLoaded, vistaActiva, creditosFiltrados, posicionCobrador]);
+
   // 6. Abrir y cerrar panel
   const abrirDrawer = (credito: CreditoCobro) => {
     setCreditoSeleccionado(credito);
@@ -248,6 +510,30 @@ function CobranzaPage() {
           )}
         </div>
 
+        {/* Selector de Vista: Lista vs Mapa */}
+        {!isLoading && !isError && (
+          <div className="grid grid-cols-2 p-1 bg-muted/60 rounded-xl">
+            <Button
+              type="button"
+              variant={vistaActiva === "lista" ? "default" : "ghost"}
+              onClick={() => setVistaActiva("lista")}
+              className="rounded-lg h-9 font-semibold text-xs gap-1.5"
+            >
+              <List className="h-4 w-4" />
+              Lista de Cobro
+            </Button>
+            <Button
+              type="button"
+              variant={vistaActiva === "mapa" ? "default" : "ghost"}
+              onClick={() => setVistaActiva("mapa")}
+              className="rounded-lg h-9 font-semibold text-xs gap-1.5"
+            >
+              <Map className="h-4 w-4" />
+              Mapa de Ruta
+            </Button>
+          </div>
+        )}
+
         {/* Resumen de ruta */}
         {!isLoading && !isError && (
           <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
@@ -278,6 +564,19 @@ function CobranzaPage() {
               </Button>
             </CardContent>
           </Card>
+        )}
+
+        {/* Mapa interactivo de Cobranza */}
+        {!isLoading && !isError && vistaActiva === "mapa" && (
+          <div className="space-y-2">
+            <div 
+              ref={mapContainerRef} 
+              className="h-[calc(100vh-270px)] min-h-[420px] w-full rounded-2xl border border-border/60 overflow-hidden relative z-10"
+            />
+            <p className="text-3xs text-muted-foreground text-center italic">
+              * Toca un marcador para ver detalles del cliente y registrar su pago.
+            </p>
+          </div>
         )}
 
         {/* Loader de carga */}
@@ -320,7 +619,7 @@ function CobranzaPage() {
         )}
 
         {/* Tarjetas de Clientes (Cards apiladas verticalmente) */}
-        {!isLoading && !isError && creditosFiltrados.length > 0 && (
+        {!isLoading && !isError && vistaActiva === "lista" && creditosFiltrados.length > 0 && (
           <div className="space-y-3">
             {creditosFiltrados.map((item) => {
               const config = ESTADO_CONFIG[item.estado] || ESTADO_CONFIG["Al día"];

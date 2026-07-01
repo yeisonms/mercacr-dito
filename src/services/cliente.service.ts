@@ -40,6 +40,8 @@ export interface Cliente {
   foto_cliente_url: string | null;
   foto_cedula_frente_url: string | null;
   foto_cedula_respaldo_url: string | null;
+  latitud: number | null;
+  longitud: number | null;
   fecha_creacion: string;
   /** Nombre de la ruta, resultado del JOIN con tabla `rutas` */
   ruta?: { nombre_ruta: string } | null;
@@ -61,6 +63,8 @@ export interface NuevoClienteInput {
   foto_cliente_url?: string | null;
   foto_cedula_frente_url?: string | null;
   foto_cedula_respaldo_url?: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
 }
 
 // ─── Rutas ───────────────────────────────────────────────────────────────────
@@ -122,6 +126,8 @@ export async function listarClientes(): Promise<Cliente[]> {
       foto_cliente_url,
       foto_cedula_frente_url,
       foto_cedula_respaldo_url,
+      latitud,
+      longitud,
       fecha_creacion,
       ruta:rutas ( nombre_ruta )
     `,
@@ -145,6 +151,23 @@ export async function listarClientes(): Promise<Cliente[]> {
  *
  * @throws Error de Supabase si la inserción falla (ej: cédula duplicada).
  */
+/**
+ * Calcula la distancia en kilómetros entre dos puntos geográficos usando la fórmula de Haversine.
+ */
+function calcularDistanciaHaversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Radio de la Tierra en km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export async function crearCliente(input: NuevoClienteInput) {
   if (!isSupabaseConfigured) {
     throw new Error(
@@ -159,15 +182,89 @@ export async function crearCliente(input: NuevoClienteInput) {
 
   const codigoConsecutivo = `CLI-${String((totalClientes ?? 0) + 1).padStart(5, "0")}`;
 
-  // 2. Secuencia de visita dentro de la ruta
-  const { count: totalEnRuta } = await supabase
+  // 2. Cargar clientes existentes en la ruta para calcular secuencia
+  const { data: clientesRuta, error: errorClientes } = await supabase
     .from("clientes")
-    .select("id", { count: "exact", head: true })
-    .eq("ruta_id", input.ruta_id);
+    .select("id, latitud, longitud, secuencia_visita")
+    .eq("ruta_id", input.ruta_id)
+    .order("secuencia_visita", { ascending: true });
 
-  const secuenciaVisita = (totalEnRuta ?? 0) + 1;
+  if (errorClientes) {
+    console.error("Error al obtener clientes de la ruta:", errorClientes);
+    throw errorClientes;
+  }
 
-  // 3. Inserción
+  const totalEnRuta = clientesRuta?.length ?? 0;
+  let secuenciaVisita = 1;
+
+  if (totalEnRuta === 0) {
+    secuenciaVisita = 1;
+  } else if (
+    input.latitud !== undefined &&
+    input.latitud !== null &&
+    input.longitud !== undefined &&
+    input.longitud !== null
+  ) {
+    // Filtrar clientes de la ruta que tengan coordenadas GPS válidas
+    const clientesConGps = (clientesRuta ?? []).filter(
+      (c) => c.latitud !== null && c.longitud !== null
+    );
+
+    if (clientesConGps.length > 0) {
+      // Encontrar el vecino más cercano
+      let nearestClient = clientesConGps[0];
+      let minDistance = calcularDistanciaHaversine(
+        Number(input.latitud),
+        Number(input.longitud),
+        Number(nearestClient.latitud),
+        Number(nearestClient.longitud)
+      );
+
+      for (let i = 1; i < clientesConGps.length; i++) {
+        const dist = calcularDistanciaHaversine(
+          Number(input.latitud),
+          Number(input.longitud),
+          Number(clientesConGps[i].latitud),
+          Number(clientesConGps[i].longitud)
+        );
+        if (dist < minDistance) {
+          minDistance = dist;
+          nearestClient = clientesConGps[i];
+        }
+      }
+
+      // La nueva secuencia es el vecino más cercano + 1
+      secuenciaVisita = nearestClient.secuencia_visita + 1;
+
+      // Desplazar +1 la secuencia de visitas de los clientes posteriores en la ruta
+      const clientesADesplazar = (clientesRuta ?? []).filter(
+        (c) => c.secuencia_visita >= secuenciaVisita
+      );
+
+      if (clientesADesplazar.length > 0) {
+        const promesas = clientesADesplazar.map((c) =>
+          supabase
+            .from("clientes")
+            .update({ secuencia_visita: c.secuencia_visita + 1 })
+            .eq("id", c.id)
+        );
+        const resultados = await Promise.all(promesas);
+        const errorShift = resultados.find((r) => r.error)?.error;
+        if (errorShift) {
+          console.error("Error al desplazar secuencia de visitas:", errorShift);
+          throw errorShift;
+        }
+      }
+    } else {
+      // Si ningún cliente en la ruta tiene GPS, lo ponemos al final
+      secuenciaVisita = totalEnRuta + 1;
+    }
+  } else {
+    // Si el nuevo cliente no tiene coordenadas, lo agregamos al final de la ruta
+    secuenciaVisita = totalEnRuta + 1;
+  }
+
+  // 3. Inserción del nuevo cliente
   const { data, error } = await supabase
     .from("clientes")
     .insert({
@@ -188,6 +285,8 @@ export async function crearCliente(input: NuevoClienteInput) {
       foto_cliente_url: input.foto_cliente_url ?? null,
       foto_cedula_frente_url: input.foto_cedula_frente_url ?? null,
       foto_cedula_respaldo_url: input.foto_cedula_respaldo_url ?? null,
+      latitud: input.latitud ?? null,
+      longitud: input.longitud ?? null,
     })
     .select()
     .single();
@@ -225,6 +324,8 @@ export async function obtenerCliente(id: string): Promise<Cliente> {
       foto_cliente_url,
       foto_cedula_frente_url,
       foto_cedula_respaldo_url,
+      latitud,
+      longitud,
       fecha_creacion,
       ruta:rutas ( nombre_ruta )
     `,

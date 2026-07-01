@@ -12,6 +12,9 @@ export interface ClienteInfo {
   cedula: string;
   telefono_principal: string;
   barrio: string;
+  latitud?: number | null;
+  longitud?: number | null;
+  secuencia_visita?: number;
 }
 
 export interface CreditoCobro {
@@ -75,20 +78,9 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
           cedula: "1056784920",
           telefono_principal: "3124567890",
           barrio: "San Javier",
-        },
-      },
-      {
-        id: "cred-2",
-        saldo_pendiente: 480000,
-        estado: "En mora",
-        numero_factura: "FAC-9012",
-        cliente: {
-          id: "cli-2",
-          nombres: "Liliana María",
-          apellidos: "Restrepo Osorio",
-          cedula: "43890211",
-          telefono_principal: "3156781234",
-          barrio: "Aranjuez",
+          latitud: 5.5310,
+          longitud: -74.1080,
+          secuencia_visita: 1,
         },
       },
       {
@@ -103,6 +95,26 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
           cedula: "1017245689",
           telefono_principal: "3004561234",
           barrio: "Manrique",
+          latitud: 5.5280,
+          longitud: -74.1050,
+          secuencia_visita: 2,
+        },
+      },
+      {
+        id: "cred-2",
+        saldo_pendiente: 480000,
+        estado: "En mora",
+        numero_factura: "FAC-9012",
+        cliente: {
+          id: "cli-2",
+          nombres: "Liliana María",
+          apellidos: "Restrepo Osorio",
+          cedula: "43890211",
+          telefono_principal: "3156781234",
+          barrio: "Aranjuez",
+          latitud: 5.5340,
+          longitud: -74.1120,
+          secuencia_visita: 3,
         },
       },
       {
@@ -117,6 +129,9 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
           cedula: "70987654",
           telefono_principal: "3209876543",
           barrio: "La Candelaria",
+          latitud: 5.5350,
+          longitud: -74.1040,
+          secuencia_visita: 4,
         },
       },
       {
@@ -131,12 +146,15 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
           cedula: "32456789",
           telefono_principal: "3182345678",
           barrio: "Robledo",
+          latitud: 5.5250,
+          longitud: -74.1150,
+          secuencia_visita: 5,
         },
       },
     ];
   }
 
-  // Consulta real uniendo creditos y clientes
+  // Consulta real uniendo creditos y clientes (incluyendo latitud, longitud y secuencia_visita)
   const { data, error } = await supabase
     .from("creditos")
     .select(`
@@ -150,43 +168,53 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
         apellidos,
         cedula,
         telefono_principal,
-        barrio
+        barrio,
+        latitud,
+        longitud,
+        secuencia_visita
       )
     `)
-    .in("estado", ["Al día", "Próximo a vencer", "En mora"])
-    .order("estado", { ascending: true });
+    .in("estado", ["Al día", "Próximo a vencer", "En mora"]);
 
   if (error) {
     console.error("Error al obtener créditos para cobranza:", error);
     throw new Error(`Error al cargar la ruta de cobro: ${error.message}`);
   }
 
-  return (data ?? []).map((item: any) => {
-    const clienteRaw = Array.isArray(item.cliente) ? item.cliente[0] : item.cliente;
-    return {
-      id: item.id,
-      saldo_pendiente: Number(item.saldo_pendiente),
-      estado: item.estado,
-      numero_factura: item.numero_factura,
-      cliente: clienteRaw
-        ? {
-            id: clienteRaw.id,
-            nombres: clienteRaw.nombres,
-            apellidos: clienteRaw.apellidos,
-            cedula: clienteRaw.cedula,
-            telefono_principal: clienteRaw.telefono_principal,
-            barrio: clienteRaw.barrio,
-          }
-        : {
-            id: "desconocido",
-            nombres: "Cliente",
-            apellidos: "Desconocido",
-            cedula: "",
-            telefono_principal: "",
-            barrio: "N/A",
-          },
-    };
-  });
+  return (data ?? [])
+    .map((item: any) => {
+      const clienteRaw = Array.isArray(item.cliente) ? item.cliente[0] : item.cliente;
+      return {
+        id: item.id,
+        saldo_pendiente: Number(item.saldo_pendiente),
+        estado: item.estado,
+        numero_factura: item.numero_factura,
+        cliente: clienteRaw
+          ? {
+              id: clienteRaw.id,
+              nombres: clienteRaw.nombres,
+              apellidos: clienteRaw.apellidos,
+              cedula: clienteRaw.cedula,
+              telefono_principal: clienteRaw.telefono_principal,
+              barrio: clienteRaw.barrio,
+              latitud: clienteRaw.latitud ? Number(clienteRaw.latitud) : null,
+              longitud: clienteRaw.longitud ? Number(clienteRaw.longitud) : null,
+              secuencia_visita: Number(clienteRaw.secuencia_visita || 0),
+            }
+          : {
+              id: "desconocido",
+              nombres: "Cliente",
+              apellidos: "Desconocido",
+              cedula: "",
+              telefono_principal: "",
+              barrio: "N/A",
+              latitud: null,
+              longitud: null,
+              secuencia_visita: 0,
+            },
+      };
+    })
+    .sort((a, b) => (a.cliente?.secuencia_visita || 0) - (b.cliente?.secuencia_visita || 0));
 }
 
 /**

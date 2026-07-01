@@ -110,6 +110,8 @@ const formSchema = z.object({
     .optional()
     .or(z.literal("")),
   ruta_id: z.string().min(1, { message: "Selecciona una ruta" }),
+  latitud: z.coerce.number().optional().nullable(),
+  longitud: z.coerce.number().optional().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -126,6 +128,8 @@ const VALORES_INICIALES: FormValues = {
   lugar_trabajo: "",
   telefono_trabajo: "",
   ruta_id: "",
+  latitud: null,
+  longitud: null,
 };
 
 // ─── Estado de subida ─────────────────────────────────────────────────────────
@@ -167,6 +171,12 @@ function NuevoClientePage() {
   const [fase, setFase] = useState<FaseEnvio>("idle");
   const [progresoSubida, setProgresoSubida] = useState(0); // 0-100
 
+  // Leaflet Map states & refs
+  const [leafletLoaded, setLeafletLoaded] = useState(false);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerInstanceRef = useRef<any>(null);
+
   /** Archivos seleccionados por el usuario */
   const [archivos, setArchivos] = useState<
     Record<TipoDocumento, File | null>
@@ -182,6 +192,143 @@ function NuevoClientePage() {
     resolver: zodResolver(formSchema),
     defaultValues: VALORES_INICIALES,
   });
+
+  const latitudValue = form.watch("latitud");
+  const longitudValue = form.watch("longitud");
+
+  // 1. Cargar scripts de Leaflet (solo cliente, SSR safe)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Agregar CSS de Leaflet si no existe
+    if (!document.getElementById("leaflet-css")) {
+      const link = document.createElement("link");
+      link.id = "leaflet-css";
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
+
+    const checkLReady = () => {
+      if ((window as any).L) {
+        setLeafletLoaded(true);
+        return true;
+      }
+      return false;
+    };
+
+    let intervalId: any = null;
+
+    // Agregar JS de Leaflet si no existe
+    if (!document.getElementById("leaflet-js")) {
+      const script = document.createElement("script");
+      script.id = "leaflet-js";
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.async = true;
+      script.onload = () => {
+        intervalId = setInterval(() => {
+          if (checkLReady()) {
+            clearInterval(intervalId);
+          }
+        }, 50);
+      };
+      document.body.appendChild(script);
+    } else {
+      if (!checkLReady()) {
+        intervalId = setInterval(() => {
+          if (checkLReady()) {
+            intervalId && clearInterval(intervalId);
+          }
+        }, 50);
+      }
+    }
+
+    return () => {
+      // Limpieza del mapa al desmontar
+      if (intervalId) clearInterval(intervalId);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerInstanceRef.current = null;
+      }
+    };
+  }, []);
+
+  // 2. Inicializar o actualizar el mapa
+  useEffect(() => {
+    if (!leafletLoaded || !mapContainerRef.current) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    // Ubicación inicial por defecto: Muzo, Colombia
+    const initialLat = latitudValue || 5.5310;
+    const initialLng = longitudValue || -74.1080;
+
+    if (!mapInstanceRef.current) {
+      // Crear instancia de mapa
+      const map = L.map(mapContainerRef.current).setView([initialLat, initialLng], 14);
+      
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+      // Crear marcador arrastrable
+      const marker = L.marker([initialLat, initialLng], { draggable: true }).addTo(map);
+
+      // Capturar movimiento del marcador
+      marker.on("dragend", () => {
+        const pos = marker.getLatLng();
+        form.setValue("latitud", Number(pos.lat.toFixed(8)));
+        form.setValue("longitud", Number(pos.lng.toFixed(8)));
+      });
+
+      // Capturar clic en el mapa
+      map.on("click", (e: any) => {
+        const { lat, lng } = e.latlng;
+        marker.setLatLng([lat, lng]);
+        form.setValue("latitud", Number(lat.toFixed(8)));
+        form.setValue("longitud", Number(lng.toFixed(8)));
+      });
+
+      mapInstanceRef.current = map;
+      markerInstanceRef.current = marker;
+    } else {
+      // Si cambian los valores externamente (ej. Localización actual), reposicionamos el marcador
+      const currentMarkerLatLng = markerInstanceRef.current.getLatLng();
+      if (
+        currentMarkerLatLng.lat !== latitudValue ||
+        currentMarkerLatLng.lng !== longitudValue
+      ) {
+        if (latitudValue && longitudValue) {
+          markerInstanceRef.current.setLatLng([latitudValue, longitudValue]);
+          mapInstanceRef.current.setView([latitudValue, longitudValue], 15);
+        }
+      }
+    }
+  }, [leafletLoaded, latitudValue, longitudValue]);
+
+  // 3. Función para capturar coordenadas GPS desde el navegador
+  const obtenerCoordenadasGps = () => {
+    if (!navigator.geolocation) {
+      toast.error("Tu navegador no soporta geolocalización");
+      return;
+    }
+
+    toast.info("Obteniendo ubicación del dispositivo...");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        form.setValue("latitud", Number(latitude.toFixed(8)));
+        form.setValue("longitud", Number(longitude.toFixed(8)));
+        toast.success("Ubicación GPS capturada con éxito");
+      },
+      (error) => {
+        console.error("Error al obtener geolocalización:", error);
+        toast.error(`No se pudo obtener la ubicación: ${error.message}`);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
 
   // Cargar rutas al montar
   useEffect(() => {
@@ -260,6 +407,8 @@ function NuevoClientePage() {
         foto_cliente_url: urlsDocumentos.foto ?? null,
         foto_cedula_frente_url: urlsDocumentos.cedula_frente ?? null,
         foto_cedula_respaldo_url: urlsDocumentos.cedula_respaldo ?? null,
+        latitud: values.latitud ?? null,
+        longitud: values.longitud ?? null,
       });
 
       setFase("completado");
@@ -570,6 +719,90 @@ function NuevoClientePage() {
                   </FormItem>
                 )}
               />
+            </CardContent>
+          </Card>
+
+          {/* ── 2.5. UBICACIÓN GPS ── */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                  <MapPin className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <CardTitle>Coordenadas GPS</CardTitle>
+                  <CardDescription>
+                    Geolocalización del cliente para optimizar la ruta de cobranza
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <FormField
+                  control={form.control}
+                  name="latitud"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel>Latitud</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.00000001"
+                          placeholder="Ej: 5.5310"
+                          disabled={enviando}
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="longitud"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel>Longitud</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.00000001"
+                          placeholder="Ej: -74.1080"
+                          disabled={enviando}
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex items-end shrink-0">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={obtenerCoordenadasGps}
+                    disabled={enviando}
+                    className="w-full sm:w-auto h-9 text-xs font-semibold"
+                  >
+                    Obtener mi ubicación actual
+                  </Button>
+                </div>
+              </div>
+
+              {/* Contenedor del mapa de Leaflet */}
+              <div 
+                ref={mapContainerRef} 
+                className="h-60 w-full rounded-lg border border-border bg-muted/30 overflow-hidden relative z-10" 
+                style={{ minHeight: "240px" }}
+              />
+              <p className="text-2xs text-muted-foreground italic">
+                * Puedes hacer clic en cualquier lugar del mapa o arrastrar el marcador para corregir la posición exacta de visita del cliente.
+              </p>
             </CardContent>
           </Card>
 

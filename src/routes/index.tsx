@@ -2,20 +2,27 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   Wallet,
   HandCoins,
-  Users,
-  AlertTriangle,
   Database,
+  TrendingUp,
+  PiggyBank,
 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { RecaudosChart } from "@/components/dashboard/RecaudosChart";
+import { CarteraDonutChart } from "@/components/dashboard/CarteraDonutChart";
+import { TopCobradoresTable } from "@/components/dashboard/TopCobradoresTable";
+import { ClientesCriticosTable } from "@/components/dashboard/ClientesCriticosTable";
 import {
   useDashboardKpis,
   useRecaudosSemana,
+  useEstadoCartera,
+  useTopCobradores,
+  useClientesCriticos,
 } from "@/hooks/use-dashboard";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { formatearMoneda } from "@/services/producto.service";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -24,38 +31,35 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Panel principal del ERP Mercacrédito: cartera activa, recaudos del día, clientes activos y en mora.",
+          "Panel principal de administración: recaudos del día, cartera activa, ventas del mes y utilidad.",
       },
     ],
   }),
   component: DashboardPage,
 });
 
-const formatoCOP = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
-
 function DashboardPage() {
   const { data: kpis, isLoading: loadingKpis } = useDashboardKpis();
   const { data: recaudos } = useRecaudosSemana();
+  const { data: estadoCartera, isLoading: loadingCartera } = useEstadoCartera();
+  const { data: topCobradores, isLoading: loadingCobradores } = useTopCobradores();
+  const { data: clientesCriticos, isLoading: loadingCriticos } = useClientesCriticos();
 
   return (
     <AppShell
       title="Dashboard"
-      subtitle="Resumen operativo de Mercacrédito"
+      subtitle="Panel de administración y control operativo"
     >
       <div className="space-y-6">
         {!isSupabaseConfigured ? (
-          <Alert>
+          <Alert variant="destructive">
             <Database className="h-4 w-4" />
             <AlertTitle>Conecta tu base de datos Supabase</AlertTitle>
             <AlertDescription>
               Crea un archivo <code className="font-mono">.env</code> en la raíz
               del proyecto (puedes copiar <code>.env.example</code>) con tus
               credenciales:
-              <pre className="mt-2 rounded-md bg-muted p-3 text-xs">
+              <pre className="mt-2 rounded-md bg-muted p-3 text-xs text-foreground">
                 {`VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
 VITE_SUPABASE_ANON_KEY=tu-anon-key-publica`}
               </pre>
@@ -64,40 +68,57 @@ VITE_SUPABASE_ANON_KEY=tu-anon-key-publica`}
           </Alert>
         ) : null}
 
+        {/* ── Tarjetas de Indicadores Clave (KPIs) ── */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard
-            label="Cartera activa"
-            value={formatoCOP.format(kpis?.carteraActiva ?? 0)}
-            icon={Wallet}
-            hint="Saldo pendiente total"
-            loading={loadingKpis}
-          />
-          <KpiCard
             label="Recaudos del día"
-            value={formatoCOP.format(kpis?.recaudosDelDia ?? 0)}
+            value={formatearMoneda(kpis?.recaudosDelDia ?? 0)}
             icon={HandCoins}
-            hint="Cobros realizados hoy"
+            hint="Cobros aprobados hoy"
             loading={loadingKpis}
             tone="success"
           />
           <KpiCard
-            label="Clientes activos"
-            value={String(kpis?.clientesActivos ?? 0)}
-            icon={Users}
-            hint="Con crédito vigente"
+            label="Cartera activa"
+            value={formatearMoneda(kpis?.carteraActiva ?? 0)}
+            icon={Wallet}
+            hint="Saldo por cobrar vigente"
             loading={loadingKpis}
+            tone="default"
           />
           <KpiCard
-            label="Clientes en mora"
-            value={String(kpis?.clientesEnMora ?? 0)}
-            icon={AlertTriangle}
-            hint="Requieren gestión"
+            label="Ventas del mes"
+            value={formatearMoneda(kpis?.ventasDelMes ?? 0)}
+            icon={TrendingUp}
+            hint="Total facturado este mes"
             loading={loadingKpis}
-            tone="danger"
+            tone="warning"
+          />
+          <KpiCard
+            label="Utilidad del mes"
+            value={formatearMoneda(kpis?.utilidadDelMes ?? 0)}
+            icon={PiggyBank}
+            hint="Recaudos + Contados - Gastos"
+            loading={loadingKpis}
+            tone={kpis && kpis.utilidadDelMes >= 0 ? "success" : "danger"}
           />
         </div>
 
-        <RecaudosChart data={recaudos ?? []} />
+        {/* ── Sección de Gráficos (Tendencia y Estado de Cartera) ── */}
+        <div className="grid gap-6 lg:grid-cols-5">
+          <div className="lg:col-span-3">
+            <RecaudosChart data={recaudos ?? []} />
+          </div>
+          <div className="lg:col-span-2">
+            <CarteraDonutChart data={estadoCartera ?? []} loading={loadingCartera} />
+          </div>
+        </div>
+
+        {/* ── Mini-Tablas de Monitoreo Rápido ── */}
+        <div className="grid gap-6 md:grid-cols-2">
+          <TopCobradoresTable data={topCobradores ?? []} loading={loadingCobradores} />
+          <ClientesCriticosTable data={clientesCriticos ?? []} loading={loadingCriticos} />
+        </div>
       </div>
     </AppShell>
   );

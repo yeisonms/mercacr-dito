@@ -3,8 +3,8 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 export interface DashboardKpis {
   carteraActiva: number;
   recaudosDelDia: number;
-  clientesActivos: number;
-  clientesEnMora: number;
+  ventasDelMes: number;
+  utilidadDelMes: number;
 }
 
 export interface RecaudoDiario {
@@ -12,59 +12,146 @@ export interface RecaudoDiario {
   total: number;
 }
 
+export interface EstadoCarteraData {
+  name: string;
+  value: number;
+}
+
+export interface TopCobrador {
+  nombre: string;
+  totalRecaudado: number;
+}
+
+export interface ClienteCritico {
+  id: string;
+  nombre: string;
+  saldoPendiente: number;
+  diasAtraso: number;
+  fechaProximoPago: string;
+}
+
 const KPIS_VACIOS: DashboardKpis = {
   carteraActiva: 0,
   recaudosDelDia: 0,
-  clientesActivos: 0,
-  clientesEnMora: 0,
+  ventasDelMes: 0,
+  utilidadDelMes: 0,
 };
+
+// Helper para formatear fechas a YYYY-MM-DD
+function formatearFechaLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 /**
  * Obtiene los KPIs principales del dashboard.
- * Por ahora devuelve ceros si Supabase no está configurado.
- * La estructura ya está lista para conectarse a las tablas reales.
  */
 export async function obtenerKpisDashboard(): Promise<DashboardKpis> {
   if (!isSupabaseConfigured) return KPIS_VACIOS;
 
   try {
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = new Date();
+    const hoyStr = formatearFechaLocal(hoy);
+    
+    // Rango del día actual (00:00:00 a 23:59:59)
+    const startOfToday = `${hoyStr}T00:00:00.000Z`;
+    const endOfToday = `${hoyStr}T23:59:59.999Z`;
 
-    const [cartera, recaudos, activos, mora] = await Promise.all([
+    // Rango del mes actual
+    const startOfMonth = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const startOfMonthStr = `${formatearFechaLocal(startOfMonth)}T00:00:00.000Z`;
+    
+    const endOfMonth = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    const endOfMonthStr = `${formatearFechaLocal(endOfMonth)}T23:59:59.999Z`;
+
+    // 1. Cartera Activa y Ventas del Mes
+    // Consultamos los créditos creados en el mes actual para ventas,
+    // y todos los créditos activos para cartera.
+    const [creditosRes, recaudosRes, recaudosMesRes] = await Promise.all([
       supabase
         .from("creditos")
-        .select("saldo_pendiente")
-        .not("estado", "in", '("Cancelado","Finalizado")'),
+        .select("saldo_pendiente, valor_credito, valor_contado, tipo_venta, fecha_venta, estado"),
       supabase
         .from("recaudos")
         .select("valor_recibido")
-        .gte("fecha_recaudo", `${hoy}T00:00:00`)
-        .lte("fecha_recaudo", `${hoy}T23:59:59`),
+        .eq("estado", "Aprobado")
+        .gte("fecha_recaudo", startOfToday)
+        .lte("fecha_recaudo", endOfToday),
       supabase
-        .from("clientes")
-        .select("id", { count: "exact", head: true })
-        .eq("estado", "Activo"),
-      supabase
-        .from("clientes")
-        .select("id", { count: "exact", head: true })
-        .eq("estado", "Moroso"),
+        .from("recaudos")
+        .select("valor_recibido")
+        .eq("estado", "Aprobado")
+        .gte("fecha_recaudo", startOfMonthStr)
+        .lte("fecha_recaudo", endOfMonthStr),
     ]);
 
+    if (creditosRes.error) throw creditosRes.error;
+    if (recaudosRes.error) throw recaudosRes.error;
+    if (recaudosMesRes.error) throw recaudosMesRes.error;
+
+    const todosCreditos = creditosRes.data ?? [];
+
+    // Calcular Cartera Activa (Saldo pendiente de créditos que no están cancelados ni finalizados)
+    const carteraActiva = todosCreditos
+      .filter(c => c.estado !== "Cancelado" && c.estado !== "Finalizado")
+      .reduce((sum, c) => sum + (Number(c.saldo_pendiente) || 0), 0);
+
+    // Calcular Ventas del Mes (Creditos creados en el mes actual)
+    const creditosMes = todosCreditos.filter(c => {
+      if (!c.fecha_venta) return false;
+      const fVenta = new Date(c.fecha_venta);
+      return fVenta >= startOfMonth && fVenta <= endOfMonth;
+    });
+
+    const ventasDelMes = creditosMes.reduce((sum, c) => {
+      // Si es crédito sumamos el valor_credito, si es de contado sumamos el valor_contado
+      const valor = c.tipo_venta === "Contado" ? c.valor_contado : c.valor_credito;
+      return sum + (Number(valor) || 0);
+    }, 0);
+
+    // Calcular Ventas de Contado del Mes (para utilidad)
+    const ventasContadoMes = creditosMes
+      .filter(c => c.tipo_venta === "Contado")
+      .reduce((sum, c) => sum + (Number(c.valor_contado) || 0), 0);
+
+    // Calcular Recaudos del Día Aprobados
+    const recaudosDelDia = (recaudosRes.data ?? []).reduce(
+      (sum, r) => sum + (Number(r.valor_recibido) || 0),
+      0
+    );
+
+    // Calcular Recaudos del Mes Aprobados (para utilidad)
+    const recaudosDelMes = (recaudosMesRes.data ?? []).reduce(
+      (sum, r) => sum + (Number(r.valor_recibido) || 0),
+      0
+    );
+
+    // 2. Suma de Gastos del Mes (Safe check, try-catch por si no existe la tabla gastos)
+    let gastosDelMes = 0;
+    try {
+      const { data: gastos, error: errorGastos } = await supabase
+        .from("gastos")
+        .select("valor")
+        .gte("fecha", startOfMonthStr.split("T")[0])
+        .lte("fecha", endOfMonthStr.split("T")[0]);
+
+      if (!errorGastos && gastos) {
+        gastosDelMes = gastos.reduce((sum, g) => sum + (Number(g.valor) || 0), 0);
+      }
+    } catch (e) {
+      console.warn("La tabla de gastos no existe o no es accesible. Ignorando gastos para utilidad.", e);
+    }
+
+    // Utilidad = Recaudos aprobados + Ventas contado - Gastos
+    const utilidadDelMes = (recaudosDelMes + ventasContadoMes) - gastosDelMes;
+
     return {
-      carteraActiva:
-        cartera.data?.reduce(
-          (acc, r: { saldo_pendiente: number | null }) =>
-            acc + (Number(r.saldo_pendiente) || 0),
-          0,
-        ) ?? 0,
-      recaudosDelDia:
-        recaudos.data?.reduce(
-          (acc, r: { valor_recibido: number | null }) =>
-            acc + (Number(r.valor_recibido) || 0),
-          0,
-        ) ?? 0,
-      clientesActivos: activos.count ?? 0,
-      clientesEnMora: mora.count ?? 0,
+      carteraActiva,
+      recaudosDelDia,
+      ventasDelMes,
+      utilidadDelMes,
     };
   } catch (error) {
     console.error("[dashboard] Error obteniendo KPIs:", error);
@@ -73,10 +160,207 @@ export async function obtenerKpisDashboard(): Promise<DashboardKpis> {
 }
 
 /**
- * Recaudos agrupados por día de la semana actual.
- * Placeholder con datos en cero hasta conectar con Supabase.
+ * Obtiene los recaudos de los últimos 7 días.
  */
 export async function obtenerRecaudosSemana(): Promise<RecaudoDiario[]> {
-  const dias = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-  return dias.map((dia) => ({ dia, total: 0 }));
+  if (!isSupabaseConfigured) return [];
+
+  try {
+    const hoy = new Date();
+    // 7 días atrás
+    const hace7Dias = new Date();
+    hace7Dias.setDate(hoy.getDate() - 6);
+    
+    const hace7DiasStr = `${formatearFechaLocal(hace7Dias)}T00:00:00.000Z`;
+
+    const { data: recaudos, error } = await supabase
+      .from("recaudos")
+      .select("valor_recibido, fecha_recaudo")
+      .eq("estado", "Aprobado")
+      .gte("fecha_recaudo", hace7DiasStr)
+      .order("fecha_recaudo", { ascending: true });
+
+    if (error) throw error;
+
+    // Inicializar mapa de los últimos 7 días con 0
+    const mapaDias = new Map<string, number>();
+    const nombresDias = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(hace7Dias);
+      d.setDate(hace7Dias.getDate() + i);
+      const claveFecha = formatearFechaLocal(d);
+      mapaDias.set(claveFecha, 0);
+    }
+
+    // Agrupar e integrar recaudos reales
+    if (recaudos) {
+      recaudos.forEach((r) => {
+        if (!r.fecha_recaudo) return;
+        // Obtener solo la parte de la fecha (YYYY-MM-DD)
+        const fecha = r.fecha_recaudo.split("T")[0];
+        if (mapaDias.has(fecha)) {
+          mapaDias.set(fecha, (mapaDias.get(fecha) || 0) + Number(r.valor_recibido));
+        }
+      });
+    }
+
+    // Convertir a formato Recharts
+    const resultado: RecaudoDiario[] = [];
+    mapaDias.forEach((total, fechaStr) => {
+      const parts = fechaStr.split("-");
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      const diaSemana = nombresDias[d.getDay()];
+      const diaMes = d.getDate();
+      resultado.push({
+        dia: `${diaSemana} ${diaMes}`,
+        total,
+      });
+    });
+
+    return resultado;
+  } catch (error) {
+    console.error("[dashboard] Error en obtenerRecaudosSemana:", error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene la distribución del saldo de la cartera activa por su estado.
+ */
+export async function obtenerEstadoCartera(): Promise<EstadoCarteraData[]> {
+  if (!isSupabaseConfigured) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from("creditos")
+      .select("saldo_pendiente, estado")
+      .not("estado", "in", '("Cancelado","Finalizado")');
+
+    if (error) throw error;
+
+    const conteo: Record<string, number> = {
+      "Al día": 0,
+      "Próximo a vencer": 0,
+      "Atrasado": 0,
+      "En mora": 0,
+    };
+
+    if (data) {
+      data.forEach((c) => {
+        const est = c.estado || "Al día";
+        if (conteo[est] !== undefined) {
+          conteo[est] += Number(c.saldo_pendiente) || 0;
+        } else {
+          // Fallback por si hay otro estado
+          conteo["Al día"] += Number(c.saldo_pendiente) || 0;
+        }
+      });
+    }
+
+    return Object.entries(conteo).map(([name, value]) => ({
+      name,
+      value,
+    }));
+  } catch (error) {
+    console.error("[dashboard] Error en obtenerEstadoCartera:", error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene los cobradores del mes y el total recaudado aprobado.
+ */
+export async function obtenerTopCobradores(): Promise<TopCobrador[]> {
+  if (!isSupabaseConfigured) return [];
+
+  try {
+    const hoy = new Date();
+    const startOfMonth = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const startOfMonthStr = `${formatearFechaLocal(startOfMonth)}T00:00:00.000Z`;
+
+    const { data, error } = await supabase
+      .from("recaudos")
+      .select(`
+        valor_recibido,
+        cobrador:usuarios ( nombre_completo )
+      `)
+      .eq("estado", "Aprobado")
+      .gte("fecha_recaudo", startOfMonthStr);
+
+    if (error) throw error;
+
+    const mapaCobradores = new Map<string, number>();
+
+    if (data) {
+      data.forEach((r: any) => {
+        const cobradorObj = Array.isArray(r.cobrador) ? r.cobrador[0] : r.cobrador;
+        const nombre = cobradorObj?.nombre_completo || "Cobrador Desconocido";
+        mapaCobradores.set(nombre, (mapaCobradores.get(nombre) || 0) + Number(r.valor_recibido));
+      });
+    }
+
+    const resultado = Array.from(mapaCobradores.entries()).map(([nombre, totalRecaudado]) => ({
+      nombre,
+      totalRecaudado,
+    }));
+
+    // Ordenar de mayor a menor y limitar a los top 5
+    return resultado.sort((a, b) => b.totalRecaudado - a.totalRecaudado).slice(0, 5);
+  } catch (error) {
+    console.error("[dashboard] Error en obtenerTopCobradores:", error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene los 5 clientes más críticos en mora.
+ */
+export async function obtenerClientesCriticos(): Promise<ClienteCritico[]> {
+  if (!isSupabaseConfigured) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from("creditos")
+      .select(`
+        id,
+        saldo_pendiente,
+        fecha_proximo_pago,
+        cliente:clientes ( nombres, apellidos )
+      `)
+      .in("estado", ["Atrasado", "En mora"])
+      .order("fecha_proximo_pago", { ascending: true })
+      .limit(5);
+
+    if (error) throw error;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    return (data ?? []).map((c: any) => {
+      const clienteObj = Array.isArray(c.cliente) ? c.cliente[0] : c.cliente;
+      const nombre = clienteObj ? `${clienteObj.nombres} ${clienteObj.apellidos}` : "Cliente Desconocido";
+      
+      let diasAtraso = 0;
+      if (c.fecha_proximo_pago) {
+        const parts = c.fecha_proximo_pago.split("-");
+        const fPago = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        fPago.setHours(0, 0, 0, 0);
+        
+        const diffTime = hoy.getTime() - fPago.getTime();
+        diasAtraso = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+      }
+
+      return {
+        id: c.id,
+        nombre,
+        saldoPendiente: Number(c.saldo_pendiente) || 0,
+        diasAtraso,
+        fechaProximoPago: c.fecha_proximo_pago || "",
+      };
+    });
+  } catch (error) {
+    console.error("[dashboard] Error en obtenerClientesCriticos:", error);
+    return [];
+  }
 }

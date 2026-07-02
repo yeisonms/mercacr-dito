@@ -353,6 +353,11 @@ export interface ActualizarClienteInput {
   telefono_trabajo?: string | null;
   ruta_id: string;
   estado: EstadoCliente;
+  latitud?: number | null;
+  longitud?: number | null;
+  foto_cliente_url?: string | null;
+  foto_cedula_frente_url?: string | null;
+  foto_cedula_respaldo_url?: string | null;
 }
 
 /**
@@ -381,6 +386,11 @@ export async function actualizarCliente(
       telefono_trabajo: input.telefono_trabajo ?? null,
       ruta_id: input.ruta_id,
       estado: input.estado,
+      latitud: input.latitud ?? null,
+      longitud: input.longitud ?? null,
+      foto_cliente_url: input.foto_cliente_url ?? null,
+      foto_cedula_frente_url: input.foto_cedula_frente_url ?? null,
+      foto_cedula_respaldo_url: input.foto_cedula_respaldo_url ?? null,
     })
     .eq("id", id)
     .select()

@@ -1,0 +1,3 @@
+cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta
+1056784999,Pedro Julio,Alvarez,3114002233,Muzo Centro,1200000,900000,50000,Quincenal,2026-07-15,NOR
+1056784998,Maria Helena,Restrepo,3123004455,,400000,-10000,20000,Semanal,2026-07-10,SUR

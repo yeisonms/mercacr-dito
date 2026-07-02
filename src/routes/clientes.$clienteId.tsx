@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   createFileRoute,
   Link,
@@ -22,7 +22,13 @@ import {
   Save,
   User,
   X,
+  CheckCircle2,
+  Upload,
 } from "lucide-react";
+
+import { subirArchivo } from "@/services/storage.service";
+
+const ARCHIVOS_MAX_MB = 5;
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -101,6 +107,11 @@ const editSchema = z.object({
     .or(z.literal("")),
   ruta_id: z.string().min(1, "Selecciona una ruta"),
   estado: z.enum(["Activo", "Inactivo", "Moroso", "Judicial", "Finalizado"]),
+  latitud: z.coerce.number().optional().nullable(),
+  longitud: z.coerce.number().optional().nullable(),
+  foto_cliente_url: z.string().optional().nullable(),
+  foto_cedula_frente_url: z.string().optional().nullable(),
+  foto_cedula_respaldo_url: z.string().optional().nullable(),
 });
 
 type EditValues = z.infer<typeof editSchema>;
@@ -124,6 +135,25 @@ function ClientePerfilPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [modoEdicion, setModoEdicion] = useState(false);
+
+  // ── Estados de Mapa y Leaflet ──────────────────────────────────────────────
+  const [leafletLoaded, setLeafletLoaded] = useState(false);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerInstanceRef = useRef<any>(null);
+
+  // ── Nuevos archivos de documentación seleccionados ──────────────────────────
+  const [nuevosArchivos, setNuevosArchivos] = useState<{
+    foto: File | null;
+    cedula_frente: File | null;
+    cedula_respaldo: File | null;
+  }>({
+    foto: null,
+    cedula_frente: null,
+    cedula_respaldo: null,
+  });
+
+  const [guardando, setGuardando] = useState(false);
 
   // ── Fetch del cliente ──────────────────────────────────────────────────────
   const {
@@ -159,9 +189,193 @@ function ClientePerfilPage() {
           telefono_trabajo: cliente.telefono_trabajo ?? "",
           ruta_id: cliente.ruta_id,
           estado: cliente.estado,
+          latitud: cliente.latitud ?? null,
+          longitud: cliente.longitud ?? null,
+          foto_cliente_url: cliente.foto_cliente_url ?? null,
+          foto_cedula_frente_url: cliente.foto_cedula_frente_url ?? null,
+          foto_cedula_respaldo_url: cliente.foto_cedula_respaldo_url ?? null,
         }
       : undefined,
   });
+
+  const latitudValue = form.watch("latitud");
+  const longitudValue = form.watch("longitud");
+
+  // Cleanup map instance on modoEdicion change to force clean redraw
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+      markerInstanceRef.current = null;
+    }
+  }, [modoEdicion]);
+
+  // 1. Cargar scripts de Leaflet (solo cliente, SSR safe)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Agregar CSS de Leaflet si no existe
+    if (!document.getElementById("leaflet-css")) {
+      const link = document.createElement("link");
+      link.id = "leaflet-css";
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
+
+    const checkLReady = () => {
+      if ((window as any).L) {
+        setLeafletLoaded(true);
+        return true;
+      }
+      return false;
+    };
+
+    let intervalId: any = null;
+
+    // Agregar JS de Leaflet si no existe
+    if (!document.getElementById("leaflet-js")) {
+      const script = document.createElement("script");
+      script.id = "leaflet-js";
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.async = true;
+      script.onload = () => {
+        intervalId = setInterval(() => {
+          if (checkLReady()) {
+            clearInterval(intervalId);
+          }
+        }, 50);
+      };
+      document.body.appendChild(script);
+    } else {
+      if (!checkLReady()) {
+        intervalId = setInterval(() => {
+          if (checkLReady()) {
+            intervalId && clearInterval(intervalId);
+          }
+        }, 50);
+      }
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerInstanceRef.current = null;
+      }
+    };
+  }, []);
+
+  // 2. Inicializar o actualizar el mapa
+  useEffect(() => {
+    const hasCoordinates = !!latitudValue && !!longitudValue;
+    if (!leafletLoaded || !mapContainerRef.current) return;
+    
+    // Si no está en modo edición y no hay coordenadas registradas, no mostramos mapa
+    if (!modoEdicion && !hasCoordinates) {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerInstanceRef.current = null;
+      }
+      return;
+    }
+
+    const L = (window as any).L;
+    if (!L) return;
+
+    const initialLat = latitudValue || 5.5310;
+    const initialLng = longitudValue || -74.1080;
+
+    if (!mapInstanceRef.current) {
+      const map = L.map(mapContainerRef.current).setView([initialLat, initialLng], 14);
+      
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+      const marker = L.marker([initialLat, initialLng], { draggable: modoEdicion }).addTo(map);
+
+      if (modoEdicion) {
+        marker.on("dragend", () => {
+          const pos = marker.getLatLng();
+          form.setValue("latitud", Number(pos.lat.toFixed(8)));
+          form.setValue("longitud", Number(pos.lng.toFixed(8)));
+        });
+
+        map.on("click", (e: any) => {
+          const { lat, lng } = e.latlng;
+          marker.setLatLng([lat, lng]);
+          form.setValue("latitud", Number(lat.toFixed(8)));
+          form.setValue("longitud", Number(lng.toFixed(8)));
+        });
+      }
+
+      mapInstanceRef.current = map;
+      markerInstanceRef.current = marker;
+    } else {
+      const marker = markerInstanceRef.current;
+      const map = mapInstanceRef.current;
+      
+      if (marker) {
+        if (modoEdicion) {
+          marker.dragging?.enable();
+          map.off("click");
+          map.on("click", (e: any) => {
+            const { lat, lng } = e.latlng;
+            marker.setLatLng([lat, lng]);
+            form.setValue("latitud", Number(lat.toFixed(8)));
+            form.setValue("longitud", Number(lng.toFixed(8)));
+          });
+          marker.off("dragend");
+          marker.on("dragend", () => {
+            const pos = marker.getLatLng();
+            form.setValue("latitud", Number(pos.lat.toFixed(8)));
+            form.setValue("longitud", Number(pos.lng.toFixed(8)));
+          });
+        } else {
+          marker.dragging?.disable();
+          map.off("click");
+          marker.off("dragend");
+        }
+
+        const currentMarkerLatLng = marker.getLatLng();
+        if (
+          currentMarkerLatLng.lat !== latitudValue ||
+          currentMarkerLatLng.lng !== longitudValue
+        ) {
+          if (latitudValue && longitudValue) {
+            marker.setLatLng([latitudValue, longitudValue]);
+            map.setView([latitudValue, longitudValue], 15);
+          }
+        }
+      }
+    }
+  }, [leafletLoaded, latitudValue, longitudValue, modoEdicion]);
+
+  // 3. Obtener ubicación actual
+  const obtenerCoordenadasGps = () => {
+    if (!navigator.geolocation) {
+      toast.error("Tu navegador no soporta geolocalización");
+      return;
+    }
+
+    toast.info("Obteniendo ubicación del dispositivo...");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        form.setValue("latitud", Number(latitude.toFixed(8)));
+        form.setValue("longitud", Number(longitude.toFixed(8)));
+        toast.success("Ubicación GPS capturada con éxito");
+      },
+      (error) => {
+        console.error("Error al obtener geolocalización:", error);
+        toast.error(`No se pudo obtener la ubicación: ${error.message}`);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
 
   // ── Mutación de actualización ──────────────────────────────────────────────
   const mutation = useMutation({
@@ -180,13 +394,61 @@ function ClientePerfilPage() {
     },
   });
 
-  const onSubmit = (values: EditValues) => {
-    mutation.mutate({
-      ...values,
-      telefono_alterno: values.telefono_alterno || null,
-      lugar_trabajo: values.lugar_trabajo || null,
-      telefono_trabajo: values.telefono_trabajo || null,
-    });
+  const onSubmit = async (values: EditValues) => {
+    setGuardando(true);
+    try {
+      let fotoUrl = values.foto_cliente_url;
+      let cedulaFrenteUrl = values.foto_cedula_frente_url;
+      let cedulaRespaldoUrl = values.foto_cedula_respaldo_url;
+      
+      const subidas = [];
+      
+      if (nuevosArchivos.foto) {
+        subidas.push(
+          subirArchivo(cliente!.cedula, "foto", nuevosArchivos.foto).then(url => {
+            fotoUrl = url;
+          })
+        );
+      }
+      if (nuevosArchivos.cedula_frente) {
+        subidas.push(
+          subirArchivo(cliente!.cedula, "cedula_frente", nuevosArchivos.cedula_frente).then(url => {
+            cedulaFrenteUrl = url;
+          })
+        );
+      }
+      if (nuevosArchivos.cedula_respaldo) {
+        subidas.push(
+          subirArchivo(cliente!.cedula, "cedula_respaldo", nuevosArchivos.cedula_respaldo).then(url => {
+            cedulaRespaldoUrl = url;
+          })
+        );
+      }
+      
+      if (subidas.length > 0) {
+        toast.info("Subiendo nuevas imágenes...");
+        await Promise.all(subidas);
+      }
+      
+      await mutation.mutateAsync({
+        ...values,
+        telefono_alterno: values.telefono_alterno || null,
+        lugar_trabajo: values.lugar_trabajo || null,
+        telefono_trabajo: values.telefono_trabajo || null,
+        latitud: values.latitud ?? null,
+        longitud: values.longitud ?? null,
+        foto_cliente_url: fotoUrl || null,
+        foto_cedula_frente_url: cedulaFrenteUrl || null,
+        foto_cedula_respaldo_url: cedulaRespaldoUrl || null,
+      });
+      
+      setNuevosArchivos({ foto: null, cedula_frente: null, cedula_respaldo: null });
+    } catch (e: any) {
+      console.error(e);
+      toast.error("Ocurrió un error al guardar", { description: e.message || e });
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const cancelarEdicion = () => {
@@ -220,9 +482,9 @@ function ClientePerfilPage() {
           <Button
             size="sm"
             onClick={form.handleSubmit(onSubmit)}
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || guardando}
           >
-            {mutation.isPending ? (
+            {mutation.isPending || guardando ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Guardando…
@@ -598,11 +860,105 @@ function ClientePerfilPage() {
                   </FormItem>
                 )}
               />
+
+              {/* Separador y Ubicación GPS */}
+              <div className="md:col-span-2 space-y-4 pt-4 border-t border-border/50">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">Coordenadas de Visita (GPS)</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Ubicación en el mapa interactivo para optimizar la secuencia de cobros
+                    </p>
+                  </div>
+                  {modoEdicion && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={obtenerCoordenadasGps}
+                      className="w-full sm:w-auto h-8 text-xs font-semibold"
+                    >
+                      Obtener mi ubicación actual
+                    </Button>
+                  )}
+                </div>
+
+                {/* Mostrar campos de coordenadas solo si es modoEdicion */}
+                {modoEdicion && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="latitud"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Latitud</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="any"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                              placeholder="Sin coordenadas"
+                              className="bg-muted/40"
+                              readOnly
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="longitud"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Longitud</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="any"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                              placeholder="Sin coordenadas"
+                              className="bg-muted/40"
+                              readOnly
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+
+                {/* Contenedor del mapa */}
+                {(modoEdicion || (latitudValue && longitudValue)) ? (
+                  <div className="space-y-2">
+                    <div
+                      ref={mapContainerRef}
+                      className="h-60 w-full rounded-lg border border-border bg-muted/30 overflow-hidden relative z-10"
+                      style={{ minHeight: "240px" }}
+                    />
+                    {modoEdicion && (
+                      <p className="text-2xs text-muted-foreground italic">
+                        * Haz clic en el mapa o arrastra el marcador para precisar las coordenadas.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
+                    Este cliente no tiene coordenadas GPS registradas. Haz clic en "Editar" para asignarle una ubicación.
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
           {/* ── Documentación fotográfica ── */}
-          {(cliente.foto_cliente_url ||
+          {(modoEdicion ||
+            cliente.foto_cliente_url ||
             cliente.foto_cedula_frente_url ||
             cliente.foto_cedula_respaldo_url) && (
             <Card>
@@ -616,30 +972,97 @@ function ClientePerfilPage() {
                       Documentación fotográfica
                     </CardTitle>
                     <CardDescription>
-                      Imágenes almacenadas en el servidor
+                      {modoEdicion
+                        ? "Sube nuevas imágenes para reemplazar las actuales o agregar documentación faltante"
+                        : "Imágenes almacenadas en el servidor"}
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-3">
-                {[
-                  { label: "Foto del cliente", url: cliente.foto_cliente_url },
-                  { label: "Cédula (frente)", url: cliente.foto_cedula_frente_url },
-                  { label: "Cédula (respaldo)", url: cliente.foto_cedula_respaldo_url },
-                ]
-                  .filter((d) => d.url)
-                  .map((doc) => (
-                    <div key={doc.label} className="flex flex-col gap-1.5">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        {doc.label}
-                      </p>
-                      <img
-                        src={doc.url!}
-                        alt={doc.label}
-                        className="h-32 w-full rounded-lg object-cover border"
-                      />
-                    </div>
-                  ))}
+                {modoEdicion ? (
+                  <>
+                    <FileFieldUI
+                      id="foto-cliente"
+                      label="Foto del cliente"
+                      file={nuevosArchivos.foto}
+                      existingUrl={form.watch("foto_cliente_url")}
+                      disabled={guardando}
+                      onChange={(file) =>
+                        setNuevosArchivos((prev) => ({ ...prev, foto: file }))
+                      }
+                      onClear={() =>
+                        setNuevosArchivos((prev) => ({ ...prev, foto: null }))
+                      }
+                      onClearExisting={() =>
+                        form.setValue("foto_cliente_url", null)
+                      }
+                    />
+                    <FileFieldUI
+                      id="cedula-frente"
+                      label="Cédula (frente)"
+                      file={nuevosArchivos.cedula_frente}
+                      existingUrl={form.watch("foto_cedula_frente_url")}
+                      disabled={guardando}
+                      onChange={(file) =>
+                        setNuevosArchivos((prev) => ({
+                          ...prev,
+                          cedula_frente: file,
+                        }))
+                      }
+                      onClear={() =>
+                        setNuevosArchivos((prev) => ({
+                          ...prev,
+                          cedula_frente: null,
+                        }))
+                      }
+                      onClearExisting={() =>
+                        form.setValue("foto_cedula_frente_url", null)
+                      }
+                    />
+                    <FileFieldUI
+                      id="cedula-respaldo"
+                      label="Cédula (respaldo)"
+                      file={nuevosArchivos.cedula_respaldo}
+                      existingUrl={form.watch("foto_cedula_respaldo_url")}
+                      disabled={guardando}
+                      onChange={(file) =>
+                        setNuevosArchivos((prev) => ({
+                          ...prev,
+                          cedula_respaldo: file,
+                        }))
+                      }
+                      onClear={() =>
+                        setNuevosArchivos((prev) => ({
+                          ...prev,
+                          cedula_respaldo: null,
+                        }))
+                      }
+                      onClearExisting={() =>
+                        form.setValue("foto_cedula_respaldo_url", null)
+                      }
+                    />
+                  </>
+                ) : (
+                  [
+                    { label: "Foto del cliente", url: cliente.foto_cliente_url },
+                    { label: "Cédula (frente)", url: cliente.foto_cedula_frente_url },
+                    { label: "Cédula (respaldo)", url: cliente.foto_cedula_respaldo_url },
+                  ]
+                    .filter((d) => d.url)
+                    .map((doc) => (
+                      <div key={doc.label} className="flex flex-col gap-1.5">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          {doc.label}
+                        </p>
+                        <img
+                          src={doc.url!}
+                          alt={doc.label}
+                          className="h-32 w-full rounded-lg object-cover border"
+                        />
+                      </div>
+                    ))
+                )}
               </CardContent>
             </Card>
           )}
@@ -723,5 +1146,143 @@ function PerfilSkeleton() {
         ))}
       </div>
     </AppShell>
+  );
+}
+
+// ─── Componente FileFieldUI ───────────────────────────────────────────────────
+
+interface FileFieldUIProps {
+  id: string;
+  label: string;
+  file: File | null;
+  existingUrl?: string | null;
+  disabled?: boolean;
+  onChange: (file: File | null) => void;
+  onClear: () => void;
+  onClearExisting?: () => void;
+}
+
+function FileFieldUI({
+  id,
+  label,
+  file,
+  existingUrl,
+  disabled,
+  onChange,
+  onClear,
+  onClearExisting,
+}: FileFieldUIProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(e.target.files?.[0] ?? null);
+  };
+
+  const handleClear = () => {
+    if (inputRef.current) inputRef.current.value = "";
+    onClear();
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label
+        htmlFor={id}
+        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+      >
+        {label}
+      </label>
+
+      {file ? (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-foreground">
+                {file.name}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {formatBytes(file.size)}
+              </p>
+            </div>
+            {!disabled && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive"
+                aria-label="Quitar archivo"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <img
+            src={URL.createObjectURL(file)}
+            alt={label}
+            className="mt-2 h-20 w-full rounded object-cover"
+          />
+        </div>
+      ) : existingUrl ? (
+        <div className="rounded-lg border border-border bg-muted/20 p-3 relative">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-foreground">Imagen subida</p>
+              <p className="text-xs text-muted-foreground font-medium text-emerald-600 dark:text-emerald-400">En el servidor</p>
+            </div>
+            {!disabled && onClearExisting && (
+              <button
+                type="button"
+                onClick={onClearExisting}
+                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive"
+                aria-label="Eliminar archivo del servidor"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <img
+            src={existingUrl}
+            alt={label}
+            className="mt-2 h-20 w-full rounded object-cover border"
+          />
+        </div>
+      ) : (
+        <label
+          htmlFor={id}
+          className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border p-4 text-center transition-colors hover:border-primary/50 hover:bg-primary/5 ${
+            disabled ? "pointer-events-none opacity-50" : ""
+          }`}
+        >
+          <Upload className="h-6 w-6 text-muted-foreground" />
+          <div>
+            <p className="text-xs font-medium text-foreground">
+              Seleccionar imagen
+            </p>
+            <p className="text-xs text-muted-foreground">
+              JPG, PNG, WEBP · máx {ARCHIVOS_MAX_MB} MB
+            </p>
+          </div>
+          <Badge variant="secondary" className="text-xs">
+            Opcional
+          </Badge>
+        </label>
+      )}
+
+      <input
+        ref={inputRef}
+        id={id}
+        type="file"
+        accept="image/*"
+        disabled={disabled}
+        onChange={handleChange}
+        className="sr-only"
+      />
+    </div>
   );
 }

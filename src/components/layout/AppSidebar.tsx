@@ -36,6 +36,7 @@ const items = [
   { title: "Cobranza", url: "/cobranza", icon: HandCoins },
   { title: "Aprobar Recaudos", url: "/cobranza/aprobacion", icon: ClipboardCheck },
   { title: "Rutas", url: "/rutas", icon: Map },
+  { title: "Migración de Cartera", url: "/migracion", icon: Wallet },
   { title: "Configuración de Mora", url: "/configuracion/mora", icon: Sliders },
   { title: "Configuración", url: "/configuracion", icon: Settings },
 ];

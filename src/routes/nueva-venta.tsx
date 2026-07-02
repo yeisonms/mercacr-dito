@@ -140,7 +140,6 @@ function NuevaVenta() {
     let totalVenta = totalBase;
     let recargoPct = 0;
     let numeroCuotas = 0;
-    let valorCuota = 0;
     let fechaProximoPago: string | null = null;
     let fechaFinalEstimada: string | null = null;
     let planExplicacion = "";
@@ -168,7 +167,6 @@ function NuevaVenta() {
 
         const saldoFinanciar = Math.max(0, totalBase - cuotaInicial);
         numeroCuotas = cuotaFija > 0 ? Math.ceil(saldoFinanciar / cuotaFija) : 0;
-        valorCuota = cuotaFija;
 
         if (numeroCuotas > 0) {
           if (frecuenciaPago === "Semanal") {
@@ -193,8 +191,6 @@ function NuevaVenta() {
         } else {
           numeroCuotas = 40;
         }
-        const saldoFinanciar = Math.max(0, totalBase - cuotaInicial);
-        valorCuota = Math.round(saldoFinanciar / numeroCuotas);
 
         if (frecuenciaPago === "Semanal") {
           fechaProximoPago = obtenerFechaFutura(7);
@@ -224,8 +220,6 @@ function NuevaVenta() {
       else pasoDias = 30;
 
       numeroCuotas = Math.ceil(plazoDias / pasoDias);
-      const saldoFinanciar = Math.max(0, totalBase - cuotaInicial);
-      valorCuota = Math.round(saldoFinanciar / numeroCuotas);
 
       fechaProximoPago = obtenerFechaFutura(pasoDias);
       fechaFinalEstimada = obtenerFechaFutura(plazoDias);
@@ -256,13 +250,46 @@ function NuevaVenta() {
         fechaFinalEstimada = obtenerFechaFutura(7 * numeroCuotas);
       }
 
-      const saldoFinanciar = Math.max(0, totalVenta - cuotaInicial);
-      valorCuota = Math.round(saldoFinanciar / numeroCuotas);
-
       planExplicacion = `Credicontado a 3 meses. Aplica un recargo del ${recargoPct}% por financiamiento (${formatearMoneda(recargoMonto)}). Proyectado a ${numeroCuotas} cuotas ${frecuenciaPago === "Mensual" ? "mensuales" : frecuenciaPago === "Quincenal" ? "quincenales" : "semanales"}.`;
     }
 
     const saldoPendiente = tipoVenta === "Contado" ? 0 : Math.max(0, totalVenta - cuotaInicial);
+
+    // Aplicar lógica de redondeo y remanentes
+    let valorCuota = 0;
+    let ultimaCuota = 0;
+
+    if (tipoVenta !== "Contado" && numeroCuotas > 0) {
+      if (numeroCuotas === 1) {
+        valorCuota = saldoPendiente;
+        ultimaCuota = saldoPendiente;
+      } else {
+        if (tipoVenta === "Credito Tradicional" && totalBase <= 1000000) {
+          // Matriz rígida de cuotas quincenales base
+          let cuotaQuincenalBase = 20000;
+          if (totalBase <= 120000) cuotaQuincenalBase = 20000;
+          else if (totalBase <= 250000) cuotaQuincenalBase = 25000;
+          else if (totalBase <= 400000) cuotaQuincenalBase = 30000;
+          else if (totalBase <= 600000) cuotaQuincenalBase = 40000;
+          else cuotaQuincenalBase = 50000;
+
+          let cuotaFija = cuotaQuincenalBase;
+          if (frecuenciaPago === "Semanal") {
+            cuotaFija = Math.round(cuotaQuincenalBase / 2);
+          } else if (frecuenciaPago === "Mensual") {
+            cuotaFija = cuotaQuincenalBase * 2;
+          }
+          
+          valorCuota = cuotaFija;
+        } else {
+          // División dinámica para Crédito Tradicional (> 1M), Credicontado 3 Meses y Credicontado Estándar
+          const cuotaBase = saldoPendiente / numeroCuotas;
+          valorCuota = Math.ceil(cuotaBase / 1000) * 1000;
+        }
+        
+        ultimaCuota = saldoPendiente - (valorCuota * (numeroCuotas - 1));
+      }
+    }
 
     return {
       totalBase,
@@ -270,6 +297,7 @@ function NuevaVenta() {
       recargoPct,
       numeroCuotas,
       valorCuota,
+      ultimaCuota,
       frecuenciaPago: tipoVenta === "Contado" ? null : frecuenciaPago,
       fechaProximoPago,
       fechaFinalEstimada,
@@ -943,8 +971,16 @@ function NuevaVenta() {
                     </div>
                     <div className="flex justify-between items-center border-t border-border/50 pt-3">
                       <span className="text-sm font-semibold text-foreground">Valor Cuota:</span>
-                      <span className="text-lg font-bold text-primary">
-                        {formatearMoneda(calculosFinancieros.valorCuota)}
+                      <span className="text-right">
+                        <span className="text-lg font-bold text-primary block">
+                          {formatearMoneda(calculosFinancieros.valorCuota)}
+                        </span>
+                        {calculosFinancieros.numeroCuotas > 1 &&
+                          calculosFinancieros.valorCuota !== calculosFinancieros.ultimaCuota && (
+                            <span className="text-2xs text-muted-foreground block font-medium">
+                              (Última cuota de {formatearMoneda(calculosFinancieros.ultimaCuota)})
+                            </span>
+                          )}
                       </span>
                     </div>
                   </>

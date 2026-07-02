@@ -16,6 +16,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -117,6 +124,9 @@ function NuevaVenta() {
   // Cuota inicial sugerida / ingresada
   const [cuotaInicial, setCuotaInicial] = useState<number>(0);
 
+  // Frecuencia de pago seleccionada por el usuario (Semanal, Quincenal, Mensual)
+  const [frecuenciaPago, setFrecuenciaPago] = useState<"Semanal" | "Quincenal" | "Mensual">("Quincenal");
+
   // Cliente seleccionado actual
   const clienteActual = (clientes || []).find((c) => c.id === selectedClienteId);
   // Producto seleccionado actual
@@ -131,7 +141,6 @@ function NuevaVenta() {
     let recargoPct = 0;
     let numeroCuotas = 0;
     let valorCuota = 0;
-    let frecuenciaPago: "Semanal" | "Quincenal" | "Mensual" | null = null;
     let fechaProximoPago: string | null = null;
     let fechaFinalEstimada: string | null = null;
     let planExplicacion = "";
@@ -141,51 +150,87 @@ function NuevaVenta() {
       planExplicacion = "Venta de contado. Se cancela la totalidad de la factura al momento de la entrega.";
     } else if (tipoVenta === "Credito Tradicional") {
       if (totalBase <= 1000000) {
-        // Rangos quincenales
-        let cuotaFija = 20000;
-        if (totalBase <= 120000) cuotaFija = 20000;
-        else if (totalBase <= 250000) cuotaFija = 25000;
-        else if (totalBase <= 400000) cuotaFija = 30000;
-        else if (totalBase <= 600000) cuotaFija = 40000;
-        else cuotaFija = 50000;
+        // Rangos quincenales base
+        let cuotaQuincenalBase = 20000;
+        if (totalBase <= 120000) cuotaQuincenalBase = 20000;
+        else if (totalBase <= 250000) cuotaQuincenalBase = 25000;
+        else if (totalBase <= 400000) cuotaQuincenalBase = 30000;
+        else if (totalBase <= 600000) cuotaQuincenalBase = 40000;
+        else cuotaQuincenalBase = 50000;
 
-        frecuenciaPago = "Quincenal";
+        // Ajuste de la cuota según frecuencia
+        let cuotaFija = cuotaQuincenalBase;
+        if (frecuenciaPago === "Semanal") {
+          cuotaFija = Math.round(cuotaQuincenalBase / 2);
+        } else if (frecuenciaPago === "Mensual") {
+          cuotaFija = cuotaQuincenalBase * 2;
+        }
+
         const saldoFinanciar = Math.max(0, totalBase - cuotaInicial);
         numeroCuotas = cuotaFija > 0 ? Math.ceil(saldoFinanciar / cuotaFija) : 0;
         valorCuota = cuotaFija;
 
-        fechaProximoPago = numeroCuotas > 0 ? obtenerFechaFutura(15) : null;
-        fechaFinalEstimada = numeroCuotas > 0 ? obtenerFechaFutura(15 * numeroCuotas) : null;
+        if (numeroCuotas > 0) {
+          if (frecuenciaPago === "Semanal") {
+            fechaProximoPago = obtenerFechaFutura(7);
+            fechaFinalEstimada = obtenerFechaFutura(7 * numeroCuotas);
+          } else if (frecuenciaPago === "Quincenal") {
+            fechaProximoPago = obtenerFechaFutura(15);
+            fechaFinalEstimada = obtenerFechaFutura(15 * numeroCuotas);
+          } else {
+            fechaProximoPago = obtenerFechaFuturaMeses(1);
+            fechaFinalEstimada = obtenerFechaFuturaMeses(numeroCuotas);
+          }
+        }
 
-        planExplicacion = `Crédito Tradicional Quincenal. Aplica cuota fija quincenal de ${formatearMoneda(cuotaFija)} en base al monto de la compra.`;
+        planExplicacion = `Crédito Tradicional. Frecuencia: ${frecuenciaPago}. Cuota fija de ${formatearMoneda(cuotaFija)} calculada automáticamente en base al monto.`;
       } else {
-        // Mayor a 1.000.000: 10 cuotas mensuales
-        frecuenciaPago = "Mensual";
-        numeroCuotas = 10;
+        // Mayor a 1.000.000: Plazo fijo adaptado a la frecuencia
+        if (frecuenciaPago === "Mensual") {
+          numeroCuotas = 10;
+        } else if (frecuenciaPago === "Quincenal") {
+          numeroCuotas = 20;
+        } else {
+          numeroCuotas = 40;
+        }
         const saldoFinanciar = Math.max(0, totalBase - cuotaInicial);
-        valorCuota = Math.round(saldoFinanciar / 10);
+        valorCuota = Math.round(saldoFinanciar / numeroCuotas);
 
-        fechaProximoPago = obtenerFechaFuturaMeses(1);
-        fechaFinalEstimada = obtenerFechaFuturaMeses(10);
+        if (frecuenciaPago === "Semanal") {
+          fechaProximoPago = obtenerFechaFutura(7);
+          fechaFinalEstimada = obtenerFechaFutura(7 * numeroCuotas);
+        } else if (frecuenciaPago === "Quincenal") {
+          fechaProximoPago = obtenerFechaFutura(15);
+          fechaFinalEstimada = obtenerFechaFutura(15 * numeroCuotas);
+        } else {
+          fechaProximoPago = obtenerFechaFuturaMeses(1);
+          fechaFinalEstimada = obtenerFechaFuturaMeses(10);
+        }
 
-        planExplicacion = "Crédito Tradicional Mensual (Compra > $1.000.000). Financiado a un plazo fijo de 10 cuotas mensuales.";
+        planExplicacion = `Crédito Tradicional Fijo (Compra > $1.000.000). Proyectado a ${numeroCuotas} cuotas ${frecuenciaPago === "Mensual" ? "mensuales" : frecuenciaPago === "Quincenal" ? "quincenales" : "semanales"}.`;
       }
     } else if (tipoVenta === "Credicontado Estandar") {
       totalVenta = totalBase;
-      frecuenciaPago = null;
-      numeroCuotas = 0;
-      valorCuota = 0;
-
+      
       let plazoDias = 20;
       if (totalBase <= 100000) plazoDias = 20;
       else if (totalBase <= 200000) plazoDias = 30;
       else if (totalBase <= 500000) plazoDias = 45;
       else plazoDias = 60;
 
-      fechaProximoPago = null;
+      let pasoDias = 15;
+      if (frecuenciaPago === "Semanal") pasoDias = 7;
+      else if (frecuenciaPago === "Quincenal") pasoDias = 15;
+      else pasoDias = 30;
+
+      numeroCuotas = Math.ceil(plazoDias / pasoDias);
+      const saldoFinanciar = Math.max(0, totalBase - cuotaInicial);
+      valorCuota = Math.round(saldoFinanciar / numeroCuotas);
+
+      fechaProximoPago = obtenerFechaFutura(pasoDias);
       fechaFinalEstimada = obtenerFechaFutura(plazoDias);
 
-      planExplicacion = `Credicontado Estándar a 0% de interés. El cliente realiza abonos libres teniendo como fecha límite de pago el ${formatearFechaEspanol(fechaFinalEstimada)} (${plazoDias} días de plazo).`;
+      planExplicacion = `Credicontado Estándar a 0% de interés. Plazo de ${plazoDias} días amortizado en ${numeroCuotas} cuotas ${frecuenciaPago === "Mensual" ? "mensuales" : frecuenciaPago === "Quincenal" ? "quincenales" : "semanales"}. Fecha límite: ${formatearFechaEspanol(fechaFinalEstimada)}.`;
     } else if (tipoVenta === "Credicontado 3 Meses") {
       // Recargos
       if (totalBase < 500000) recargoPct = 10;
@@ -197,15 +242,24 @@ function NuevaVenta() {
       const recargoMonto = (totalBase * recargoPct) / 100;
       totalVenta = totalBase + recargoMonto;
 
-      frecuenciaPago = "Mensual";
-      numeroCuotas = 3;
+      if (frecuenciaPago === "Mensual") {
+        numeroCuotas = 3;
+        fechaProximoPago = obtenerFechaFuturaMeses(1);
+        fechaFinalEstimada = obtenerFechaFuturaMeses(3);
+      } else if (frecuenciaPago === "Quincenal") {
+        numeroCuotas = 6;
+        fechaProximoPago = obtenerFechaFutura(15);
+        fechaFinalEstimada = obtenerFechaFutura(15 * numeroCuotas);
+      } else {
+        numeroCuotas = 12;
+        fechaProximoPago = obtenerFechaFutura(7);
+        fechaFinalEstimada = obtenerFechaFutura(7 * numeroCuotas);
+      }
+
       const saldoFinanciar = Math.max(0, totalVenta - cuotaInicial);
-      valorCuota = Math.round(saldoFinanciar / 3);
+      valorCuota = Math.round(saldoFinanciar / numeroCuotas);
 
-      fechaProximoPago = obtenerFechaFuturaMeses(1);
-      fechaFinalEstimada = obtenerFechaFuturaMeses(3);
-
-      planExplicacion = `Credicontado a 3 meses. Aplica un recargo del ${recargoPct}% por financiamiento sobre el total base (${formatearMoneda(recargoMonto)}). Plazo de 90 días con 3 cuotas mensuales.`;
+      planExplicacion = `Credicontado a 3 meses. Aplica un recargo del ${recargoPct}% por financiamiento (${formatearMoneda(recargoMonto)}). Proyectado a ${numeroCuotas} cuotas ${frecuenciaPago === "Mensual" ? "mensuales" : frecuenciaPago === "Quincenal" ? "quincenales" : "semanales"}.`;
     }
 
     const saldoPendiente = tipoVenta === "Contado" ? 0 : Math.max(0, totalVenta - cuotaInicial);
@@ -216,13 +270,13 @@ function NuevaVenta() {
       recargoPct,
       numeroCuotas,
       valorCuota,
-      frecuenciaPago,
+      frecuenciaPago: tipoVenta === "Contado" ? null : frecuenciaPago,
       fechaProximoPago,
       fechaFinalEstimada,
       saldoPendiente,
       planExplicacion,
     };
-  }, [carrito, tipoVenta, cuotaInicial]);
+  }, [carrito, tipoVenta, cuotaInicial, frecuenciaPago]);
 
   // Ajustar cuota inicial si supera el nuevo total
   useEffect(() => {
@@ -807,6 +861,28 @@ function NuevaVenta() {
                       placeholder="0"
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Selector de Frecuencia de Pago (obligatorio para Créditos) */}
+              {tipoVenta !== "Contado" && (
+                <div className="space-y-2 animate-in fade-in duration-200">
+                  <Label htmlFor="frecuencia-pago-select" className="text-sm font-medium">
+                    Frecuencia de Pago <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={frecuenciaPago}
+                    onValueChange={(val) => setFrecuenciaPago(val as any)}
+                  >
+                    <SelectTrigger id="frecuencia-pago-select">
+                      <SelectValue placeholder="Seleccione frecuencia" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Semanal">Semanal (cada 7 días)</SelectItem>
+                      <SelectItem value="Quincenal">Quincenal (cada 15 días)</SelectItem>
+                      <SelectItem value="Mensual">Mensual (cada mes)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 

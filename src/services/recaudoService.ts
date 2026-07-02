@@ -62,6 +62,8 @@ export interface RecaudoPendiente {
  * Filtra por estados: 'Al día', 'Próximo a vencer', 'En mora'.
  */
 export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
+  const todayStr = new Date().toISOString().split("T")[0];
+
   if (!isSupabaseConfigured) {
     // Retornar datos simulados si Supabase no está configurado
     await new Promise((resolve) => setTimeout(resolve, 800));
@@ -154,7 +156,7 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
     ];
   }
 
-  // Consulta real uniendo creditos y clientes (incluyendo latitud, longitud y secuencia_visita)
+  // Consulta real uniendo creditos y clientes (filtrando por fecha_proximo_pago <= hoy)
   const { data, error } = await supabase
     .from("creditos")
     .select(`
@@ -162,6 +164,7 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
       saldo_pendiente,
       estado,
       numero_factura,
+      fecha_proximo_pago,
       cliente:clientes (
         id,
         nombres,
@@ -174,7 +177,8 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
         secuencia_visita
       )
     `)
-    .in("estado", ["Al día", "Próximo a vencer", "En mora"]);
+    .in("estado", ["Al día", "Próximo a vencer", "En mora"])
+    .lte("fecha_proximo_pago", todayStr);
 
   if (error) {
     console.error("Error al obtener créditos para cobranza:", error);

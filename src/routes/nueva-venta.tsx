@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -8,13 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -45,6 +38,8 @@ import {
   Calendar,
   DollarSign,
   AlertTriangle,
+  Info,
+  Percent,
 } from "lucide-react";
 
 import { listarClientes } from "@/services/cliente.service";
@@ -65,17 +60,44 @@ interface CarritoReactItem {
   precioCredito: number;
 }
 
+// Tipo de Venta según reglas comerciales
+type TipoVentaComercial =
+  | "Contado"
+  | "Credito Tradicional"
+  | "Credicontado Estandar"
+  | "Credicontado 3 Meses";
+
+// Funciones auxiliares para fechas
+function obtenerFechaFutura(dias: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + dias);
+  return date.toISOString().split("T")[0];
+}
+
+function obtenerFechaFuturaMeses(meses: number): string {
+  const date = new Date();
+  date.setMonth(date.getMonth() + meses);
+  return date.toISOString().split("T")[0];
+}
+
+function formatearFechaEspanol(fechaStr: string | null): string {
+  if (!fechaStr) return "";
+  const partes = fechaStr.split("-");
+  if (partes.length !== 3) return fechaStr;
+  return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+
 function NuevaVenta() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   // ─── Consultas de datos ──────────────────────────────────────────────────
-  const { data: clientes, isLoading: cargandoClientes } = useQuery({
+  const { data: clientes = [], isLoading: cargandoClientes } = useQuery({
     queryKey: ["clientes"],
     queryFn: listarClientes,
   });
 
-  const { data: productos, isLoading: cargandoProductos } = useQuery({
+  const { data: productos = [], isLoading: cargandoProductos } = useQuery({
     queryKey: ["productos"],
     queryFn: listarProductos,
   });
@@ -89,53 +111,134 @@ function NuevaVenta() {
   const [cantidad, setCantidad] = useState<number>(1);
   const [carrito, setCarrito] = useState<CarritoReactItem[]>([]);
 
-  const [tipoVenta, setTipoVenta] = useState<"Contado" | "Credito">("Contado");
+  // Tipo de venta comercial del formulario
+  const [tipoVenta, setTipoVenta] = useState<TipoVentaComercial>("Contado");
 
-  // Parámetros de crédito
+  // Cuota inicial sugerida / ingresada
   const [cuotaInicial, setCuotaInicial] = useState<number>(0);
-  const [numeroCuotas, setNumeroCuotas] = useState<number>(4);
-  const [frecuenciaPago, setFrecuenciaPago] = useState<"Semanal" | "Quincenal" | "Mensual">("Semanal");
 
-  // ─── Cálculos reactivos ──────────────────────────────────────────────────
-  // Calcular el total general basado en el tipo de venta
-  const totalGeneral = carrito.reduce((acc, item) => {
-    const precio = tipoVenta === "Credito" ? item.precioCredito : item.precioContado;
-    return acc + item.cantidad * precio;
-  }, 0);
+  // Cliente seleccionado actual
+  const clienteActual = (clientes || []).find((c) => c.id === selectedClienteId);
+  // Producto seleccionado actual
+  const productoActual = (productos || []).find((p) => p.id === selectedProductoId);
 
-  // Valor total alternativo para mostrar comparación de ahorro o recargo
-  const totalContadoAlternativo = carrito.reduce(
-    (acc, item) => acc + item.cantidad * item.precioContado,
-    0
-  );
-  const totalCreditoAlternativo = carrito.reduce(
-    (acc, item) => acc + item.cantidad * item.precioCredito,
-    0
-  );
+  // ─── Motor de Reglas Comerciales (Reactivo) ──────────────────────────────
+  const calculosFinancieros = useMemo(() => {
+    // Total Base (Precio de Contado)
+    const totalBase = carrito.reduce((acc, item) => acc + item.cantidad * item.precioContado, 0);
+
+    let totalVenta = totalBase;
+    let recargoPct = 0;
+    let numeroCuotas = 0;
+    let valorCuota = 0;
+    let frecuenciaPago: "Semanal" | "Quincenal" | "Mensual" | null = null;
+    let fechaProximoPago: string | null = null;
+    let fechaFinalEstimada: string | null = null;
+    let planExplicacion = "";
+
+    if (tipoVenta === "Contado") {
+      totalVenta = totalBase;
+      planExplicacion = "Venta de contado. Se cancela la totalidad de la factura al momento de la entrega.";
+    } else if (tipoVenta === "Credito Tradicional") {
+      if (totalBase <= 1000000) {
+        // Rangos quincenales
+        let cuotaFija = 20000;
+        if (totalBase <= 120000) cuotaFija = 20000;
+        else if (totalBase <= 250000) cuotaFija = 25000;
+        else if (totalBase <= 400000) cuotaFija = 30000;
+        else if (totalBase <= 600000) cuotaFija = 40000;
+        else cuotaFija = 50000;
+
+        frecuenciaPago = "Quincenal";
+        const saldoFinanciar = Math.max(0, totalBase - cuotaInicial);
+        numeroCuotas = cuotaFija > 0 ? Math.ceil(saldoFinanciar / cuotaFija) : 0;
+        valorCuota = cuotaFija;
+
+        fechaProximoPago = numeroCuotas > 0 ? obtenerFechaFutura(15) : null;
+        fechaFinalEstimada = numeroCuotas > 0 ? obtenerFechaFutura(15 * numeroCuotas) : null;
+
+        planExplicacion = `Crédito Tradicional Quincenal. Aplica cuota fija quincenal de ${formatearMoneda(cuotaFija)} en base al monto de la compra.`;
+      } else {
+        // Mayor a 1.000.000: 10 cuotas mensuales
+        frecuenciaPago = "Mensual";
+        numeroCuotas = 10;
+        const saldoFinanciar = Math.max(0, totalBase - cuotaInicial);
+        valorCuota = Math.round(saldoFinanciar / 10);
+
+        fechaProximoPago = obtenerFechaFuturaMeses(1);
+        fechaFinalEstimada = obtenerFechaFuturaMeses(10);
+
+        planExplicacion = "Crédito Tradicional Mensual (Compra > $1.000.000). Financiado a un plazo fijo de 10 cuotas mensuales.";
+      }
+    } else if (tipoVenta === "Credicontado Estandar") {
+      totalVenta = totalBase;
+      frecuenciaPago = null;
+      numeroCuotas = 0;
+      valorCuota = 0;
+
+      let plazoDias = 20;
+      if (totalBase <= 100000) plazoDias = 20;
+      else if (totalBase <= 200000) plazoDias = 30;
+      else if (totalBase <= 500000) plazoDias = 45;
+      else plazoDias = 60;
+
+      fechaProximoPago = null;
+      fechaFinalEstimada = obtenerFechaFutura(plazoDias);
+
+      planExplicacion = `Credicontado Estándar a 0% de interés. El cliente realiza abonos libres teniendo como fecha límite de pago el ${formatearFechaEspanol(fechaFinalEstimada)} (${plazoDias} días de plazo).`;
+    } else if (tipoVenta === "Credicontado 3 Meses") {
+      // Recargos
+      if (totalBase < 500000) recargoPct = 10;
+      else if (totalBase < 1000000) recargoPct = 10;
+      else if (totalBase < 1500000) recargoPct = 8;
+      else if (totalBase < 2500000) recargoPct = 7;
+      else recargoPct = 6;
+
+      const recargoMonto = (totalBase * recargoPct) / 100;
+      totalVenta = totalBase + recargoMonto;
+
+      frecuenciaPago = "Mensual";
+      numeroCuotas = 3;
+      const saldoFinanciar = Math.max(0, totalVenta - cuotaInicial);
+      valorCuota = Math.round(saldoFinanciar / 3);
+
+      fechaProximoPago = obtenerFechaFuturaMeses(1);
+      fechaFinalEstimada = obtenerFechaFuturaMeses(3);
+
+      planExplicacion = `Credicontado a 3 meses. Aplica un recargo del ${recargoPct}% por financiamiento sobre el total base (${formatearMoneda(recargoMonto)}). Plazo de 90 días con 3 cuotas mensuales.`;
+    }
+
+    const saldoPendiente = tipoVenta === "Contado" ? 0 : Math.max(0, totalVenta - cuotaInicial);
+
+    return {
+      totalBase,
+      totalVenta,
+      recargoPct,
+      numeroCuotas,
+      valorCuota,
+      frecuenciaPago,
+      fechaProximoPago,
+      fechaFinalEstimada,
+      saldoPendiente,
+      planExplicacion,
+    };
+  }, [carrito, tipoVenta, cuotaInicial]);
 
   // Ajustar cuota inicial si supera el nuevo total
   useEffect(() => {
-    if (cuotaInicial > totalGeneral) {
-      setCuotaInicial(totalGeneral);
+    if (cuotaInicial > calculosFinancieros.totalVenta) {
+      setCuotaInicial(calculosFinancieros.totalVenta);
     }
-  }, [totalGeneral, cuotaInicial]);
+  }, [calculosFinancieros.totalVenta, cuotaInicial]);
 
-  const saldoPendiente = Math.max(0, totalGeneral - cuotaInicial);
-  const valorCuota = numeroCuotas > 0 ? Math.round(saldoPendiente / numeroCuotas) : 0;
-
-  // Cliente seleccionado actual
-  const clienteActual = clientes?.find((c) => c.id === selectedClienteId);
-  // Producto seleccionado actual
-  const productoActual = productos?.find((p) => p.id === selectedProductoId);
-
-  // ─── Acciones ────────────────────────────────────────────────────────────
+  // ─── Acciones del Carrito ────────────────────────────────────────────────
   const agregarAlCarrito = () => {
     if (!selectedProductoId) {
       toast.error("Seleccione un producto");
       return;
     }
 
-    const prod = productos?.find((p) => p.id === selectedProductoId);
+    const prod = (productos || []).find((p) => p.id === selectedProductoId);
     if (!prod) return;
 
     if (cantidad <= 0) {
@@ -180,7 +283,7 @@ function NuevaVenta() {
     toast.success("Producto eliminado del carrito");
   };
 
-  // ─── Mutación de Guardado ───────────────────────────────────────────────
+  // ─── Mutación de Procesamiento de Venta ──────────────────────────────────
   const mutation = useMutation({
     mutationFn: async () => {
       if (!selectedClienteId) {
@@ -189,47 +292,48 @@ function NuevaVenta() {
       if (carrito.length === 0) {
         throw new Error("El carrito está vacío");
       }
-      if (tipoVenta === "Credito" && numeroCuotas <= 0) {
-        throw new Error("El número de cuotas debe ser mayor a 0");
+      if (tipoVenta !== "Contado" && tipoVenta !== "Credicontado Estandar" && calculosFinancieros.numeroCuotas <= 0) {
+        throw new Error("El número de cuotas calculado debe ser mayor a 0");
       }
 
-      // Convertir el carrito al formato de ventaService
+      // Convertir el carrito al formato de detalles_venta aplicando los recargos
       const carritoFormateado: CarritoItem[] = carrito.map((item) => {
-        const precio = tipoVenta === "Credito" ? item.precioCredito : item.precioContado;
+        let precioAplicado = item.precioContado;
+        if (calculosFinancieros.recargoPct > 0) {
+          precioAplicado = Math.round(item.precioContado * (1 + calculosFinancieros.recargoPct / 100));
+        }
         return {
           productoId: item.productoId,
           nombre: item.nombre,
           cantidad: item.cantidad,
-          precioAplicado: precio,
-          subtotal: item.cantidad * precio,
+          precioAplicado: precioAplicado,
+          subtotal: item.cantidad * precioAplicado,
         };
       });
 
       return procesarVenta({
         clienteId: selectedClienteId,
-        tipoVenta,
-        valorContado: totalContadoAlternativo,
-        valorCredito: totalCreditoAlternativo,
-        cuotaInicial: tipoVenta === "Credito" ? cuotaInicial : 0,
-        saldoPendiente: tipoVenta === "Credito" ? saldoPendiente : 0,
-        numeroCuotas: tipoVenta === "Credito" ? numeroCuotas : 0,
-        valorCuota: tipoVenta === "Credito" ? valorCuota : 0,
-        frecuenciaPago: tipoVenta === "Credito" ? frecuenciaPago : null,
+        tipoVenta: tipoVenta === "Contado" ? "Contado" : "Credito", // Enlace estricto a DDL 'Contado' | 'Credito'
+        valorContado: calculosFinancieros.totalBase,
+        valorCredito: calculosFinancieros.totalVenta,
+        cuotaInicial: tipoVenta === "Contado" ? 0 : cuotaInicial,
+        saldoPendiente: calculosFinancieros.saldoPendiente,
+        numeroCuotas: calculosFinancieros.numeroCuotas,
+        valorCuota: calculosFinancieros.valorCuota,
+        frecuenciaPago: calculosFinancieros.frecuenciaPago,
         carrito: carritoFormateado,
+        fechaProximoPago: calculosFinancieros.fechaProximoPago,
+        fechaFinalEstimada: calculosFinancieros.fechaFinalEstimada,
       });
     },
     onSuccess: (res) => {
       toast.success(`🎉 Venta registrada correctamente. Factura: ${res.numeroFactura}`);
-      // Invalidar queries relevantes para refrescar KPIs o listas
       queryClient.invalidateQueries({ queryKey: ["kpis-dashboard"] });
       // Limpiar formulario
       setSelectedClienteId("");
       setCarrito([]);
       setTipoVenta("Contado");
       setCuotaInicial(0);
-      setNumeroCuotas(4);
-      setFrecuenciaPago("Semanal");
-      // Redirigir al Dashboard
       navigate({ to: "/" });
     },
     onError: (error: any) => {
@@ -246,20 +350,20 @@ function NuevaVenta() {
   return (
     <AppShell
       title="Nueva Venta"
-      subtitle="Registrar transacciones de contado u originar nuevos créditos"
+      subtitle="Registrar transacciones de contado u originar nuevos créditos con reglas comerciales"
     >
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* COLUMNA IZQUIERDA Y CENTRAL: Clientes y Carrito */}
+        {/* COLUMNA IZQUIERDA Y CENTRAL: Selección de Cliente y Carrito */}
         <div className="space-y-6 lg:col-span-2">
-          {/* BLOQUE 1: SELECCIÓN DE CLIENTE */}
+          {/* SECCIÓN 1: SELECCIÓN DE CLIENTE */}
           <Card className="border-border/60 shadow-sm transition-all duration-300 hover:shadow-md">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2 text-primary">
                 <User className="h-5 w-5" />
-                <CardTitle className="text-lg">Bloque 1: Selección de Cliente</CardTitle>
+                <CardTitle className="text-lg">Selección de Cliente</CardTitle>
               </div>
               <CardDescription>
-                Busque y seleccione el cliente que realizará la compra.
+                Busque y asocie el cliente de la base de datos para registrar la venta.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -290,7 +394,7 @@ function NuevaVenta() {
                       <CommandList>
                         <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                         <CommandGroup>
-                          {clientes?.map((cliente) => (
+                          {(clientes || []).map((cliente) => (
                             <CommandItem
                               key={cliente.id}
                               value={`${cliente.nombres} ${cliente.apellidos} ${cliente.cedula} ${cliente.codigo_consecutivo}`}
@@ -356,9 +460,9 @@ function NuevaVenta() {
                           clienteActual.estado === "Activo"
                             ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
                             : clienteActual.estado === "Moroso"
-                              ? "bg-rose-500/10 text-rose-600 border-rose-500/20"
+                              ? "bg-rose-500/10 text-rose-600 border-rose-500/20 animate-pulse font-semibold"
                               : clienteActual.estado === "Judicial"
-                                ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                                ? "bg-amber-500/10 text-amber-600 border-amber-500/20 font-semibold"
                                 : "bg-neutral-500/10 text-neutral-600 border-neutral-500/20"
                         }`}
                         variant="outline"
@@ -370,7 +474,7 @@ function NuevaVenta() {
                       <span className="block text-xs font-semibold text-muted-foreground uppercase">
                         Dirección & Barrio
                       </span>
-                      <span>
+                      <span className="truncate block">
                         {clienteActual.direccion}, {clienteActual.barrio} ({clienteActual.ciudad})
                       </span>
                     </div>
@@ -386,15 +490,15 @@ function NuevaVenta() {
             </CardContent>
           </Card>
 
-          {/* BLOQUE 2: CARRITO DE COMPRAS */}
+          {/* SECCIÓN 2: CARRITO DE COMPRAS */}
           <Card className="border-border/60 shadow-sm transition-all duration-300 hover:shadow-md">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2 text-primary">
                 <ShoppingCart className="h-5 w-5" />
-                <CardTitle className="text-lg">Bloque 2: Carrito de Compras</CardTitle>
+                <CardTitle className="text-lg">Carrito de Compras</CardTitle>
               </div>
               <CardDescription>
-                Busque productos en el catálogo, especifique la cantidad y añádalos a la venta.
+                Añada productos al carrito para calcular en tiempo real el Total Base.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -427,9 +531,9 @@ function NuevaVenta() {
                         <CommandList>
                           <CommandEmpty>No se encontraron productos.</CommandEmpty>
                           <CommandGroup>
-                            {productos
-                              ?.filter((p) => p.estado === "Activo")
-                              ?.map((prod) => (
+                            {(productos || [])
+                              .filter((p) => p.estado === "Activo")
+                              .map((prod) => (
                                 <CommandItem
                                   key={prod.id}
                                   value={`${prod.nombre} ${prod.codigo_producto}`}
@@ -446,7 +550,7 @@ function NuevaVenta() {
                                   <div className="flex flex-col flex-1">
                                     <span className="font-medium">{prod.nombre}</span>
                                     <span className="text-xs text-muted-foreground">
-                                      Contado: {formatearMoneda(prod.precio_contado)} | Crédito:{" "}
+                                      Precio Contado: {formatearMoneda(prod.precio_contado)} | Crédito:{" "}
                                       {formatearMoneda(prod.precio_credito)}
                                     </span>
                                   </div>
@@ -492,7 +596,7 @@ function NuevaVenta() {
 
               {/* Vista previa de precios del producto seleccionado */}
               {productoActual && (
-                <div className="flex items-center gap-4 rounded-lg bg-primary/5 p-3 text-sm text-primary-foreground border border-primary/10 animate-in fade-in duration-200">
+                <div className="flex items-center gap-4 rounded-lg bg-primary/5 p-3 text-sm border border-primary/10 animate-in fade-in duration-200">
                   <div className="flex-1">
                     <span className="block text-xs font-semibold text-primary/70 uppercase">
                       Precio de Contado
@@ -505,7 +609,7 @@ function NuevaVenta() {
                     <span className="block text-xs font-semibold text-primary/70 uppercase">
                       Precio de Crédito
                     </span>
-                    <span className="text-base font-bold text-primary">
+                    <span className="text-base font-bold text-muted-foreground line-through">
                       {formatearMoneda(productoActual.precio_credito)}
                     </span>
                   </div>
@@ -529,7 +633,7 @@ function NuevaVenta() {
                     <TableRow>
                       <TableHead>Producto</TableHead>
                       <TableHead className="text-center w-24">Cant.</TableHead>
-                      <TableHead className="text-right w-36">Precio Unit.</TableHead>
+                      <TableHead className="text-right w-36">Precio Unit. (Contado)</TableHead>
                       <TableHead className="text-right w-36">Subtotal</TableHead>
                       <TableHead className="text-center w-16"></TableHead>
                     </TableRow>
@@ -543,15 +647,13 @@ function NuevaVenta() {
                       </TableRow>
                     ) : (
                       carrito.map((item) => {
-                        const precio =
-                          tipoVenta === "Credito" ? item.precioCredito : item.precioContado;
-                        const subtotalItem = item.cantidad * precio;
+                        const subtotalItem = item.cantidad * item.precioContado;
 
                         return (
                           <TableRow key={item.productoId} className="hover:bg-muted/10 transition-colors">
                             <TableCell className="font-medium">{item.nombre}</TableCell>
                             <TableCell className="text-center">{item.cantidad}</TableCell>
-                            <TableCell className="text-right">{formatearMoneda(precio)}</TableCell>
+                            <TableCell className="text-right">{formatearMoneda(item.precioContado)}</TableCell>
                             <TableCell className="text-right font-semibold">
                               {formatearMoneda(subtotalItem)}
                             </TableCell>
@@ -573,21 +675,13 @@ function NuevaVenta() {
                 </Table>
               </div>
 
-              {/* Resumen e Indicador de Tipo de Venta */}
+              {/* Resumen de totales */}
               {carrito.length > 0 && (
                 <div className="flex flex-col gap-2 rounded-lg bg-muted/20 p-4 border border-border/50">
-                  <div className="flex justify-between items-center text-sm text-muted-foreground">
-                    <span>Total Contado equivalente:</span>
-                    <span>{formatearMoneda(totalContadoAlternativo)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm text-muted-foreground border-b border-border/50 pb-2">
-                    <span>Total Crédito equivalente:</span>
-                    <span>{formatearMoneda(totalCreditoAlternativo)}</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2">
-                    <span className="text-base font-semibold text-foreground">Total General:</span>
-                    <span className="text-xl font-bold text-primary">
-                      {formatearMoneda(totalGeneral)}
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-muted-foreground">Total Base (Precio Contado):</span>
+                    <span className="text-lg font-bold text-foreground">
+                      {formatearMoneda(calculosFinancieros.totalBase)}
                     </span>
                   </div>
                 </div>
@@ -596,181 +690,206 @@ function NuevaVenta() {
           </Card>
         </div>
 
-        {/* COLUMNA DERECHA: Condiciones de Pago y Confirmación */}
+        {/* COLUMNA DERECHA: SECCIÓN 3: CONFIGURACIÓN FINANCIERA */}
         <div className="space-y-6">
-          {/* BLOQUE 3: CONDICIONES DE PAGO */}
           <Card className="border-border/60 shadow-sm transition-all duration-300 hover:shadow-md lg:sticky lg:top-6">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2 text-primary">
                 <Coins className="h-5 w-5" />
-                <CardTitle className="text-lg">Bloque 3: Condiciones de Pago</CardTitle>
+                <CardTitle className="text-lg">Configuración Financiera</CardTitle>
               </div>
               <CardDescription>
-                Configure el tipo de pago y la amortización del crédito si aplica.
+                Seleccione el plan de pago. Las cuotas y fechas se calcularán automáticamente según las políticas del almacén.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Radio Group - Tipo de Venta */}
+              {/* Radio Group - Tipo de Venta Comercial */}
               <div className="space-y-3">
-                <Label className="text-sm font-semibold">Tipo de Venta</Label>
+                <Label className="text-sm font-semibold">Tipo de Venta / Plan Financiero</Label>
                 <RadioGroup
-                  defaultValue="Contado"
                   value={tipoVenta}
                   onValueChange={(val) => {
-                    setTipoVenta(val as "Contado" | "Credito");
-                    // Opcional: Resetear cuota inicial si pasa a contado
-                    if (val === "Contado") {
-                      setCuotaInicial(0);
-                    }
+                    setTipoVenta(val as TipoVentaComercial);
+                    setCuotaInicial(0); // Resetear cuota inicial al cambiar de plan
                   }}
-                  className="grid grid-cols-2 gap-4"
+                  className="grid grid-cols-1 gap-2.5"
                 >
-                  <div>
-                    <RadioGroupItem value="Contado" id="contado" className="peer sr-only" />
+                  <div className="relative">
+                    <RadioGroupItem value="Contado" id="plan-contado" className="peer sr-only" />
                     <Label
-                      htmlFor="contado"
-                      className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-all duration-200"
+                      htmlFor="plan-contado"
+                      className="flex items-center justify-between rounded-lg border-2 border-muted bg-popover p-3 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-all duration-150"
                     >
-                      <DollarSign className="mb-2 h-6 w-6" />
-                      <span className="text-sm font-bold">Contado</span>
+                      <div className="flex items-center gap-3">
+                        <DollarSign className="h-5 w-5 text-emerald-500" />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold">Contado</span>
+                          <span className="text-2xs text-muted-foreground">Pago único inmediato</span>
+                        </div>
+                      </div>
                     </Label>
                   </div>
-                  <div>
-                    <RadioGroupItem value="Credito" id="credito" className="peer sr-only" />
+
+                  <div className="relative">
+                    <RadioGroupItem value="Credito Tradicional" id="plan-tradicional" className="peer sr-only" />
                     <Label
-                      htmlFor="credito"
-                      className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-all duration-200"
+                      htmlFor="plan-tradicional"
+                      className="flex items-center justify-between rounded-lg border-2 border-muted bg-popover p-3 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-all duration-150"
                     >
-                      <Calendar className="mb-2 h-6 w-6" />
-                      <span className="text-sm font-bold">Crédito</span>
+                      <div className="flex items-center gap-3">
+                        <Calendar className="h-5 w-5 text-blue-500" />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold">Crédito Tradicional</span>
+                          <span className="text-2xs text-muted-foreground">Cuotas quincenales fijas según monto</span>
+                        </div>
+                      </div>
+                    </Label>
+                  </div>
+
+                  <div className="relative">
+                    <RadioGroupItem value="Credicontado Estandar" id="plan-estandar" className="peer sr-only" />
+                    <Label
+                      htmlFor="plan-estandar"
+                      className="flex items-center justify-between rounded-lg border-2 border-muted bg-popover p-3 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-all duration-150"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Percent className="h-5 w-5 text-amber-500" />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold">Credicontado Estándar</span>
+                          <span className="text-2xs text-muted-foreground">Financiación al 0% con fecha límite</span>
+                        </div>
+                      </div>
+                    </Label>
+                  </div>
+
+                  <div className="relative">
+                    <RadioGroupItem value="Credicontado 3 Meses" id="plan-3meses" className="peer sr-only" />
+                    <Label
+                      htmlFor="plan-3meses"
+                      className="flex items-center justify-between rounded-lg border-2 border-muted bg-popover p-3 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-all duration-150"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Coins className="h-5 w-5 text-purple-500" />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold">Credicontado 3 Meses</span>
+                          <span className="text-2xs text-muted-foreground">Plazo a 3 meses con recargo inicial</span>
+                        </div>
+                      </div>
                     </Label>
                   </div>
                 </RadioGroup>
               </div>
 
-              {/* Lógica reactiva - Si es Contado */}
-              {tipoVenta === "Contado" ? (
-                <div className="space-y-4 rounded-lg bg-emerald-500/5 p-4 border border-emerald-500/10 text-emerald-600 animate-in fade-in duration-200">
-                  <div className="flex items-center gap-2">
-                    <Check className="h-5 w-5 bg-emerald-500/10 rounded-full p-0.5" />
-                    <span className="text-sm font-semibold">Venta de Contado Seleccionada</span>
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground uppercase block font-semibold">
-                      Total a Pagar
-                    </span>
-                    <span className="text-2xl font-bold text-foreground">
-                      {formatearMoneda(totalGeneral)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    La factura quedará registrada directamente con el estado de pago{" "}
-                    <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white">
-                      Finalizado
-                    </Badge>{" "}
-                    al confirmar.
-                  </p>
-                </div>
-              ) : (
-                /* Lógica reactiva - Si es Crédito */
-                <div className="space-y-4 animate-in fade-in duration-200">
-                  {/* Cuota Inicial */}
-                  <div className="space-y-2">
-                    <Label htmlFor="cuota-inicial" className="text-sm font-medium">
-                      Cuota Inicial
-                    </Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">$</span>
-                      <Input
-                        id="cuota-inicial"
-                        type="number"
-                        min={0}
-                        max={totalGeneral}
-                        value={cuotaInicial || ""}
-                        onChange={(e) => {
-                          const val = Math.max(0, parseInt(e.target.value) || 0);
-                          if (val > totalGeneral) {
-                            toast.error("La cuota inicial no puede superar el total de la compra");
-                            setCuotaInicial(totalGeneral);
-                          } else {
-                            setCuotaInicial(val);
-                          }
-                        }}
-                        className="pl-7"
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Número de Cuotas */}
-                  <div className="space-y-2">
-                    <Label htmlFor="num-cuotas" className="text-sm font-medium">
-                      Número de Cuotas
-                    </Label>
+              {/* Input de Cuota Inicial (solo visible para tipos de crédito) */}
+              {tipoVenta !== "Contado" && (
+                <div className="space-y-2 animate-in fade-in duration-200">
+                  <Label htmlFor="cuota-inicial" className="text-sm font-medium">
+                    Cuota Inicial (Abono previo)
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">$</span>
                     <Input
-                      id="num-cuotas"
+                      id="cuota-inicial"
                       type="number"
-                      min={1}
-                      value={numeroCuotas}
-                      onChange={(e) => setNumeroCuotas(Math.max(1, parseInt(e.target.value) || 1))}
+                      min={0}
+                      max={calculosFinancieros.totalVenta}
+                      value={cuotaInicial || ""}
+                      onChange={(e) => {
+                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                        if (val > calculosFinancieros.totalVenta) {
+                          toast.error("La cuota inicial no puede superar el total de la venta");
+                          setCuotaInicial(calculosFinancieros.totalVenta);
+                        } else {
+                          setCuotaInicial(val);
+                        }
+                      }}
+                      className="pl-7"
+                      placeholder="0"
                     />
                   </div>
-
-                  {/* Frecuencia de Pago */}
-                  <div className="space-y-2">
-                    <Label htmlFor="frecuencia-select" className="text-sm font-medium">
-                      Frecuencia de Pago
-                    </Label>
-                    <Select
-                      value={frecuenciaPago}
-                      onValueChange={(val) =>
-                        setFrecuenciaPago(val as "Semanal" | "Quincenal" | "Mensual")
-                      }
-                    >
-                      <SelectTrigger id="frecuencia-select">
-                        <SelectValue placeholder="Seleccione frecuencia" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Semanal">Semanal</SelectItem>
-                        <SelectItem value="Quincenal">Quincenal</SelectItem>
-                        <SelectItem value="Mensual">Mensual</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Resultados de Amortización */}
-                  <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-3">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">Saldo Pendiente:</span>
-                      <span className="font-bold text-foreground">
-                        {formatearMoneda(saldoPendiente)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center border-t border-border pt-3">
-                      <span className="text-muted-foreground font-semibold">Valor de la Cuota:</span>
-                      <span className="text-lg font-bold text-primary">
-                        {formatearMoneda(valorCuota)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Advertencia si no hay cliente o productos */}
-                  {(!selectedClienteId || carrito.length === 0) && (
-                    <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 p-3 border border-amber-500/20 text-amber-600 text-xs">
-                      <AlertTriangle className="h-4 w-4 shrink-0" />
-                      <div>
-                        Para confirmar la venta, debe completar los bloques obligatorios:
-                        <ul className="list-disc pl-4 mt-1 space-y-0.5">
-                          {!selectedClienteId && <li>Seleccionar un cliente</li>}
-                          {carrito.length === 0 && <li>Agregar productos al carrito</li>}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
-              {/* Botón de Confirmación */}
+              {/* Banners dinámicos explicativos del motor de reglas */}
+              {carrito.length > 0 && (
+                <div className="rounded-lg bg-primary/5 border border-primary/10 p-3.5 space-y-2.5 animate-in fade-in duration-300">
+                  <div className="flex items-start gap-2.5 text-primary">
+                    <Info className="h-5 w-5 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-bold uppercase tracking-wider">Regla Aplicada</h4>
+                      <p className="text-xs leading-relaxed text-foreground/90">
+                        {calculosFinancieros.planExplicacion}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Resumen del Plan Financiero */}
+              <div className="rounded-xl border border-border bg-muted/40 p-4 space-y-3">
+                <div className="flex justify-between items-center text-sm border-b border-border/50 pb-2">
+                  <span className="text-muted-foreground">Total Venta:</span>
+                  <span className="text-base font-bold text-foreground">
+                    {formatearMoneda(calculosFinancieros.totalVenta)}
+                  </span>
+                </div>
+                {tipoVenta !== "Contado" && (
+                  <>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Cuota Inicial:</span>
+                      <span className="font-semibold text-foreground">
+                        {formatearMoneda(cuotaInicial)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Saldo Pendiente:</span>
+                      <span className="font-bold text-foreground">
+                        {formatearMoneda(calculosFinancieros.saldoPendiente)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Número de Cuotas:</span>
+                      <span className="font-semibold text-foreground">
+                        {calculosFinancieros.numeroCuotas || "N/A (Abono Libre)"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Frecuencia:</span>
+                      <span className="font-semibold text-foreground">
+                        {calculosFinancieros.frecuenciaPago || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Plazo Estimado:</span>
+                      <span className="font-semibold text-foreground">
+                        {formatearFechaEspanol(calculosFinancieros.fechaFinalEstimada) || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center border-t border-border/50 pt-3">
+                      <span className="text-sm font-semibold text-foreground">Valor Cuota:</span>
+                      <span className="text-lg font-bold text-primary">
+                        {formatearMoneda(calculosFinancieros.valorCuota)}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Advertencia si falta cliente o carrito */}
+              {(!selectedClienteId || carrito.length === 0) && (
+                <div className="flex items-start gap-2.5 rounded-lg bg-amber-500/10 p-3 border border-amber-500/20 text-amber-600 text-xs leading-normal">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold">Requisitos pendientes:</span>
+                    <ul className="list-disc pl-4 mt-1 space-y-0.5">
+                      {!selectedClienteId && <li>Seleccionar un cliente</li>}
+                      {carrito.length === 0 && <li>Agregar al menos 1 producto al carrito</li>}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Botón Confirmar Venta */}
               <Button
                 onClick={handleConfirmarVenta}
                 disabled={!selectedClienteId || carrito.length === 0 || mutation.isPending}

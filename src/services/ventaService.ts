@@ -24,6 +24,8 @@ export interface ProcesarVentaInput {
   valorCuota: number;
   frecuenciaPago: "Semanal" | "Quincenal" | "Mensual" | null;
   carrito: CarritoItem[];
+  fechaProximoPago?: string | null;
+  fechaFinalEstimada?: string | null;
 }
 
 /**
@@ -124,8 +126,15 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
   let fechaProximoPago: string | null = null;
   let fechaFinalEstimada: string | null = null;
 
-  if (input.tipoVenta === "Credito" && input.frecuenciaPago) {
+  if (input.fechaProximoPago) {
+    fechaProximoPago = input.fechaProximoPago;
+  } else if (input.tipoVenta === "Credito" && input.frecuenciaPago) {
     fechaProximoPago = calcularFechaVencimiento(fechaVenta, input.frecuenciaPago, 1);
+  }
+
+  if (input.fechaFinalEstimada) {
+    fechaFinalEstimada = input.fechaFinalEstimada;
+  } else if (input.tipoVenta === "Credito" && input.frecuenciaPago) {
     fechaFinalEstimada = calcularFechaVencimiento(
       fechaVenta,
       input.frecuenciaPago,
@@ -186,6 +195,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
   if (input.tipoVenta === "Credito" && input.frecuenciaPago && input.numeroCuotas > 0) {
     const cuotasParaInsertar = [];
     
+    let totalAcumuladoCuotas = 0;
     for (let i = 1; i <= input.numeroCuotas; i++) {
       const fechaVencimiento = calcularFechaVencimiento(
         fechaVenta,
@@ -193,13 +203,21 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
         i
       );
 
+      let valorCuotaActual = input.valorCuota;
+      if (i === input.numeroCuotas) {
+        // Ajustar la última cuota al saldo restante exacto para evitar diferencias por redondeo
+        valorCuotaActual = input.saldoPendiente - totalAcumuladoCuotas;
+      } else {
+        totalAcumuladoCuotas += valorCuotaActual;
+      }
+
       cuotasParaInsertar.push({
         credito_id: creditoId,
         numero_cuota: i,
         fecha_vencimiento: fechaVencimiento,
-        valor_cuota: input.valorCuota,
+        valor_cuota: valorCuotaActual,
         valor_pagado: 0,
-        saldo_cuota: input.valorCuota,
+        saldo_cuota: valorCuotaActual,
         estado: "Pendiente",
       });
     }

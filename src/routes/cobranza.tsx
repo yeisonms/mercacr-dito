@@ -109,6 +109,78 @@ const formatearMoneda = (valor: number) => {
   }).format(valor);
 };
 
+/**
+ * Calcula la distancia euclidiana entre dos puntos GPS.
+ * Para distancias cortas dentro de una ciudad es suficientemente preciso.
+ */
+function distanciaKm(
+  lat1: number, lng1: number,
+  lat2: number, lng2: number
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Algoritmo del Vecino Más Cercano (Nearest Neighbor).
+ * Ordena los clientes partiendo desde el punto de inicio (cobrador)
+ * visitando siempre el cliente más cercano no visitado.
+ * Solo considera clientes que tienen coordenadas GPS.
+ */
+function optimizarRuta(
+  clientes: CreditoCobro[],
+  inicio: [number, number]
+): CreditoCobro[] {
+  const conGps = clientes.filter(
+    (c) => c.cliente.latitud !== null && c.cliente.longitud !== null
+  );
+  if (conGps.length === 0) return clientes;
+
+  const sinGps = clientes.filter(
+    (c) => c.cliente.latitud === null || c.cliente.longitud === null
+  );
+
+  const visitados = new Set<string>();
+  const rutaOptima: CreditoCobro[] = [];
+  let posActual = inicio;
+
+  while (visitados.size < conGps.length) {
+    let menorDistancia = Infinity;
+    let siguiente: CreditoCobro | null = null;
+
+    for (const cliente of conGps) {
+      if (visitados.has(cliente.id)) continue;
+      const dist = distanciaKm(
+        posActual[0], posActual[1],
+        Number(cliente.cliente.latitud!),
+        Number(cliente.cliente.longitud!)
+      );
+      if (dist < menorDistancia) {
+        menorDistancia = dist;
+        siguiente = cliente;
+      }
+    }
+
+    if (!siguiente) break;
+    visitados.add(siguiente.id);
+    rutaOptima.push(siguiente);
+    posActual = [
+      Number(siguiente.cliente.latitud!),
+      Number(siguiente.cliente.longitud!),
+    ];
+  }
+
+  // Los clientes sin GPS van al final
+  return [...rutaOptima, ...sinGps];
+}
+
 // ─── Componente Principal ────────────────────────────────────────────────────
 
 function CobranzaPage() {
@@ -385,53 +457,74 @@ function CobranzaPage() {
       cobradorMarkerRef.current = markerCobrador;
     }
 
-    // 2. Dibujar marcadores de los clientes
+    // 2. Optimizar orden de visitas con Nearest Neighbor
+    const puntoInicio: [number, number] = posicionCobrador ?? [5.5310, -74.1080];
+    const clientesOrdenados = optimizarRuta(creditosFiltrados, puntoInicio);
+
+    // 3. Dibujar marcadores en el ORDEN ÓPTIMO
     const latlngsRuta: [number, number][] = [];
 
-    creditosFiltrados.forEach((item) => {
+    // Si hay posición del cobrador, incluirla como primer punto de la polilínea
+    if (posicionCobrador) {
+      latlngsRuta.push(posicionCobrador);
+    }
+
+    clientesOrdenados.forEach((item, index) => {
       if (item.cliente.latitud !== null && item.cliente.longitud !== null) {
         const lat = Number(item.cliente.latitud);
         const lng = Number(item.cliente.longitud);
         latlngsRuta.push([lat, lng]);
+
+        // Número de visita en el orden óptimo (1-based)
+        const numeroVisita = index + 1;
 
         // Color según estado del crédito
         let colorMarker = "#10b981"; // Al día
         if (item.estado === "En mora") colorMarker = "#ef4444";
         else if (item.estado === "Próximo a vencer") colorMarker = "#f59e0b";
 
-        // Crear marcador personalizado usando L.divIcon
+        // Calcular distancia desde el punto anterior
+        const puntoAnterior = index === 0
+          ? puntoInicio
+          : [
+              Number(clientesOrdenados[index - 1].cliente.latitud!),
+              Number(clientesOrdenados[index - 1].cliente.longitud!),
+            ] as [number, number];
+        const dist = distanciaKm(
+          puntoAnterior[0], puntoAnterior[1], lat, lng
+        ).toFixed(2);
+
+        // Marcador numerado según orden óptimo
         const customIcon = L.divIcon({
           className: "custom-div-icon",
-          html: `<div class="relative flex items-center justify-center">
-                   <div class="absolute h-8 w-8 rounded-full opacity-20 animate-ping" style="background-color: ${colorMarker}"></div>
-                   <div class="h-6 w-6 rounded-full border-2 border-white flex items-center justify-center font-bold text-[10px] text-white shadow-md" style="background-color: ${colorMarker}">
-                     ${item.cliente.secuencia_visita || 0}
+          html: `<div style="position:relative;display:flex;align-items:center;justify-content:center;">
+                   <div style="position:absolute;height:32px;width:32px;border-radius:50%;opacity:0.18;background-color:${colorMarker};"></div>
+                   <div style="height:26px;width:26px;border-radius:50%;border:2.5px solid white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;color:white;background-color:${colorMarker};box-shadow:0 2px 6px rgba(0,0,0,0.35);">
+                     ${numeroVisita}
                    </div>
                  </div>`,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
+          iconSize: [26, 26],
+          iconAnchor: [13, 13],
         });
 
         const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
 
-        // Contenido del Popup
         const popupContent = `
-          <div class="p-1 space-y-1.5 min-w-[150px]">
-            <div class="font-bold text-sm text-foreground leading-tight">
-              ${item.cliente.secuencia_visita}. ${item.cliente.nombres} ${item.cliente.apellidos}
+          <div style="padding:6px;min-width:165px;font-family:sans-serif;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px;">
+              ${numeroVisita}. ${item.cliente.nombres} ${item.cliente.apellidos}
             </div>
-            <div class="text-2xs text-muted-foreground font-mono">
-              Barrio: ${item.cliente.barrio}
-            </div>
-            <div class="text-xs font-bold text-foreground">
+            <div style="font-size:11px;color:#6b7280;margin-bottom:2px;">📍 ${item.cliente.barrio}</div>
+            <div style="font-size:11px;color:#6b7280;margin-bottom:4px;">📏 ~${dist} km desde parada anterior</div>
+            <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:6px;">
               Saldo: ${formatearMoneda(item.saldo_pendiente)}
             </div>
             <button 
               type="button" 
-              class="btn-cobrar-mapa bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-1.5 px-3 rounded-lg text-2xs mt-2 w-full text-center cursor-pointer border-0 shadow-sm"
+              class="btn-cobrar-mapa"
               data-credito-id="${item.id}"
-            >
-              Registrar Pago
+              style="background:#059669;color:white;font-weight:700;padding:6px 10px;border-radius:8px;font-size:11px;width:100%;text-align:center;cursor:pointer;border:0;box-shadow:0 1px 3px rgba(0,0,0,0.2);">
+              💰 Registrar Pago
             </button>
           </div>
         `;
@@ -441,21 +534,25 @@ function CobranzaPage() {
       }
     });
 
-    // 3. Dibujar polilínea que conecta a los clientes secuencialmente
-    if (latlngsRuta.length > 1) {
+    // 4. Dibujar polilínea de la ruta ÓPTIMA
+    const soloClientes = latlngsRuta.slice(posicionCobrador ? 1 : 0);
+
+    if (soloClientes.length > 1) {
+      // Línea principal de la ruta
       const polyline = L.polyline(latlngsRuta, {
-        color: "#10b981", // Emerald 500
-        weight: 3,
-        opacity: 0.7,
-        dashArray: "6, 6"
+        color: "#6366f1",   // Indigo — diferente al verde de los marcadores para distinguir
+        weight: 3.5,
+        opacity: 0.75,
+        dashArray: "8, 5",
       }).addTo(map);
 
+      // Flecha de dirección sobre la polilínea (usando decoradores si Leaflet los soporta)
       polylineRef.current = polyline;
-      
-      // Auto-ajustar mapa para mostrar toda la ruta
-      map.fitBounds(polyline.getBounds(), { padding: [40, 40] });
-    } else if (latlngsRuta.length === 1) {
-      map.setView(latlngsRuta[0], 15);
+
+      // Auto-fit mostrando toda la ruta óptima
+      map.fitBounds(polyline.getBounds(), { padding: [45, 45] });
+    } else if (soloClientes.length === 1) {
+      map.setView(soloClientes[0], 15);
     }
   }, [leafletLoaded, vistaActiva, creditosFiltrados, posicionCobrador]);
 
@@ -569,15 +666,33 @@ function CobranzaPage() {
         {/* Mapa interactivo de Cobranza */}
         {!isLoading && !isError && vistaActiva === "mapa" && (
           <div className="space-y-2">
-            <div 
-              ref={mapContainerRef} 
-              className="h-[calc(100vh-270px)] min-h-[420px] w-full rounded-2xl border border-border/60 overflow-hidden relative z-10"
+            {/* Badge ruta óptima */}
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700 dark:text-indigo-400">
+                  ✦ Ruta Óptima calculada
+                </span>
+                {posicionCobrador ? (
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">· GPS activo</span>
+                ) : (
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">· Sin GPS (ubicación por defecto)</span>
+                )}
+              </div>
+              <span className="text-[10px] text-muted-foreground">
+                {creditosFiltrados.filter(c => c.cliente.latitud !== null).length}/{creditosFiltrados.length} con GPS
+              </span>
+            </div>
+
+            <div
+              ref={mapContainerRef}
+              className="h-[calc(100vh-300px)] min-h-[420px] w-full rounded-2xl border border-border/60 overflow-hidden relative z-10"
             />
-            <p className="text-3xs text-muted-foreground text-center italic">
-              * Toca un marcador para ver detalles del cliente y registrar su pago.
+            <p className="text-[10px] text-muted-foreground text-center italic">
+              Los números indican el orden de visita optimizado partiendo desde tu ubicación. Toca un marcador para registrar el pago.
             </p>
           </div>
         )}
+
 
         {/* Loader de carga */}
         {isLoading && (

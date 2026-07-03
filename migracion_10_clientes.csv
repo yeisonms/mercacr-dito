@@ -1,11 +1,4 @@
 cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta
-1017111222,Carlos Mario2,Restrepo,3001112233,Niquia,1000000,750000,50000,Semanal,2026-07-02,R-001
-1017111333,Diana Patricia2,Gomez,3002223344,Zamora,800000,600000,40000,Quincenal,2026-07-02,R-001
-1017111444,Alejandro2,Muñoz,3003334455,Guayabal,500000,300000,30000,Mensual,2026-07-02,R-002
-1017111555,Beatriz Elena2,Ortiz,3004445566,Poblado,1500000,1200000,100000,Quincenal,2026-07-02,R-002
-1017111666,Wilson Alexis2,Serna,3005556677,Laureles,600000,400000,40000,Semanal,2026-07-02,R-003
-1017111777,Sandra Milena2,Henao,3006667788,Cabañas,1200000,900000,60000,Semanal,2026-07-02,R-001
-1017111888,Jorge Ivan2,Cardona,3007778899,Zamora,900000,700000,50000,Quincenal,2026-07-02,R-001
-1017111999,Gloria Ines2,Castrillon,3008889900,Belen,400000,200000,20000,Mensual,2026-07-02,R-002
-1017112000,Hernan Dario2,Velasquez,3009990011,Envigado,2000000,1600000,100000,Quincenal,2026-07-02,R-002
-1017112100,Olga Lucia2,Montoya,3011112233,Centro,700000,500000,50000,Semanal,2026-07-02,R-003
+1017111777,Sandra Milena2,Henao,3006667788,Cabañas,1200000,900000,60000,Semanal,2026-07-03,R-001
+
+

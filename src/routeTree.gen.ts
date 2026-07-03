@@ -9,10 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UsuariosRouteImport } from './routes/usuarios'
 import { Route as RutasRouteImport } from './routes/rutas'
 import { Route as ProductosRouteImport } from './routes/productos'
 import { Route as NuevaVentaRouteImport } from './routes/nueva-venta'
 import { Route as MigracionRouteImport } from './routes/migracion'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as EstadoCuentaRouteImport } from './routes/estado-cuenta'
 import { Route as CreditosRouteImport } from './routes/creditos'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
@@ -24,6 +26,11 @@ import { Route as CobranzaAprobacionRouteImport } from './routes/cobranza_.aprob
 import { Route as ClientesNuevoRouteImport } from './routes/clientes.nuevo'
 import { Route as ClientesClienteIdRouteImport } from './routes/clientes.$clienteId'
 
+const UsuariosRoute = UsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RutasRoute = RutasRouteImport.update({
   id: '/rutas',
   path: '/rutas',
@@ -42,6 +49,11 @@ const NuevaVentaRoute = NuevaVentaRouteImport.update({
 const MigracionRoute = MigracionRouteImport.update({
   id: '/migracion',
   path: '/migracion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EstadoCuentaRoute = EstadoCuentaRouteImport.update({
@@ -101,10 +113,12 @@ export interface FileRoutesByFullPath {
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
+  '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
   '/productos': typeof ProductosRoute
   '/rutas': typeof RutasRoute
+  '/usuarios': typeof UsuariosRoute
   '/clientes/$clienteId': typeof ClientesClienteIdRoute
   '/clientes/nuevo': typeof ClientesNuevoRoute
   '/cobranza/aprobacion': typeof CobranzaAprobacionRoute
@@ -117,10 +131,12 @@ export interface FileRoutesByTo {
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
+  '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
   '/productos': typeof ProductosRoute
   '/rutas': typeof RutasRoute
+  '/usuarios': typeof UsuariosRoute
   '/clientes/$clienteId': typeof ClientesClienteIdRoute
   '/clientes/nuevo': typeof ClientesNuevoRoute
   '/cobranza/aprobacion': typeof CobranzaAprobacionRoute
@@ -134,10 +150,12 @@ export interface FileRoutesById {
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
+  '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
   '/productos': typeof ProductosRoute
   '/rutas': typeof RutasRoute
+  '/usuarios': typeof UsuariosRoute
   '/clientes/$clienteId': typeof ClientesClienteIdRoute
   '/clientes/nuevo': typeof ClientesNuevoRoute
   '/cobranza_/aprobacion': typeof CobranzaAprobacionRoute
@@ -152,10 +170,12 @@ export interface FileRouteTypes {
     | '/configuracion'
     | '/creditos'
     | '/estado-cuenta'
+    | '/login'
     | '/migracion'
     | '/nueva-venta'
     | '/productos'
     | '/rutas'
+    | '/usuarios'
     | '/clientes/$clienteId'
     | '/clientes/nuevo'
     | '/cobranza/aprobacion'
@@ -168,10 +188,12 @@ export interface FileRouteTypes {
     | '/configuracion'
     | '/creditos'
     | '/estado-cuenta'
+    | '/login'
     | '/migracion'
     | '/nueva-venta'
     | '/productos'
     | '/rutas'
+    | '/usuarios'
     | '/clientes/$clienteId'
     | '/clientes/nuevo'
     | '/cobranza/aprobacion'
@@ -184,10 +206,12 @@ export interface FileRouteTypes {
     | '/configuracion'
     | '/creditos'
     | '/estado-cuenta'
+    | '/login'
     | '/migracion'
     | '/nueva-venta'
     | '/productos'
     | '/rutas'
+    | '/usuarios'
     | '/clientes/$clienteId'
     | '/clientes/nuevo'
     | '/cobranza_/aprobacion'
@@ -201,10 +225,12 @@ export interface RootRouteChildren {
   ConfiguracionRoute: typeof ConfiguracionRoute
   CreditosRoute: typeof CreditosRoute
   EstadoCuentaRoute: typeof EstadoCuentaRoute
+  LoginRoute: typeof LoginRoute
   MigracionRoute: typeof MigracionRoute
   NuevaVentaRoute: typeof NuevaVentaRoute
   ProductosRoute: typeof ProductosRoute
   RutasRoute: typeof RutasRoute
+  UsuariosRoute: typeof UsuariosRoute
   ClientesClienteIdRoute: typeof ClientesClienteIdRoute
   ClientesNuevoRoute: typeof ClientesNuevoRoute
   CobranzaAprobacionRoute: typeof CobranzaAprobacionRoute
@@ -214,6 +240,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/usuarios': {
+      id: '/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof UsuariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/rutas': {
       id: '/rutas'
       path: '/rutas'
@@ -240,6 +273,13 @@ declare module '@tanstack/react-router' {
       path: '/migracion'
       fullPath: '/migracion'
       preLoaderRoute: typeof MigracionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/estado-cuenta': {
@@ -321,10 +361,12 @@ const rootRouteChildren: RootRouteChildren = {
   ConfiguracionRoute: ConfiguracionRoute,
   CreditosRoute: CreditosRoute,
   EstadoCuentaRoute: EstadoCuentaRoute,
+  LoginRoute: LoginRoute,
   MigracionRoute: MigracionRoute,
   NuevaVentaRoute: NuevaVentaRoute,
   ProductosRoute: ProductosRoute,
   RutasRoute: RutasRoute,
+  UsuariosRoute: UsuariosRoute,
   ClientesClienteIdRoute: ClientesClienteIdRoute,
   ClientesNuevoRoute: ClientesNuevoRoute,
   CobranzaAprobacionRoute: CobranzaAprobacionRoute,

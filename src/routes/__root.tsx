@@ -4,36 +4,47 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
+  useNavigate,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { Loader2, Wallet } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { isSupabaseConfigured } from "@/lib/supabase";
+
+// ── Not found ─────────────────────────────────────────────────────────────────
 
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">
+          Página no encontrada
+        </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+          La página que buscas no existe o ha sido movida.
         </p>
         <div className="mt-6">
           <Link
             to="/"
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Go home
+            Volver al inicio
           </Link>
         </div>
       </div>
     </div>
   );
 }
+
+// ── Error boundary ────────────────────────────────────────────────────────────
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
@@ -46,10 +57,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+          Esta página no cargó
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          Algo salió mal. Puedes intentar refrescar o volver al inicio.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -59,13 +70,13 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Try again
+            Intentar de nuevo
           </button>
           <a
             href="/"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Go home
+            Ir al inicio
           </a>
         </div>
       </div>
@@ -73,36 +84,108 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-    ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-    ],
-  }),
-  shellComponent: RootShell,
-  component: RootComponent,
-  notFoundComponent: NotFoundComponent,
-  errorComponent: ErrorComponent,
-});
+// ── Loading screen ────────────────────────────────────────────────────────────
+
+function LoadingScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950">
+      <div className="flex flex-col items-center gap-5">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-600/30">
+          <Wallet className="h-7 w-7 text-white" />
+        </div>
+        <div className="flex items-center gap-2.5 text-slate-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm font-medium">Verificando sesión…</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Route Guard ───────────────────────────────────────────────────────────────
+/**
+ * Protege las rutas verificando la sesión activa y el rol del usuario.
+ *
+ * Reglas:
+ * - Sin sesión → redirige a /login
+ * - Con sesión en /login → redirige al home del rol
+ * - Cobrador fuera de /cobranza → redirige a /cobranza
+ * - Sin Supabase configurado → no aplica protección (modo desarrollo)
+ */
+function RouteGuard({ children }: { children: ReactNode }) {
+  const { session, perfil, cargando } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (cargando) return;
+    if (!isSupabaseConfigured) return; // Sin Supabase → desarrollo libre
+
+    const isLoginPage = pathname === "/login";
+
+    // Sin sesión fuera del login → login
+    if (!session && !isLoginPage) {
+      navigate({ to: "/login", replace: true });
+      return;
+    }
+
+    // Con sesión en login → redirigir al home del rol
+    if (session && perfil && isLoginPage) {
+      navigate({
+        to: perfil.rol === "Cobrador" ? "/cobranza" : "/",
+        replace: true,
+      });
+      return;
+    }
+
+    // Cobrador intentando acceder a rutas no permitidas
+    if (
+      session &&
+      perfil?.rol === "Cobrador" &&
+      !isLoginPage &&
+      !pathname.startsWith("/cobranza")
+    ) {
+      navigate({ to: "/cobranza", replace: true });
+    }
+  }, [cargando, session, perfil, pathname, navigate]);
+
+  // Pantalla de carga durante la resolución inicial de sesión
+  if (cargando) return <LoadingScreen />;
+
+  // Evitar el flash de contenido protegido mientras se redirige
+  if (isSupabaseConfigured && !session && pathname !== "/login") return null;
+  if (isSupabaseConfigured && session && perfil && pathname === "/login") return null;
+
+  return <>{children}</>;
+}
+
+// ── Root route ────────────────────────────────────────────────────────────────
+
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
+  {
+    head: () => ({
+      meta: [
+        { charSet: "utf-8" },
+        { name: "viewport", content: "width=device-width, initial-scale=1" },
+        { title: "Mercacrédito ERP" },
+        {
+          name: "description",
+          content: "ERP de gestión de microcréditos y cobranza para Mercacrédito.",
+        },
+        { name: "author", content: "Mercacrédito" },
+      ],
+      links: [{ rel: "stylesheet", href: appCss }],
+    }),
+    shellComponent: RootShell,
+    component: RootComponent,
+    notFoundComponent: NotFoundComponent,
+    errorComponent: ErrorComponent,
+  }
+);
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="es">
       <head>
         <HeadContent />
       </head>
@@ -119,8 +202,11 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <AuthProvider>
+        <RouteGuard>
+          <Outlet />
+        </RouteGuard>
+      </AuthProvider>
       <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );

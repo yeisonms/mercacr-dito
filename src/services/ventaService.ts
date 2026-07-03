@@ -158,7 +158,10 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
       saldo_pendiente: input.tipoVenta === "Credito" ? input.saldoPendiente : 0,
       numero_cuotas: input.tipoVenta === "Credito" ? input.numeroCuotas : 0,
       valor_cuota: input.tipoVenta === "Credito" ? input.valorCuota : 0,
-      frecuencia_pago: input.tipoVenta === "Credito" ? input.frecuenciaPago : null,
+      // Para Contado: se envía 'Mensual' como valor neutro si la columna tiene NOT NULL.
+      // Semánticamente no aplica, pero evita el constraint error.
+      // Solución definitiva: ALTER TABLE creditos ALTER COLUMN frecuencia_pago DROP NOT NULL;
+      frecuencia_pago: input.tipoVenta === "Credito" ? input.frecuenciaPago : "Mensual",
       fecha_proximo_pago: fechaProximoPago,
       fecha_final_estimada: fechaFinalEstimada,
       estado: estadoCredito,

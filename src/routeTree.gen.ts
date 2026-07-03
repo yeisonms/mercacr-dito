@@ -13,6 +13,7 @@ import { Route as RutasRouteImport } from './routes/rutas'
 import { Route as ProductosRouteImport } from './routes/productos'
 import { Route as NuevaVentaRouteImport } from './routes/nueva-venta'
 import { Route as MigracionRouteImport } from './routes/migracion'
+import { Route as EstadoCuentaRouteImport } from './routes/estado-cuenta'
 import { Route as CreditosRouteImport } from './routes/creditos'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as CobranzaRouteImport } from './routes/cobranza'
@@ -41,6 +42,11 @@ const NuevaVentaRoute = NuevaVentaRouteImport.update({
 const MigracionRoute = MigracionRouteImport.update({
   id: '/migracion',
   path: '/migracion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EstadoCuentaRoute = EstadoCuentaRouteImport.update({
+  id: '/estado-cuenta',
+  path: '/estado-cuenta',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CreditosRoute = CreditosRouteImport.update({
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/cobranza': typeof CobranzaRoute
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
+  '/estado-cuenta': typeof EstadoCuentaRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
   '/productos': typeof ProductosRoute
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/cobranza': typeof CobranzaRoute
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
+  '/estado-cuenta': typeof EstadoCuentaRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
   '/productos': typeof ProductosRoute
@@ -125,6 +133,7 @@ export interface FileRoutesById {
   '/cobranza': typeof CobranzaRoute
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
+  '/estado-cuenta': typeof EstadoCuentaRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
   '/productos': typeof ProductosRoute
@@ -142,6 +151,7 @@ export interface FileRouteTypes {
     | '/cobranza'
     | '/configuracion'
     | '/creditos'
+    | '/estado-cuenta'
     | '/migracion'
     | '/nueva-venta'
     | '/productos'
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/cobranza'
     | '/configuracion'
     | '/creditos'
+    | '/estado-cuenta'
     | '/migracion'
     | '/nueva-venta'
     | '/productos'
@@ -172,6 +183,7 @@ export interface FileRouteTypes {
     | '/cobranza'
     | '/configuracion'
     | '/creditos'
+    | '/estado-cuenta'
     | '/migracion'
     | '/nueva-venta'
     | '/productos'
@@ -188,6 +200,7 @@ export interface RootRouteChildren {
   CobranzaRoute: typeof CobranzaRoute
   ConfiguracionRoute: typeof ConfiguracionRoute
   CreditosRoute: typeof CreditosRoute
+  EstadoCuentaRoute: typeof EstadoCuentaRoute
   MigracionRoute: typeof MigracionRoute
   NuevaVentaRoute: typeof NuevaVentaRoute
   ProductosRoute: typeof ProductosRoute
@@ -227,6 +240,13 @@ declare module '@tanstack/react-router' {
       path: '/migracion'
       fullPath: '/migracion'
       preLoaderRoute: typeof MigracionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/estado-cuenta': {
+      id: '/estado-cuenta'
+      path: '/estado-cuenta'
+      fullPath: '/estado-cuenta'
+      preLoaderRoute: typeof EstadoCuentaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/creditos': {
@@ -300,6 +320,7 @@ const rootRouteChildren: RootRouteChildren = {
   CobranzaRoute: CobranzaRoute,
   ConfiguracionRoute: ConfiguracionRoute,
   CreditosRoute: CreditosRoute,
+  EstadoCuentaRoute: EstadoCuentaRoute,
   MigracionRoute: MigracionRoute,
   NuevaVentaRoute: NuevaVentaRoute,
   ProductosRoute: ProductosRoute,

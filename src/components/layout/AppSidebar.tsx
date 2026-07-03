@@ -12,6 +12,7 @@ import {
   Wallet,
   ShoppingCart,
   Sliders,
+  Receipt,
 } from "lucide-react";
 
 import {
@@ -33,6 +34,7 @@ const items = [
   { title: "Nuevo Cliente", url: "/clientes/nuevo", icon: UserPlus },
   { title: "Productos", url: "/productos", icon: Package },
   { title: "Créditos", url: "/creditos", icon: Banknote },
+  { title: "Estado de Cuenta", url: "/estado-cuenta", icon: Receipt },
   { title: "Cobranza", url: "/cobranza", icon: HandCoins },
   { title: "Aprobar Recaudos", url: "/cobranza/aprobacion", icon: ClipboardCheck },
   { title: "Rutas", url: "/rutas", icon: Map },

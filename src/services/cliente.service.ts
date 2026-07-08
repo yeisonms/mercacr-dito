@@ -40,6 +40,8 @@ export interface Cliente {
   foto_cliente_url: string | null;
   foto_cedula_frente_url: string | null;
   foto_cedula_respaldo_url: string | null;
+  foto_casa_1_url: string | null;
+  foto_casa_2_url: string | null;
   latitud: number | null;
   longitud: number | null;
   fecha_creacion: string;
@@ -63,6 +65,8 @@ export interface NuevoClienteInput {
   foto_cliente_url?: string | null;
   foto_cedula_frente_url?: string | null;
   foto_cedula_respaldo_url?: string | null;
+  foto_casa_1_url?: string | null;
+  foto_casa_2_url?: string | null;
   latitud?: number | null;
   longitud?: number | null;
 }
@@ -285,6 +289,8 @@ export async function crearCliente(input: NuevoClienteInput) {
       foto_cliente_url: input.foto_cliente_url ?? null,
       foto_cedula_frente_url: input.foto_cedula_frente_url ?? null,
       foto_cedula_respaldo_url: input.foto_cedula_respaldo_url ?? null,
+      foto_casa_1_url: input.foto_casa_1_url ?? null,
+      foto_casa_2_url: input.foto_casa_2_url ?? null,
       latitud: input.latitud ?? null,
       longitud: input.longitud ?? null,
     })
@@ -324,6 +330,8 @@ export async function obtenerCliente(id: string): Promise<Cliente> {
       foto_cliente_url,
       foto_cedula_frente_url,
       foto_cedula_respaldo_url,
+      foto_casa_1_url,
+      foto_casa_2_url,
       latitud,
       longitud,
       fecha_creacion,
@@ -358,6 +366,8 @@ export interface ActualizarClienteInput {
   foto_cliente_url?: string | null;
   foto_cedula_frente_url?: string | null;
   foto_cedula_respaldo_url?: string | null;
+  foto_casa_1_url?: string | null;
+  foto_casa_2_url?: string | null;
 }
 
 /**
@@ -391,6 +401,8 @@ export async function actualizarCliente(
       foto_cliente_url: input.foto_cliente_url ?? null,
       foto_cedula_frente_url: input.foto_cedula_frente_url ?? null,
       foto_cedula_respaldo_url: input.foto_cedula_respaldo_url ?? null,
+      foto_casa_1_url: input.foto_casa_1_url ?? null,
+      foto_casa_2_url: input.foto_casa_2_url ?? null,
     })
     .eq("id", id)
     .select()

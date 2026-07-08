@@ -445,7 +445,7 @@ function NuevoClientePage() {
 
   const resetForm = () => {
     form.reset(VALORES_INICIALES);
-    setArchivos({ foto: null, cedula_frente: null, cedula_respaldo: null });
+    setArchivos({ foto: null, cedula_frente: null, cedula_respaldo: null, foto_casa_1: null, foto_casa_2: null });
     setFase("idle");
   };
 

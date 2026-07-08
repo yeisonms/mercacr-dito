@@ -42,6 +42,7 @@ import {
   registrarRecaudo,
   type CreditoCobro,
 } from "@/services/recaudoService";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 // ─── Definición de Ruta ───────────────────────────────────────────────────────
 
@@ -64,6 +65,7 @@ const recaudoSchema = z.object({
   valor_recibido: z.coerce
     .number({ invalid_type_error: "El valor recibido debe ser un número" })
     .min(1, "El valor recibido debe ser mayor a 0"),
+  metodo_pago: z.enum(["Efectivo", "Transferencia"]),
   observaciones: z.string().optional(),
 });
 
@@ -187,6 +189,7 @@ function CobranzaPage() {
   const queryClient = useQueryClient();
   const [busqueda, setBusqueda] = useState("");
   const [creditoSeleccionado, setCreditoSeleccionado] = useState<CreditoCobro | null>(null);
+  const [cuotaSugerida, setCuotaSugerida] = useState<number | null>(null);
 
   // Estados del archivo de foto
   const [fotoSoporte, setFotoSoporte] = useState<File | null>(null);
@@ -291,17 +294,18 @@ function CobranzaPage() {
     queryFn: obtenerCreditosCobro,
   });
 
-  // 2. React Hook Form para validación
   const {
     register,
     handleSubmit,
     setValue,
     reset,
+    watch,
     formState: { errors },
   } = useForm<RecaudoFormValues>({
     resolver: zodResolver(recaudoSchema),
     defaultValues: {
       valor_recibido: undefined,
+      metodo_pago: "Efectivo",
       observaciones: "",
     },
   });
@@ -311,11 +315,16 @@ function CobranzaPage() {
     mutationFn: (values: {
       creditoId: string;
       valorRecibido: number;
+      metodoPago: "Efectivo" | "Transferencia";
       fotoDinero?: File | null;
       observaciones?: string;
     }) => registrarRecaudo(values),
-    onSuccess: () => {
-      toast.success("Pago registrado, pendiente de aprobación");
+    onSuccess: (data, variables) => {
+      if (variables.metodoPago === "Efectivo") {
+        toast.success("Pago en efectivo procesado y aprobado");
+      } else {
+        toast.success("Pago enviado a revisión");
+      }
       queryClient.invalidateQueries({ queryKey: ["creditos", "cobro"] });
       cerrarDrawer();
     },
@@ -557,18 +566,48 @@ function CobranzaPage() {
   }, [leafletLoaded, vistaActiva, creditosFiltrados, posicionCobrador]);
 
   // 6. Abrir y cerrar panel
-  const abrirDrawer = (credito: CreditoCobro) => {
+  const abrirDrawer = async (credito: CreditoCobro) => {
     setCreditoSeleccionado(credito);
-    // Inicializar el valor recibido con la totalidad del saldo pendiente como sugerencia
+    removerFoto();
+    
+    // Sugerencia Automática de Cuota
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from("cuotas")
+          .select("saldo_cuota")
+          .eq("credito_id", credito.id)
+          .in("estado", ["Pendiente", "Parcial"])
+          .order("numero_cuota", { ascending: true })
+          .limit(1)
+          .single();
+
+        if (!error && data) {
+          const valor = Number(data.saldo_cuota);
+          setCuotaSugerida(valor);
+          reset({
+            valor_recibido: valor,
+            metodo_pago: "Efectivo",
+            observaciones: "",
+          });
+          return;
+        }
+      } catch (err) {
+        console.error("Error obteniendo cuota sugerida:", err);
+      }
+    }
+    
+    setCuotaSugerida(null);
     reset({
       valor_recibido: undefined,
+      metodo_pago: "Efectivo",
       observaciones: "",
     });
-    removerFoto();
   };
 
   const cerrarDrawer = () => {
     setCreditoSeleccionado(null);
+    setCuotaSugerida(null);
     reset();
     removerFoto();
   };
@@ -576,9 +615,15 @@ function CobranzaPage() {
   const onSubmit = (values: RecaudoFormValues) => {
     if (!creditoSeleccionado) return;
 
+    if (values.metodo_pago === "Transferencia" && !fotoSoporte) {
+      toast.error("La foto del comprobante es obligatoria para Transferencia.");
+      return;
+    }
+
     mutation.mutate({
       creditoId: creditoSeleccionado.id,
       valorRecibido: values.valor_recibido,
+      metodoPago: values.metodo_pago,
       fotoDinero: fotoSoporte,
       observaciones: values.observaciones,
     });
@@ -839,13 +884,45 @@ function CobranzaPage() {
                     </Button>
                   </div>
 
+                  {/* Método de Pago */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-foreground block">
+                      Método de Pago
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="flex items-center justify-center gap-2 border rounded-xl p-3 cursor-pointer hover:bg-muted/50 has-[:checked]:bg-primary/10 has-[:checked]:border-primary transition-colors text-center">
+                        <input 
+                          type="radio" 
+                          value="Efectivo" 
+                          className="accent-primary w-4 h-4"
+                          {...register("metodo_pago")} 
+                        />
+                        <span className="text-sm font-medium">Efectivo</span>
+                      </label>
+                      <label className="flex items-center justify-center gap-2 border rounded-xl p-3 cursor-pointer hover:bg-muted/50 has-[:checked]:bg-primary/10 has-[:checked]:border-primary transition-colors text-center">
+                        <input 
+                          type="radio" 
+                          value="Transferencia" 
+                          className="accent-primary w-4 h-4"
+                          {...register("metodo_pago")} 
+                        />
+                        <span className="text-sm font-medium">Transferencia</span>
+                      </label>
+                    </div>
+                  </div>
+
                   {/* Input Valor Recibido */}
                   <div className="space-y-1.5">
                     <label
                       htmlFor="valor_recibido"
-                      className="text-xs font-bold text-foreground block"
+                      className="flex items-center justify-between text-xs font-bold text-foreground"
                     >
-                      Valor Recibido <span className="text-destructive">*</span>
+                      <span>Valor Recibido <span className="text-destructive">*</span></span>
+                      {cuotaSugerida !== null && (
+                        <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider">
+                          Sugerida: {formatearMoneda(cuotaSugerida)}
+                        </span>
+                      )}
                     </label>
                     <div className="relative">
                       <DollarSign className="absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
@@ -868,8 +945,13 @@ function CobranzaPage() {
 
                   {/* Input Foto Soporte */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-foreground block">
-                      Foto del Dinero / Soporte (Opcional)
+                    <label className="flex items-center justify-between text-xs font-bold text-foreground">
+                      <span>Foto del Comprobante / Dinero</span>
+                      {watch("metodo_pago") === "Transferencia" ? (
+                        <span className="text-[10px] text-destructive bg-destructive/10 px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold">Obligatorio</span>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Opcional</span>
+                      )}
                     </label>
 
                     {!fotoPreview ? (

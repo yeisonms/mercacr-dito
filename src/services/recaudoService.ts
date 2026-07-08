@@ -28,6 +28,7 @@ export interface CreditoCobro {
 export interface RegistrarRecaudoInput {
   creditoId: string;
   valorRecibido: number;
+  metodoPago: "Efectivo" | "Transferencia";
   fotoDinero?: File | null;
   observaciones?: string;
 }
@@ -328,6 +329,7 @@ export async function registrarRecaudo(input: RegistrarRecaudoInput): Promise<st
       credito_id: input.creditoId,
       cobrador_id: cobradorId,
       valor_recibido: input.valorRecibido,
+      metodo_pago: input.metodoPago,
       soporte_foto_dinero_url: fotoUrl,
       observaciones: input.observaciones || null,
       estado: "Pendiente",
@@ -338,6 +340,17 @@ export async function registrarRecaudo(input: RegistrarRecaudoInput): Promise<st
   if (error || !data) {
     console.error("Error al insertar el recaudo:", error);
     throw new Error(`Error al guardar el pago: ${error?.message || "No retornó ID"}`);
+  }
+
+  // Lógica de auto-aprobación para efectivo (el dinero ya está en mano)
+  if (input.metodoPago === "Efectivo") {
+    try {
+      await aprobarRecaudo(data.id, input.creditoId, input.valorRecibido);
+    } catch (approveError) {
+      console.error("Error al auto-aprobar recaudo en efectivo:", approveError);
+      // Opcional: lanzar error o permitir que el recaudo quede pendiente para revisión manual
+      // throw new Error(`El recaudo se guardó pero falló la auto-aprobación: ${(approveError as Error).message}`);
+    }
   }
 
   return data.id;

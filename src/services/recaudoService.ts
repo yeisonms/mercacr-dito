@@ -20,6 +20,7 @@ export interface ClienteInfo {
 export interface CreditoCobro {
   id: string; // credito_id
   saldo_pendiente: number;
+  valor_credito: number;
   estado: "Al día" | "Próximo a vencer" | "Atrasado" | "En mora" | "Cancelado" | "Finalizado";
   numero_factura: string;
   cliente: ClienteInfo;
@@ -72,6 +73,7 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
       {
         id: "cred-1",
         saldo_pendiente: 150000,
+        valor_credito: 1500000,
         estado: "Al día",
         numero_factura: "FAC-8831",
         cliente: {
@@ -89,6 +91,7 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
       {
         id: "cred-3",
         saldo_pendiente: 95000,
+        valor_credito: 500000,
         estado: "Próximo a vencer",
         numero_factura: "FAC-1102",
         cliente: {
@@ -106,6 +109,7 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
       {
         id: "cred-2",
         saldo_pendiente: 480000,
+        valor_credito: 2000000,
         estado: "En mora",
         numero_factura: "FAC-9012",
         cliente: {
@@ -123,6 +127,7 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
       {
         id: "cred-4",
         saldo_pendiente: 230000,
+        valor_credito: 800000,
         estado: "Al día",
         numero_factura: "FAC-7762",
         cliente: {
@@ -140,6 +145,7 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
       {
         id: "cred-5",
         saldo_pendiente: 620000,
+        valor_credito: 1200000,
         estado: "En mora",
         numero_factura: "FAC-3498",
         cliente: {
@@ -163,6 +169,7 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
     .select(`
       id,
       saldo_pendiente,
+      valor_credito,
       estado,
       numero_factura,
       fecha_proximo_pago,
@@ -192,6 +199,7 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
       return {
         id: item.id,
         saldo_pendiente: Number(item.saldo_pendiente),
+        valor_credito: Number(item.valor_credito),
         estado: item.estado,
         numero_factura: item.numero_factura,
         cliente: clienteRaw

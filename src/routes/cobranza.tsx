@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
+import { toPng, toBlob } from 'html-to-image';
 import {
   Search,
   MapPin,
@@ -20,6 +21,9 @@ import {
   Calendar,
   List,
   Map,
+  Download,
+  Share2,
+  MessageCircle,
 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -36,6 +40,13 @@ import {
   DrawerDescription,
   DrawerFooter,
 } from "@/components/ui/drawer";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 import {
   obtenerCreditosCobro,
@@ -58,6 +69,15 @@ export const Route = createFileRoute("/cobranza")({
   }),
   component: CobranzaPage,
 });
+
+export interface ReciboData {
+  fecha: string;
+  clienteNombre: string;
+  abono: number;
+  totalCredito: number;
+  saldoPendiente: number;
+  telefono: string;
+}
 
 // ─── Esquema de Validación Zod ──────────────────────────────────────────────
 
@@ -190,6 +210,10 @@ function CobranzaPage() {
   const [busqueda, setBusqueda] = useState("");
   const [creditoSeleccionado, setCreditoSeleccionado] = useState<CreditoCobro | null>(null);
   const [cuotaSugerida, setCuotaSugerida] = useState<number | null>(null);
+  
+  // Estado para el modal de Recibo Exitoso
+  const [reciboData, setReciboData] = useState<ReciboData | null>(null);
+  const ticketRef = useRef<HTMLDivElement>(null);
 
   // Estados del archivo de foto
   const [fotoSoporte, setFotoSoporte] = useState<File | null>(null);
@@ -326,6 +350,19 @@ function CobranzaPage() {
         toast.success("Pago enviado a revisión");
       }
       queryClient.invalidateQueries({ queryKey: ["creditos", "cobro"] });
+      
+      // Preparar datos para el recibo (si había crédito seleccionado)
+      if (creditoSeleccionado) {
+        setReciboData({
+          fecha: new Date().toISOString().split("T")[0],
+          clienteNombre: `${creditoSeleccionado.cliente.nombres} ${creditoSeleccionado.cliente.apellidos}`,
+          abono: variables.valorRecibido,
+          totalCredito: creditoSeleccionado.valor_credito || 0,
+          saldoPendiente: creditoSeleccionado.saldo_pendiente - variables.valorRecibido,
+          telefono: creditoSeleccionado.cliente.telefono_principal || "",
+        });
+      }
+      
       cerrarDrawer();
     },
     onError: (error: any) => {
@@ -627,6 +664,55 @@ function CobranzaPage() {
       fotoDinero: fotoSoporte,
       observaciones: values.observaciones,
     });
+  };
+
+  const descargarRecibo = async () => {
+    if (!ticketRef.current || !reciboData) return;
+    try {
+      const dataUrl = await toPng(ticketRef.current, { cacheBust: true, pixelRatio: 2 });
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `Recibo_Mercacredito_${reciboData.clienteNombre.replace(/\s+/g, "_")}.png`;
+      link.click();
+    } catch (err) {
+      console.error("Error al generar la imagen:", err);
+      toast.error("Error al descargar el recibo");
+    }
+  };
+
+  const compartirRecibo = async () => {
+    if (!ticketRef.current || !reciboData) return;
+    
+    try {
+      const blob = await toBlob(ticketRef.current, { cacheBust: true, pixelRatio: 2 });
+      if (!blob) throw new Error("No se pudo generar la imagen para compartir");
+
+      const file = new File([blob], `Recibo_Mercacredito_${reciboData.clienteNombre.replace(/\s+/g, "_")}.png`, { type: blob.type });
+      const texto = `Comprobante de Pago Mercacrédito\nCliente: ${reciboData.clienteNombre}\nAbono: $${reciboData.abono.toLocaleString()}\nSaldo Pendiente: $${reciboData.saldoPendiente.toLocaleString()}`;
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file]
+        });
+      } else {
+        toast.info("Compartir imágenes directamente no está soportado en este dispositivo/navegador. Utiliza la opción de descargar.");
+      }
+    } catch (err) {
+      console.error("Error al compartir:", err);
+      toast.error("Hubo un error al intentar compartir el recibo.");
+    }
+  };
+
+  const enviarWhatsApp = () => {
+    if (!reciboData) return;
+    const { clienteNombre, abono, saldoPendiente, telefono } = reciboData;
+    let tel = telefono.replace(/\D/g, "");
+    if (!tel.startsWith("57") && tel.length === 10) {
+      tel = "57" + tel;
+    }
+    const mensaje = `Hola *${clienteNombre}*, confirmamos el pago de tu cuota con *Mercacrédito*. Abono: *$${abono.toLocaleString()}*. Tu saldo pendiente es: *$${saldoPendiente.toLocaleString()}*. ¡Gracias por tu pago!`;
+    const encoded = encodeURIComponent(mensaje);
+    window.open(`https://wa.me/${tel}?text=${encoded}`, "_blank");
   };
 
   return (
@@ -1040,6 +1126,90 @@ function CobranzaPage() {
             )}
           </DrawerContent>
         </Drawer>
+
+        {/* Modal de Éxito / Recibo (Ticket) */}
+        <Dialog open={reciboData !== null} onOpenChange={(open) => !open && setReciboData(null)}>
+          <DialogContent className="max-w-sm rounded-2xl mx-auto bg-white p-6 shadow-2xl overflow-hidden [&>button]:hidden">
+            {reciboData && (
+              <div className="flex flex-col items-center space-y-6">
+                
+                {/* Contenedor completo para descargar (incluye logo, check y body) */}
+                <div ref={ticketRef} className="flex flex-col items-center space-y-4 bg-white p-4 pb-2 w-full">
+                  {/* Header */}
+                  <div className="flex flex-col items-center text-center space-y-3">
+                    <img 
+                      src="/logo.jpeg" 
+                      alt="Logo Mercacrédito" 
+                      className="h-16 w-auto object-contain mx-auto"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                    <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center animate-in zoom-in duration-300">
+                      <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+                    </div>
+                    <div className="space-y-1">
+                      <h2 className="text-xl font-black text-foreground tracking-tight">¡Pago Registrado con Éxito!</h2>
+                      <p className="text-sm font-semibold text-primary/80 uppercase tracking-widest">Mercacrédito</p>
+                    </div>
+                  </div>
+
+                  {/* Ticket Body */}
+                  <div className="w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-5 space-y-4">
+                    <div className="flex justify-between items-center pb-3 border-b border-dashed border-slate-200">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fecha</span>
+                      <span className="text-sm font-bold text-foreground">{reciboData.fecha}</span>
+                    </div>
+                    <div className="flex justify-between items-center pb-3 border-b border-dashed border-slate-200">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cliente</span>
+                      <span className="text-sm font-bold text-foreground text-right max-w-[150px] truncate">{reciboData.clienteNombre}</span>
+                    </div>
+                    <div className="flex justify-between items-center pb-3 border-b border-dashed border-slate-200 bg-emerald-50/50 -mx-2 px-2 py-1 rounded">
+                      <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Abono Realizado</span>
+                      <span className="text-base font-black text-emerald-600">${reciboData.abono.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-medium text-muted-foreground">Total del Crédito</span>
+                      <span className="text-sm font-medium text-foreground">${reciboData.totalCredito.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Saldo Pendiente</span>
+                      <span className="text-sm font-black text-amber-600">${reciboData.saldoPendiente.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="w-full space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button variant="outline" className="w-full text-xs font-semibold h-11 rounded-xl" onClick={descargarRecibo}>
+                      <Download className="w-4 h-4 mr-2" />
+                      Descargar
+                    </Button>
+                    <Button variant="outline" className="w-full text-xs font-semibold h-11 rounded-xl" onClick={compartirRecibo}>
+                      <Share2 className="w-4 h-4 mr-2" />
+                      Compartir
+                    </Button>
+                  </div>
+                  <Button 
+                    className="w-full text-sm font-bold h-12 rounded-xl bg-[#25D366] hover:bg-[#25D366]/90 text-white flex items-center justify-center gap-2 shadow-sm"
+                    onClick={enviarWhatsApp}
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    Enviar Recibo por WhatsApp
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full text-xs font-semibold h-10 text-muted-foreground"
+                    onClick={() => setReciboData(null)}
+                  >
+                    Cerrar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </AppShell>
   );

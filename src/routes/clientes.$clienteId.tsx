@@ -14,6 +14,9 @@ import {
   ArrowLeft,
   Building2,
   Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Download,
   Edit3,
   FileImage,
   Loader2,
@@ -24,6 +27,7 @@ import {
   X,
   CheckCircle2,
   Upload,
+  ZoomIn,
 } from "lucide-react";
 
 import { subirArchivo } from "@/services/storage.service";
@@ -961,110 +965,16 @@ function ClientePerfilPage() {
             cliente.foto_cliente_url ||
             cliente.foto_cedula_frente_url ||
             cliente.foto_cedula_respaldo_url) && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                    <FileImage className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-sm">
-                      Documentación fotográfica
-                    </CardTitle>
-                    <CardDescription>
-                      {modoEdicion
-                        ? "Sube nuevas imágenes para reemplazar las actuales o agregar documentación faltante"
-                        : "Imágenes almacenadas en el servidor"}
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-3">
-                {modoEdicion ? (
-                  <>
-                    <FileFieldUI
-                      id="foto-cliente"
-                      label="Foto del cliente"
-                      file={nuevosArchivos.foto}
-                      existingUrl={form.watch("foto_cliente_url")}
-                      disabled={guardando}
-                      onChange={(file) =>
-                        setNuevosArchivos((prev) => ({ ...prev, foto: file }))
-                      }
-                      onClear={() =>
-                        setNuevosArchivos((prev) => ({ ...prev, foto: null }))
-                      }
-                      onClearExisting={() =>
-                        form.setValue("foto_cliente_url", null)
-                      }
-                    />
-                    <FileFieldUI
-                      id="cedula-frente"
-                      label="Cédula (frente)"
-                      file={nuevosArchivos.cedula_frente}
-                      existingUrl={form.watch("foto_cedula_frente_url")}
-                      disabled={guardando}
-                      onChange={(file) =>
-                        setNuevosArchivos((prev) => ({
-                          ...prev,
-                          cedula_frente: file,
-                        }))
-                      }
-                      onClear={() =>
-                        setNuevosArchivos((prev) => ({
-                          ...prev,
-                          cedula_frente: null,
-                        }))
-                      }
-                      onClearExisting={() =>
-                        form.setValue("foto_cedula_frente_url", null)
-                      }
-                    />
-                    <FileFieldUI
-                      id="cedula-respaldo"
-                      label="Cédula (respaldo)"
-                      file={nuevosArchivos.cedula_respaldo}
-                      existingUrl={form.watch("foto_cedula_respaldo_url")}
-                      disabled={guardando}
-                      onChange={(file) =>
-                        setNuevosArchivos((prev) => ({
-                          ...prev,
-                          cedula_respaldo: file,
-                        }))
-                      }
-                      onClear={() =>
-                        setNuevosArchivos((prev) => ({
-                          ...prev,
-                          cedula_respaldo: null,
-                        }))
-                      }
-                      onClearExisting={() =>
-                        form.setValue("foto_cedula_respaldo_url", null)
-                      }
-                    />
-                  </>
-                ) : (
-                  [
-                    { label: "Foto del cliente", url: cliente.foto_cliente_url },
-                    { label: "Cédula (frente)", url: cliente.foto_cedula_frente_url },
-                    { label: "Cédula (respaldo)", url: cliente.foto_cedula_respaldo_url },
-                  ]
-                    .filter((d) => d.url)
-                    .map((doc) => (
-                      <div key={doc.label} className="flex flex-col gap-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          {doc.label}
-                        </p>
-                        <img
-                          src={doc.url!}
-                          alt={doc.label}
-                          className="h-32 w-full rounded-lg object-cover border"
-                        />
-                      </div>
-                    ))
-                )}
-              </CardContent>
-            </Card>
+            <FotosCard
+              modoEdicion={modoEdicion}
+              fotoClienteUrl={cliente.foto_cliente_url}
+              fotoCedulaFrenteUrl={cliente.foto_cedula_frente_url}
+              fotoCedulaRespaldoUrl={cliente.foto_cedula_respaldo_url}
+              nuevosArchivos={nuevosArchivos}
+              setNuevosArchivos={setNuevosArchivos}
+              form={form}
+              guardando={guardando}
+            />
           )}
 
           {/* ── Teléfonos rápidos (solo vista) ── */}
@@ -1286,3 +1196,277 @@ function FileFieldUI({
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FotosCard: Documentación fotográfica con Lightbox incorporado
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface FotosCardProps {
+  modoEdicion: boolean;
+  fotoClienteUrl?: string | null;
+  fotoCedulaFrenteUrl?: string | null;
+  fotoCedulaRespaldoUrl?: string | null;
+  nuevosArchivos: { foto: File | null; cedula_frente: File | null; cedula_respaldo: File | null };
+  setNuevosArchivos: React.Dispatch<React.SetStateAction<{ foto: File | null; cedula_frente: File | null; cedula_respaldo: File | null }>>;
+  form: any;
+  guardando: boolean;
+}
+
+function FotosCard({
+  modoEdicion,
+  fotoClienteUrl,
+  fotoCedulaFrenteUrl,
+  fotoCedulaRespaldoUrl,
+  nuevosArchivos,
+  setNuevosArchivos,
+  form,
+  guardando,
+}: FotosCardProps) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  // Solo las fotos que tienen URL
+  const docs = [
+    { label: "Foto del cliente", url: fotoClienteUrl },
+    { label: "Cédula (frente)", url: fotoCedulaFrenteUrl },
+    { label: "Cédula (respaldo)", url: fotoCedulaRespaldoUrl },
+  ].filter((d) => !!d.url) as { label: string; url: string }[];
+
+  const abrirLightbox = (idx: number) => setLightboxIndex(idx);
+  const cerrarLightbox = () => setLightboxIndex(null);
+  const irAnterior = () =>
+    setLightboxIndex((i) => (i !== null ? (i - 1 + docs.length) % docs.length : null));
+  const irSiguiente = () =>
+    setLightboxIndex((i) => (i !== null ? (i + 1) % docs.length : null));
+
+  // Teclado: Escape cierra, flechas navegan
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cerrarLightbox();
+      if (e.key === "ArrowLeft") irAnterior();
+      if (e.key === "ArrowRight") irSiguiente();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxIndex, docs.length]);
+
+  // Bloquear scroll del body mientras el lightbox esté abierto
+  useEffect(() => {
+    document.body.style.overflow = lightboxIndex !== null ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [lightboxIndex]);
+
+  const handleDescargar = (url: string, label: string) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${label.replace(/\s+/g, "_")}.jpg`;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.click();
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <FileImage className="h-4 w-4" />
+            </div>
+            <div>
+              <CardTitle className="text-sm">Documentación fotográfica</CardTitle>
+              <CardDescription>
+                {modoEdicion
+                  ? "Sube nuevas imágenes para reemplazar las actuales o agregar documentación faltante"
+                  : "Haz clic en una imagen para verla en pantalla completa"}
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="grid gap-4 sm:grid-cols-3">
+          {modoEdicion ? (
+            <>
+              <FileFieldUI
+                id="foto-cliente"
+                label="Foto del cliente"
+                file={nuevosArchivos.foto}
+                existingUrl={form.watch("foto_cliente_url")}
+                disabled={guardando}
+                onChange={(file) => setNuevosArchivos((p) => ({ ...p, foto: file }))}
+                onClear={() => setNuevosArchivos((p) => ({ ...p, foto: null }))}
+                onClearExisting={() => form.setValue("foto_cliente_url", null)}
+              />
+              <FileFieldUI
+                id="cedula-frente"
+                label="Cédula (frente)"
+                file={nuevosArchivos.cedula_frente}
+                existingUrl={form.watch("foto_cedula_frente_url")}
+                disabled={guardando}
+                onChange={(file) => setNuevosArchivos((p) => ({ ...p, cedula_frente: file }))}
+                onClear={() => setNuevosArchivos((p) => ({ ...p, cedula_frente: null }))}
+                onClearExisting={() => form.setValue("foto_cedula_frente_url", null)}
+              />
+              <FileFieldUI
+                id="cedula-respaldo"
+                label="Cédula (respaldo)"
+                file={nuevosArchivos.cedula_respaldo}
+                existingUrl={form.watch("foto_cedula_respaldo_url")}
+                disabled={guardando}
+                onChange={(file) => setNuevosArchivos((p) => ({ ...p, cedula_respaldo: file }))}
+                onClear={() => setNuevosArchivos((p) => ({ ...p, cedula_respaldo: null }))}
+                onClearExisting={() => form.setValue("foto_cedula_respaldo_url", null)}
+              />
+            </>
+          ) : docs.length === 0 ? (
+            <div className="col-span-3 flex flex-col items-center gap-2 py-8 text-muted-foreground">
+              <FileImage className="h-8 w-8 opacity-30" />
+              <p className="text-xs">No hay imágenes registradas</p>
+            </div>
+          ) : (
+            docs.map((doc, idx) => (
+              <button
+                key={doc.label}
+                type="button"
+                onClick={() => abrirLightbox(idx)}
+                className="group relative flex flex-col gap-1.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
+              >
+                <p className="text-xs font-medium text-muted-foreground px-0.5">
+                  {doc.label}
+                </p>
+                {/* Thumbnail */}
+                <div className="relative overflow-hidden rounded-xl border border-border/60 shadow-sm aspect-[4/3] w-full bg-muted">
+                  <img
+                    src={doc.url}
+                    alt={doc.label}
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                  {/* Overlay con ícono al hacer hover */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-all duration-200">
+                    <div className="flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <ZoomIn className="h-7 w-7 text-white drop-shadow-lg" />
+                      <span className="text-[11px] font-semibold text-white drop-shadow">Ver completa</span>
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── LIGHTBOX ─────────────────────────────────────────────────── */}
+      {lightboxIndex !== null && docs[lightboxIndex] && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Visor de imagen: ${docs[lightboxIndex].label}`}
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.93)" }}
+          onClick={cerrarLightbox}
+        >
+          {/* Contenido — detiene propagación para no cerrar al hacer clic en la imagen */}
+          <div
+            className="relative flex flex-col items-center max-w-5xl w-full px-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Barra superior */}
+            <div className="flex items-center justify-between w-full mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-white font-semibold text-sm">
+                  {docs[lightboxIndex].label}
+                </span>
+                <span className="text-white/40 text-xs">
+                  {lightboxIndex + 1} / {docs.length}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Descargar */}
+                <button
+                  type="button"
+                  onClick={() => handleDescargar(docs[lightboxIndex].url, docs[lightboxIndex].label)}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/20 transition-colors"
+                  title="Descargar imagen"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Descargar
+                </button>
+                {/* Cerrar */}
+                <button
+                  type="button"
+                  onClick={cerrarLightbox}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white hover:bg-white/20 transition-colors"
+                  title="Cerrar (Esc)"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Imagen principal */}
+            <div className="relative w-full flex items-center justify-center">
+              {/* Botón anterior */}
+              {docs.length > 1 && (
+                <button
+                  type="button"
+                  onClick={irAnterior}
+                  className="absolute left-0 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/50 text-white hover:bg-black/80 transition-colors -translate-x-2"
+                  title="Anterior (←)"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+              )}
+
+              <img
+                key={lightboxIndex}
+                src={docs[lightboxIndex].url}
+                alt={docs[lightboxIndex].label}
+                className="max-h-[75vh] max-w-full rounded-xl object-contain shadow-2xl"
+                style={{ userSelect: "none" }}
+              />
+
+              {/* Botón siguiente */}
+              {docs.length > 1 && (
+                <button
+                  type="button"
+                  onClick={irSiguiente}
+                  className="absolute right-0 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/50 text-white hover:bg-black/80 transition-colors translate-x-2"
+                  title="Siguiente (→)"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+
+            {/* Miniaturas de navegación */}
+            {docs.length > 1 && (
+              <div className="flex gap-2 mt-4">
+                {docs.map((d, i) => (
+                  <button
+                    key={d.label}
+                    type="button"
+                    onClick={() => setLightboxIndex(i)}
+                    className={`h-14 w-14 rounded-lg overflow-hidden border-2 transition-all ${
+                      i === lightboxIndex
+                        ? "border-white scale-110 shadow-lg"
+                        : "border-white/30 opacity-50 hover:opacity-80 hover:border-white/60"
+                    }`}
+                    title={d.label}
+                  >
+                    <img src={d.url} alt={d.label} className="h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Hint de teclado */}
+            <p className="mt-3 text-[11px] text-white/30">
+              Usa ← → para navegar · Esc para cerrar · Clic fuera para salir
+            </p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+

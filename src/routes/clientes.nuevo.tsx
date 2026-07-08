@@ -184,6 +184,8 @@ function NuevoClientePage() {
     foto: null,
     cedula_frente: null,
     cedula_respaldo: null,
+    foto_casa_1: null,
+    foto_casa_2: null,
   });
 
   const enviando = fase !== "idle";
@@ -407,6 +409,8 @@ function NuevoClientePage() {
         foto_cliente_url: urlsDocumentos.foto ?? null,
         foto_cedula_frente_url: urlsDocumentos.cedula_frente ?? null,
         foto_cedula_respaldo_url: urlsDocumentos.cedula_respaldo ?? null,
+        foto_casa_1_url: urlsDocumentos.foto_casa_1 ?? null,
+        foto_casa_2_url: urlsDocumentos.foto_casa_2 ?? null,
         latitud: values.latitud ?? null,
         longitud: values.longitud ?? null,
       });
@@ -422,7 +426,7 @@ function NuevoClientePage() {
       // Reset y navegar después de un breve delay
       setTimeout(() => {
         form.reset(VALORES_INICIALES);
-        setArchivos({ foto: null, cedula_frente: null, cedula_respaldo: null });
+    setArchivos({ foto: null, cedula_frente: null, cedula_respaldo: null, foto_casa_1: null, foto_casa_2: null });
         setFase("idle");
         setProgresoSubida(0);
         navigate({ to: "/clientes" });
@@ -863,6 +867,31 @@ function NuevoClientePage() {
                     ...prev,
                     cedula_respaldo: null,
                   }))
+                }
+              />
+              {/* Fotos de la casa — segunda fila */}
+              <FileFieldUI
+                id="foto-casa-1"
+                label="Foto de la casa (1)"
+                file={archivos.foto_casa_1}
+                disabled={enviando}
+                onChange={(file) =>
+                  setArchivos((prev) => ({ ...prev, foto_casa_1: file }))
+                }
+                onClear={() =>
+                  setArchivos((prev) => ({ ...prev, foto_casa_1: null }))
+                }
+              />
+              <FileFieldUI
+                id="foto-casa-2"
+                label="Foto de la casa (2)"
+                file={archivos.foto_casa_2}
+                disabled={enviando}
+                onChange={(file) =>
+                  setArchivos((prev) => ({ ...prev, foto_casa_2: file }))
+                }
+                onClear={() =>
+                  setArchivos((prev) => ({ ...prev, foto_casa_2: null }))
                 }
               />
             </CardContent>

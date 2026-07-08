@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 const BUCKET = "documentos_clientes";
 
 /** Tipos permitidos de documento para un cliente */
-export type TipoDocumento = "foto" | "cedula_frente" | "cedula_respaldo";
+export type TipoDocumento = "foto" | "cedula_frente" | "cedula_respaldo" | "foto_casa_1" | "foto_casa_2";
 
 /** Resultado tipado de una subida */
 export interface ResultadoSubida {

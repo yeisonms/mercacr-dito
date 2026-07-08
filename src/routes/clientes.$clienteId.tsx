@@ -116,6 +116,8 @@ const editSchema = z.object({
   foto_cliente_url: z.string().optional().nullable(),
   foto_cedula_frente_url: z.string().optional().nullable(),
   foto_cedula_respaldo_url: z.string().optional().nullable(),
+  foto_casa_1_url: z.string().optional().nullable(),
+  foto_casa_2_url: z.string().optional().nullable(),
 });
 
 type EditValues = z.infer<typeof editSchema>;
@@ -151,10 +153,14 @@ function ClientePerfilPage() {
     foto: File | null;
     cedula_frente: File | null;
     cedula_respaldo: File | null;
+    foto_casa_1: File | null;
+    foto_casa_2: File | null;
   }>({
     foto: null,
     cedula_frente: null,
     cedula_respaldo: null,
+    foto_casa_1: null,
+    foto_casa_2: null,
   });
 
   const [guardando, setGuardando] = useState(false);
@@ -404,36 +410,42 @@ function ClientePerfilPage() {
       let fotoUrl = values.foto_cliente_url;
       let cedulaFrenteUrl = values.foto_cedula_frente_url;
       let cedulaRespaldoUrl = values.foto_cedula_respaldo_url;
-      
+      let fotoCasa1Url = values.foto_casa_1_url;
+      let fotoCasa2Url = values.foto_casa_2_url;
+
       const subidas = [];
-      
+
       if (nuevosArchivos.foto) {
         subidas.push(
-          subirArchivo(cliente!.cedula, "foto", nuevosArchivos.foto).then(url => {
-            fotoUrl = url;
-          })
+          subirArchivo(cliente!.cedula, "foto", nuevosArchivos.foto).then(url => { fotoUrl = url; })
         );
       }
       if (nuevosArchivos.cedula_frente) {
         subidas.push(
-          subirArchivo(cliente!.cedula, "cedula_frente", nuevosArchivos.cedula_frente).then(url => {
-            cedulaFrenteUrl = url;
-          })
+          subirArchivo(cliente!.cedula, "cedula_frente", nuevosArchivos.cedula_frente).then(url => { cedulaFrenteUrl = url; })
         );
       }
       if (nuevosArchivos.cedula_respaldo) {
         subidas.push(
-          subirArchivo(cliente!.cedula, "cedula_respaldo", nuevosArchivos.cedula_respaldo).then(url => {
-            cedulaRespaldoUrl = url;
-          })
+          subirArchivo(cliente!.cedula, "cedula_respaldo", nuevosArchivos.cedula_respaldo).then(url => { cedulaRespaldoUrl = url; })
         );
       }
-      
+      if (nuevosArchivos.foto_casa_1) {
+        subidas.push(
+          subirArchivo(cliente!.cedula, "foto_casa_1", nuevosArchivos.foto_casa_1).then(url => { fotoCasa1Url = url; })
+        );
+      }
+      if (nuevosArchivos.foto_casa_2) {
+        subidas.push(
+          subirArchivo(cliente!.cedula, "foto_casa_2", nuevosArchivos.foto_casa_2).then(url => { fotoCasa2Url = url; })
+        );
+      }
+
       if (subidas.length > 0) {
         toast.info("Subiendo nuevas imágenes...");
         await Promise.all(subidas);
       }
-      
+
       await mutation.mutateAsync({
         ...values,
         telefono_alterno: values.telefono_alterno || null,
@@ -444,9 +456,11 @@ function ClientePerfilPage() {
         foto_cliente_url: fotoUrl || null,
         foto_cedula_frente_url: cedulaFrenteUrl || null,
         foto_cedula_respaldo_url: cedulaRespaldoUrl || null,
+        foto_casa_1_url: fotoCasa1Url || null,
+        foto_casa_2_url: fotoCasa2Url || null,
       });
-      
-      setNuevosArchivos({ foto: null, cedula_frente: null, cedula_respaldo: null });
+
+      setNuevosArchivos({ foto: null, cedula_frente: null, cedula_respaldo: null, foto_casa_1: null, foto_casa_2: null });
     } catch (e: any) {
       console.error(e);
       toast.error("Ocurrió un error al guardar", { description: e.message || e });
@@ -964,12 +978,16 @@ function ClientePerfilPage() {
           {(modoEdicion ||
             cliente.foto_cliente_url ||
             cliente.foto_cedula_frente_url ||
-            cliente.foto_cedula_respaldo_url) && (
+            cliente.foto_cedula_respaldo_url ||
+            cliente.foto_casa_1_url ||
+            cliente.foto_casa_2_url) && (
             <FotosCard
               modoEdicion={modoEdicion}
               fotoClienteUrl={cliente.foto_cliente_url}
               fotoCedulaFrenteUrl={cliente.foto_cedula_frente_url}
               fotoCedulaRespaldoUrl={cliente.foto_cedula_respaldo_url}
+              fotoCasa1Url={cliente.foto_casa_1_url}
+              fotoCasa2Url={cliente.foto_casa_2_url}
               nuevosArchivos={nuevosArchivos}
               setNuevosArchivos={setNuevosArchivos}
               form={form}
@@ -1206,8 +1224,10 @@ interface FotosCardProps {
   fotoClienteUrl?: string | null;
   fotoCedulaFrenteUrl?: string | null;
   fotoCedulaRespaldoUrl?: string | null;
-  nuevosArchivos: { foto: File | null; cedula_frente: File | null; cedula_respaldo: File | null };
-  setNuevosArchivos: React.Dispatch<React.SetStateAction<{ foto: File | null; cedula_frente: File | null; cedula_respaldo: File | null }>>;
+  fotoCasa1Url?: string | null;
+  fotoCasa2Url?: string | null;
+  nuevosArchivos: { foto: File | null; cedula_frente: File | null; cedula_respaldo: File | null; foto_casa_1: File | null; foto_casa_2: File | null };
+  setNuevosArchivos: React.Dispatch<React.SetStateAction<{ foto: File | null; cedula_frente: File | null; cedula_respaldo: File | null; foto_casa_1: File | null; foto_casa_2: File | null }>>;
   form: any;
   guardando: boolean;
 }
@@ -1217,6 +1237,8 @@ function FotosCard({
   fotoClienteUrl,
   fotoCedulaFrenteUrl,
   fotoCedulaRespaldoUrl,
+  fotoCasa1Url,
+  fotoCasa2Url,
   nuevosArchivos,
   setNuevosArchivos,
   form,
@@ -1229,6 +1251,8 @@ function FotosCard({
     { label: "Foto del cliente", url: fotoClienteUrl },
     { label: "Cédula (frente)", url: fotoCedulaFrenteUrl },
     { label: "Cédula (respaldo)", url: fotoCedulaRespaldoUrl },
+    { label: "Casa (foto 1)", url: fotoCasa1Url },
+    { label: "Casa (foto 2)", url: fotoCasa2Url },
   ].filter((d) => !!d.url) as { label: string; url: string }[];
 
   const abrirLightbox = (idx: number) => setLightboxIndex(idx);
@@ -1316,6 +1340,27 @@ function FotosCard({
                 onChange={(file) => setNuevosArchivos((p) => ({ ...p, cedula_respaldo: file }))}
                 onClear={() => setNuevosArchivos((p) => ({ ...p, cedula_respaldo: null }))}
                 onClearExisting={() => form.setValue("foto_cedula_respaldo_url", null)}
+              />
+              {/* Fotos de la casa */}
+              <FileFieldUI
+                id="foto-casa-1"
+                label="Casa (foto 1)"
+                file={nuevosArchivos.foto_casa_1}
+                existingUrl={form.watch("foto_casa_1_url")}
+                disabled={guardando}
+                onChange={(file) => setNuevosArchivos((p) => ({ ...p, foto_casa_1: file }))}
+                onClear={() => setNuevosArchivos((p) => ({ ...p, foto_casa_1: null }))}
+                onClearExisting={() => form.setValue("foto_casa_1_url", null)}
+              />
+              <FileFieldUI
+                id="foto-casa-2"
+                label="Casa (foto 2)"
+                file={nuevosArchivos.foto_casa_2}
+                existingUrl={form.watch("foto_casa_2_url")}
+                disabled={guardando}
+                onChange={(file) => setNuevosArchivos((p) => ({ ...p, foto_casa_2: file }))}
+                onClear={() => setNuevosArchivos((p) => ({ ...p, foto_casa_2: null }))}
+                onClearExisting={() => form.setValue("foto_casa_2_url", null)}
               />
             </>
           ) : docs.length === 0 ? (

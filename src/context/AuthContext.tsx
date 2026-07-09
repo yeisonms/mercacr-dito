@@ -81,7 +81,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    // Sin Supabase configurado → modo desarrollo, sin auth
     if (!isSupabaseConfigured) {
       setCargando(false);
       return;
@@ -89,10 +88,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let mounted = true;
 
+    // Obtener sesión inicial inmediatamente
+    supabase.auth.getSession().then(async ({ data: { session: initSession } }) => {
+      if (!mounted) return;
+      setSession(initSession);
+      setUser(initSession?.user ?? null);
+      
+      if (initSession?.user) {
+        const p = await cargarPerfil(initSession.user.id);
+        if (mounted) {
+          setPerfil(p);
+          setCargando(false);
+        }
+      } else {
+        if (mounted) {
+          setCargando(false);
+        }
+      }
+    });
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_, newSession) => {
+    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!mounted) return;
+      
+      // Solo actuar en SIGN_IN o SIGN_OUT para evitar doble carga en inicialización
+      if (event === "INITIAL_SESSION") return; 
 
       setSession(newSession);
       setUser(newSession?.user ?? null);

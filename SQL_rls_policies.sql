@@ -28,46 +28,46 @@ ALTER TABLE logs_auditoria ENABLE ROW LEVEL SECURITY;
 -- ====================================================================================
 
 -- roles
-CREATE POLICY "anon_all_roles" ON roles FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_roles" ON roles FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- usuarios
-CREATE POLICY "anon_all_usuarios" ON usuarios FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_usuarios" ON usuarios FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- rutas
-CREATE POLICY "anon_all_rutas" ON rutas FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_rutas" ON rutas FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- clientes
-CREATE POLICY "anon_all_clientes" ON clientes FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_clientes" ON clientes FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- productos
-CREATE POLICY "anon_all_productos" ON productos FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_productos" ON productos FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- creditos
-CREATE POLICY "anon_all_creditos" ON creditos FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_creditos" ON creditos FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- detalles_venta
-CREATE POLICY "anon_all_detalles_venta" ON detalles_venta FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_detalles_venta" ON detalles_venta FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- cuotas
-CREATE POLICY "anon_all_cuotas" ON cuotas FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_cuotas" ON cuotas FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- recaudos
-CREATE POLICY "anon_all_recaudos" ON recaudos FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_recaudos" ON recaudos FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- registro_visitas
-CREATE POLICY "anon_all_registro_visitas" ON registro_visitas FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_registro_visitas" ON registro_visitas FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- promesas_pago
-CREATE POLICY "anon_all_promesas_pago" ON promesas_pago FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_promesas_pago" ON promesas_pago FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- configuracion_negocio
-CREATE POLICY "anon_all_configuracion_negocio" ON configuracion_negocio FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_configuracion_negocio" ON configuracion_negocio FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- historial_alertas
-CREATE POLICY "anon_all_historial_alertas" ON historial_alertas FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_historial_alertas" ON historial_alertas FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- logs_auditoria
-CREATE POLICY "anon_all_logs_auditoria" ON logs_auditoria FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_logs_auditoria" ON logs_auditoria FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- ====================================================================================
 -- DATOS DE PRUEBA: Rutas iniciales

@@ -15,6 +15,7 @@ import {
   Receipt,
   UserCog,
   LogOut,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,25 +57,25 @@ const items: NavItem[] = [
     title: "Nueva Venta",
     url: "/nueva-venta",
     icon: ShoppingCart,
-    roles: ["Administrador", "Vendedor"],
+    roles: ["Administrador", "Vendedor", "Cobrador"],
   },
   {
     title: "Clientes",
     url: "/clientes",
     icon: Users,
-    roles: ["Administrador", "Gerencia", "Vendedor", "Auxiliar"],
+    roles: ["Administrador", "Gerencia", "Vendedor", "Auxiliar", "Cobrador"],
   },
   {
     title: "Nuevo Cliente",
     url: "/clientes/nuevo",
     icon: UserPlus,
-    roles: ["Administrador", "Vendedor"],
+    roles: ["Administrador", "Vendedor", "Cobrador"],
   },
   {
     title: "Productos",
     url: "/productos",
     icon: Package,
-    roles: ["Administrador", "Vendedor"],
+    roles: ["Administrador", "Vendedor", "Cobrador"],
   },
   {
     title: "Créditos",
@@ -86,7 +87,7 @@ const items: NavItem[] = [
     title: "Estado de Cuenta",
     url: "/estado-cuenta",
     icon: Receipt,
-    roles: ["Administrador", "Gerencia", "Auxiliar"],
+    roles: ["Administrador", "Gerencia", "Auxiliar", "Cobrador"],
   },
   {
     title: "Cobranza",
@@ -111,6 +112,12 @@ const items: NavItem[] = [
     url: "/migracion",
     icon: Wallet,
     roles: ["Administrador"],
+  },
+  {
+    title: "Gestión de Mora",
+    url: "/gestion-mora",
+    icon: AlertTriangle,
+    roles: ["Administrador", "Gerencia"],
   },
   {
     title: "Configuración de Mora",

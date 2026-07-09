@@ -142,10 +142,22 @@ function RouteGuard({ children }: { children: ReactNode }) {
     if (
       session &&
       perfil?.rol === "Cobrador" &&
-      !isLoginPage &&
-      !pathname.startsWith("/cobranza")
+      !isLoginPage
     ) {
-      navigate({ to: "/cobranza", replace: true });
+      const allowedPaths = [
+        "/cobranza",
+        "/creditos",
+        "/clientes",
+        "/productos",
+        "/estado-cuenta",
+        "/nueva-venta"
+      ];
+      
+      const isAllowed = allowedPaths.some(path => pathname.startsWith(path)) || pathname === "/";
+      
+      if (!isAllowed) {
+        navigate({ to: "/cobranza", replace: true });
+      }
     }
   }, [cargando, session, perfil, pathname, navigate]);
 

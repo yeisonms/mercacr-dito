@@ -15,6 +15,7 @@ import { Route as ProductosRouteImport } from './routes/productos'
 import { Route as NuevaVentaRouteImport } from './routes/nueva-venta'
 import { Route as MigracionRouteImport } from './routes/migracion'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as GestionMoraRouteImport } from './routes/gestion-mora'
 import { Route as EstadoCuentaRouteImport } from './routes/estado-cuenta'
 import { Route as CreditosRouteImport } from './routes/creditos'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
@@ -54,6 +55,11 @@ const MigracionRoute = MigracionRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GestionMoraRoute = GestionMoraRouteImport.update({
+  id: '/gestion-mora',
+  path: '/gestion-mora',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EstadoCuentaRoute = EstadoCuentaRouteImport.update({
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
+  '/gestion-mora': typeof GestionMoraRoute
   '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
+  '/gestion-mora': typeof GestionMoraRoute
   '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/configuracion': typeof ConfiguracionRoute
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
+  '/gestion-mora': typeof GestionMoraRoute
   '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/configuracion'
     | '/creditos'
     | '/estado-cuenta'
+    | '/gestion-mora'
     | '/login'
     | '/migracion'
     | '/nueva-venta'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/configuracion'
     | '/creditos'
     | '/estado-cuenta'
+    | '/gestion-mora'
     | '/login'
     | '/migracion'
     | '/nueva-venta'
@@ -206,6 +217,7 @@ export interface FileRouteTypes {
     | '/configuracion'
     | '/creditos'
     | '/estado-cuenta'
+    | '/gestion-mora'
     | '/login'
     | '/migracion'
     | '/nueva-venta'
@@ -225,6 +237,7 @@ export interface RootRouteChildren {
   ConfiguracionRoute: typeof ConfiguracionRoute
   CreditosRoute: typeof CreditosRoute
   EstadoCuentaRoute: typeof EstadoCuentaRoute
+  GestionMoraRoute: typeof GestionMoraRoute
   LoginRoute: typeof LoginRoute
   MigracionRoute: typeof MigracionRoute
   NuevaVentaRoute: typeof NuevaVentaRoute
@@ -280,6 +293,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gestion-mora': {
+      id: '/gestion-mora'
+      path: '/gestion-mora'
+      fullPath: '/gestion-mora'
+      preLoaderRoute: typeof GestionMoraRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/estado-cuenta': {
@@ -361,6 +381,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConfiguracionRoute: ConfiguracionRoute,
   CreditosRoute: CreditosRoute,
   EstadoCuentaRoute: EstadoCuentaRoute,
+  GestionMoraRoute: GestionMoraRoute,
   LoginRoute: LoginRoute,
   MigracionRoute: MigracionRoute,
   NuevaVentaRoute: NuevaVentaRoute,

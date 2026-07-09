@@ -29,7 +29,6 @@ import {
   Upload,
   ZoomIn,
 } from "lucide-react";
-
 import { subirArchivo } from "@/services/storage.service";
 
 const ARCHIVOS_MAX_MB = 5;

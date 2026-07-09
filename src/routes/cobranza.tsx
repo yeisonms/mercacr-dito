@@ -24,7 +24,15 @@ import {
   Download,
   Share2,
   MessageCircle,
+  CalendarIcon,
 } from "lucide-react";
+
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Calendar as CalendarUI } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,6 +61,7 @@ import {
   registrarRecaudo,
   type CreditoCobro,
 } from "@/services/recaudoService";
+import { registrarPromesaPago } from "@/services/gestionService";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 // ─── Definición de Ruta ───────────────────────────────────────────────────────
@@ -214,6 +223,23 @@ function CobranzaPage() {
   // Estado para el modal de Recibo Exitoso
   const [reciboData, setReciboData] = useState<ReciboData | null>(null);
   const ticketRef = useRef<HTMLDivElement>(null);
+
+  // Estados para Promesa de Pago
+  const [fechaCompromiso, setFechaCompromiso] = useState<Date | undefined>(undefined);
+  const [observacionesGestion, setObservacionesGestion] = useState("");
+
+  const promesaMutation = useMutation({
+    mutationFn: registrarPromesaPago,
+    onSuccess: () => {
+      toast.success("Promesa registrada. El cliente se ha reprogramado en la ruta.");
+      queryClient.invalidateQueries({ queryKey: ["creditos", "cobro"] });
+      cerrarDrawer();
+    },
+    onError: (error: any) => {
+      console.error("Error promesa:", error);
+      toast.error(error.message || "Error al registrar la promesa");
+    }
+  });
 
   // Estados del archivo de foto
   const [fotoSoporte, setFotoSoporte] = useState<File | null>(null);
@@ -645,6 +671,8 @@ function CobranzaPage() {
   const cerrarDrawer = () => {
     setCreditoSeleccionado(null);
     setCuotaSugerida(null);
+    setFechaCompromiso(undefined);
+    setObservacionesGestion("");
     reset();
     removerFoto();
   };
@@ -663,6 +691,27 @@ function CobranzaPage() {
       metodoPago: values.metodo_pago,
       fotoDinero: fotoSoporte,
       observaciones: values.observaciones,
+    });
+  };
+
+  const onGuardarPromesa = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!creditoSeleccionado || !posicionCobrador) return;
+    if (!fechaCompromiso) {
+      toast.error("Debes seleccionar una fecha de compromiso.");
+      return;
+    }
+    if (!observacionesGestion.trim()) {
+      toast.error("Debes escribir una observación o motivo de la promesa.");
+      return;
+    }
+
+    promesaMutation.mutate({
+      clienteId: creditoSeleccionado.cliente.id,
+      creditoId: creditoSeleccionado.id,
+      cobradorId: "52709375-28fd-4129-af98-8bc7e0536025", // Hardcoded for demo/Módulo 3, must come from Auth Context
+      fechaCompromiso: format(fechaCompromiso, "yyyy-MM-dd"),
+      observaciones: observacionesGestion,
     });
   };
 
@@ -933,21 +982,28 @@ function CobranzaPage() {
         <Drawer open={creditoSeleccionado !== null} onOpenChange={(open) => !open && cerrarDrawer()}>
           <DrawerContent className="max-w-md mx-auto">
             {creditoSeleccionado && (
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <Tabs defaultValue="pago" className="w-full">
                 <DrawerHeader className="text-left pb-2">
-                  <DrawerTitle className="text-lg font-bold">Registrar Recaudo</DrawerTitle>
+                  <DrawerTitle className="text-lg font-bold">Gestión de Cobro</DrawerTitle>
                   <DrawerDescription className="text-xs text-muted-foreground">
-                    Registrar abono de cuota o cancelación para{" "}
-                    <strong>
+                    Cliente: <strong>
                       {creditoSeleccionado.cliente.nombres}{" "}
                       {creditoSeleccionado.cliente.apellidos}
                     </strong>
-                    .
                   </DrawerDescription>
                 </DrawerHeader>
 
-                <div className="px-4 space-y-4">
-                  {/* Resumen del Saldo Actual */}
+                <div className="px-4">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="pago">Registrar Pago</TabsTrigger>
+                    <TabsTrigger value="promesa">Registrar Promesa</TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <TabsContent value="pago">
+                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                    <div className="px-4 space-y-4 mt-2">
+                      {/* Resumen del Saldo Actual */}
                   <div className="rounded-xl bg-primary/5 dark:bg-primary/10 border border-primary/15 p-4 flex items-center justify-between">
                     <div className="space-y-0.5">
                       <span className="text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
@@ -1123,6 +1179,84 @@ function CobranzaPage() {
                   </Button>
                 </DrawerFooter>
               </form>
+              </TabsContent>
+
+              <TabsContent value="promesa">
+                <form onSubmit={onGuardarPromesa} className="space-y-4 mt-2">
+                  <div className="px-4 space-y-4">
+                    {/* Fecha de Compromiso */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-foreground block">
+                        Fecha de Compromiso
+                      </label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full justify-start text-left font-normal h-11 rounded-xl",
+                              !fechaCompromiso && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {fechaCompromiso ? format(fechaCompromiso, "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarUI
+                            mode="single"
+                            selected={fechaCompromiso}
+                            onSelect={setFechaCompromiso}
+                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    {/* Observaciones */}
+                    <div className="space-y-1.5">
+                      <label htmlFor="observaciones_gestion" className="text-xs font-bold text-foreground block">
+                        Motivo / Observaciones
+                      </label>
+                      <Textarea
+                        id="observaciones_gestion"
+                        placeholder="Ej: El cliente dice que le pagan el viernes..."
+                        value={observacionesGestion}
+                        onChange={(e) => setObservacionesGestion(e.target.value)}
+                        className="min-h-[100px] resize-none text-sm rounded-lg"
+                      />
+                    </div>
+                  </div>
+
+                  <DrawerFooter className="pt-2 gap-2">
+                    <Button
+                      type="submit"
+                      disabled={promesaMutation.isPending}
+                      className="h-11 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/95 flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      {promesaMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Registrando...
+                        </>
+                      ) : (
+                        <>Guardar Gestión</>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={cerrarDrawer}
+                      disabled={promesaMutation.isPending}
+                      className="h-10 text-xs rounded-xl"
+                    >
+                      Cancelar
+                    </Button>
+                  </DrawerFooter>
+                </form>
+              </TabsContent>
+            </Tabs>
             )}
           </DrawerContent>
         </Drawer>

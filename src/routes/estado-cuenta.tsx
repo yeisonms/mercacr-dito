@@ -13,7 +13,14 @@ import {
   Phone,
   MapPin,
   ClipboardList,
+  Clock,
+  Loader2,
+  CalendarClock,
 } from "lucide-react";
+
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { obtenerHistorialGestiones } from "@/services/gestionService";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,6 +105,17 @@ function EstadoCuentaPage() {
     queryFn: () => obtenerEstadoCuenta(selectedClienteId),
     enabled: !!selectedClienteId,
     retry: 1,
+  });
+
+  // Query para el Historial de Gestiones
+  const {
+    data: gestiones = [],
+    isLoading: isLoadingGestiones,
+    error: errorGestiones,
+  } = useQuery({
+    queryKey: ["gestiones", selectedClienteId],
+    queryFn: () => obtenerHistorialGestiones(selectedClienteId),
+    enabled: !!selectedClienteId,
   });
 
   // Cliente seleccionado actual en el combo
@@ -327,14 +345,18 @@ function EstadoCuentaPage() {
             {/* PANEL DE TABS PARA AMORTIZACIONES E RECAUDOS */}
             {estadoCuenta.credito && (
               <Tabs defaultValue="cuotas" className="w-full">
-                <TabsList className="grid grid-cols-2 max-w-sm h-10 border border-border bg-muted/40 p-1">
+                <TabsList className="grid grid-cols-3 max-w-2xl h-10 border border-border bg-muted/40 p-1">
                   <TabsTrigger value="cuotas" className="text-xs flex items-center gap-1.5 py-1.5">
                     <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
-                    <span>Plan de Pagos (Cuotas)</span>
+                    <span className="hidden sm:inline">Plan de Pagos</span>
                   </TabsTrigger>
                   <TabsTrigger value="recaudos" className="text-xs flex items-center gap-1.5 py-1.5">
                     <History className="h-3.5 w-3.5 shrink-0" />
-                    <span>Historial de Recaudos</span>
+                    <span className="hidden sm:inline">Historial Recaudos</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="gestiones" className="text-xs flex items-center gap-1.5 py-1.5">
+                    <Clock className="h-3.5 w-3.5 shrink-0" />
+                    <span className="hidden sm:inline">Historial Gestiones</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -474,6 +496,100 @@ function EstadoCuentaPage() {
                           </TableBody>
                         </Table>
                       </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* CONTENIDO PESTAÑA 3: HISTORIAL DE GESTIONES */}
+                <TabsContent value="gestiones" className="mt-4">
+                  <Card className="border-border/60 shadow-sm">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-primary" />
+                        Historial de Visitas y Gestiones
+                      </CardTitle>
+                      <CardDescription>
+                        Registro histórico de promesas de pago, visitas y cobranza en campo.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 sm:p-6 sm:pt-0">
+                      {errorGestiones ? (
+                        <div className="flex flex-col items-center justify-center py-10 gap-2 border-2 border-dashed border-rose-500/30 rounded-xl bg-rose-500/5">
+                          <p className="text-sm text-destructive font-bold">Error al cargar gestiones</p>
+                          <p className="text-xs text-muted-foreground">{errorGestiones?.message}</p>
+                        </div>
+                      ) : isLoadingGestiones ? (
+                        <div className="flex flex-col items-center justify-center py-10 gap-2">
+                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                          <p className="text-sm text-muted-foreground">Cargando gestiones...</p>
+                        </div>
+                      ) : gestiones.length === 0 ? (
+                        <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-xl bg-muted/10">
+                          <CalendarClock className="w-10 h-10 mx-auto text-muted-foreground/30 mb-2" />
+                          No hay gestiones ni visitas registradas aún.
+                        </div>
+                      ) : (
+                        <div className="relative border-l-2 border-primary/20 ml-3 md:ml-6 space-y-8">
+                          {gestiones.map((gestion: any) => (
+                            <div key={gestion.id} className="relative pl-6 md:pl-8">
+                              {/* Indicador de estado */}
+                              <div className="absolute w-4 h-4 rounded-full -left-[9px] top-1 bg-primary/20 border-2 border-primary ring-4 ring-background" />
+                              
+                              <div className="space-y-2">
+                                {/* Fecha y Cobrador */}
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                  <span className="text-sm font-bold text-foreground">
+                                    {format(new Date(gestion.fecha_registro), "PPP p", { locale: es })}
+                                  </span>
+                                  <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1 bg-muted px-2 py-1 rounded-md w-fit">
+                                    <User className="w-3 h-3" />
+                                    {gestion.cobrador?.nombre_completo}
+                                  </span>
+                                </div>
+
+                                {/* Estado de la Gestión */}
+                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                  <Badge 
+                                    variant="outline" 
+                                    className={
+                                      gestion.estado_gestion === "Visitado con Pago" 
+                                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" 
+                                        : gestion.estado_gestion === "Promesa de Pago" 
+                                          ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20"
+                                          : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                                    }
+                                  >
+                                    {gestion.estado_gestion}
+                                  </Badge>
+                                  
+                                  {/* Si fue pago, mostrar valor */}
+                                  {gestion.recaudo && (
+                                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                      <Banknote className="w-4 h-4" />
+                                      + ${gestion.recaudo.valor_recibido?.toLocaleString()}
+                                    </span>
+                                  )}
+
+                                  {/* Si fue promesa, mostrar la fecha prometida */}
+                                  {gestion.promesa && (
+                                    <span className="text-sm font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                                      <CalendarClock className="w-4 h-4" />
+                                      Prometido para: {format(new Date(gestion.promesa.fecha_compromiso + "T12:00:00"), "PP", { locale: es })}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Observaciones */}
+                                {gestion.observaciones && (
+                                  <div className="bg-muted/30 p-3 rounded-lg text-sm text-muted-foreground border border-border/50 shadow-sm">
+                                    {gestion.observaciones}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>

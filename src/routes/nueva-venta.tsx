@@ -134,8 +134,11 @@ function NuevaVenta() {
 
   // ─── Motor de Reglas Comerciales (Reactivo) ──────────────────────────────
   const calculosFinancieros = useMemo(() => {
-    // Total Base (Precio de Contado)
-    const totalBase = carrito.reduce((acc, item) => acc + item.cantidad * item.precioContado, 0);
+    // Total Base dependiendo del Tipo de Venta
+    const totalBase = carrito.reduce((acc, item) => {
+      const precioUnitario = tipoVenta === "Credito Tradicional" ? item.precioCredito : item.precioContado;
+      return acc + item.cantidad * precioUnitario;
+    }, 0);
 
     let totalVenta = totalBase;
     let recargoPct = 0;
@@ -380,7 +383,7 @@ function NuevaVenta() {
 
       // Convertir el carrito al formato de detalles_venta aplicando los recargos
       const carritoFormateado: CarritoItem[] = carrito.map((item) => {
-        let precioAplicado = item.precioContado;
+        let precioAplicado = tipoVenta === "Credito Tradicional" ? item.precioCredito : item.precioContado;
         if (calculosFinancieros.recargoPct > 0) {
           precioAplicado = Math.round(item.precioContado * (1 + calculosFinancieros.recargoPct / 100));
         }
@@ -715,7 +718,7 @@ function NuevaVenta() {
                     <TableRow>
                       <TableHead>Producto</TableHead>
                       <TableHead className="text-center w-24">Cant.</TableHead>
-                      <TableHead className="text-right w-36">Precio Unit. (Contado)</TableHead>
+                      <TableHead className="text-right w-36">Precio Unit. ({tipoVenta === "Credito Tradicional" ? "Crédito" : "Contado"})</TableHead>
                       <TableHead className="text-right w-36">Subtotal</TableHead>
                       <TableHead className="text-center w-16"></TableHead>
                     </TableRow>
@@ -729,13 +732,14 @@ function NuevaVenta() {
                       </TableRow>
                     ) : (
                       carrito.map((item) => {
-                        const subtotalItem = item.cantidad * item.precioContado;
+                        const precioUnitario = tipoVenta === "Credito Tradicional" ? item.precioCredito : item.precioContado;
+                        const subtotalItem = item.cantidad * precioUnitario;
 
                         return (
                           <TableRow key={item.productoId} className="hover:bg-muted/10 transition-colors">
                             <TableCell className="font-medium">{item.nombre}</TableCell>
                             <TableCell className="text-center">{item.cantidad}</TableCell>
-                            <TableCell className="text-right">{formatearMoneda(item.precioContado)}</TableCell>
+                            <TableCell className="text-right">{formatearMoneda(precioUnitario)}</TableCell>
                             <TableCell className="text-right font-semibold">
                               {formatearMoneda(subtotalItem)}
                             </TableCell>
@@ -761,7 +765,7 @@ function NuevaVenta() {
               {carrito.length > 0 && (
                 <div className="flex flex-col gap-2 rounded-lg bg-muted/20 p-4 border border-border/50">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-muted-foreground">Total Base (Precio Contado):</span>
+                    <span className="text-sm font-semibold text-muted-foreground">Total Base ({tipoVenta === "Credito Tradicional" ? "Precio Crédito" : "Precio Contado"}):</span>
                     <span className="text-lg font-bold text-foreground">
                       {formatearMoneda(calculosFinancieros.totalBase)}
                     </span>

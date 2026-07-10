@@ -4,6 +4,7 @@
  * Interactúa con las tablas: creditos, clientes, recaudos y usuarios.
  */
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { format } from "date-fns";
 
 export interface ClienteInfo {
   id: string;
@@ -64,7 +65,7 @@ export interface RecaudoPendiente {
  * Filtra por estados: 'Al día', 'Próximo a vencer', 'En mora'.
  */
 export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = format(new Date(), "yyyy-MM-dd");
 
   if (!isSupabaseConfigured) {
     // Retornar datos simulados si Supabase no está configurado

@@ -4,6 +4,7 @@
  * Interactúa con las tablas: creditos, detalles_venta, cuotas y usuarios.
  */
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { format } from "date-fns";
 
 export interface CarritoItem {
   productoId: string;
@@ -44,7 +45,7 @@ export function calcularFechaVencimiento(
   } else if (frecuencia === "Mensual") {
     fecha.setMonth(fecha.getMonth() + numeroCuota);
   }
-  return fecha.toISOString().split("T")[0];
+  return format(fecha, "yyyy-MM-dd");
 }
 
 /**

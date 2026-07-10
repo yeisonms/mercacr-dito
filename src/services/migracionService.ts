@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { format } from "date-fns";
 
 export interface CreditoMigracionInput {
   cedula_cliente: string;
@@ -35,7 +36,7 @@ export function calcularFechaVencimientoMigracion(
   } else if (frecuencia === "Mensual") {
     fecha.setMonth(fecha.getMonth() + indiceCuotaZeroBased);
   }
-  return fecha.toISOString().split("T")[0];
+  return format(fecha, "yyyy-MM-dd");
 }
 
 async function obtenerVendedorId(): Promise<string> {

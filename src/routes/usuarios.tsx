@@ -271,15 +271,7 @@ function UsuariosPage() {
     >
       <div className="space-y-6">
         {/* Info banner */}
-        <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
-          <Key className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
-            <strong>Requisito:</strong> Para que los empleados inicien sesión de
-            inmediato, asegúrate de deshabilitar "Confirm email" en{" "}
-            <em>Supabase → Settings → Auth → Email</em>. De lo contrario, recibirán
-            un email de confirmación.
-          </p>
-        </div>
+
 
         {/* Tabla */}
         <div className="rounded-xl border border-border/60 overflow-hidden shadow-sm">

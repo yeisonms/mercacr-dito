@@ -32,6 +32,16 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import {
   Check,
@@ -52,6 +62,7 @@ import {
 import { listarClientes } from "@/services/cliente.service";
 import { listarProductos, formatearMoneda } from "@/services/producto.service";
 import { procesarVenta, type CarritoItem } from "@/services/ventaService";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/nueva-venta")({
   head: () => ({ meta: [{ title: "Nueva Venta — Mercacrédito" }] }),
@@ -127,6 +138,40 @@ function NuevaVenta() {
   // Frecuencia de pago seleccionada por el usuario (Semanal, Quincenal, Mensual)
   const [frecuenciaPago, setFrecuenciaPago] = useState<"Semanal" | "Quincenal" | "Mensual">("Quincenal");
 
+  // Estados para Refinanciación
+  const [creditoActivo, setCreditoActivo] = useState<{ id: string; saldo_pendiente: number; } | null>(null);
+  const [isRefinanciacion, setIsRefinanciacion] = useState(false);
+  const [openRefinanciacionDialog, setOpenRefinanciacionDialog] = useState(false);
+
+  // Consultar saldo si el cliente cambia
+  useEffect(() => {
+    if (!selectedClienteId) {
+      setCreditoActivo(null);
+      setIsRefinanciacion(false);
+      return;
+    }
+
+    async function checkCredito() {
+      const { data, error } = await supabase
+        .from("creditos")
+        .select("id, saldo_pendiente")
+        .eq("cliente_id", selectedClienteId)
+        .in("estado", ["Al día", "Próximo a vencer", "Atrasado", "En mora"])
+        .order("fecha_venta", { ascending: false })
+        .limit(1);
+
+      if (data && data.length > 0) {
+        setCreditoActivo({ id: data[0].id, saldo_pendiente: Number(data[0].saldo_pendiente) });
+        setOpenRefinanciacionDialog(true);
+      } else {
+        setCreditoActivo(null);
+        setIsRefinanciacion(false);
+      }
+    }
+
+    checkCredito();
+  }, [selectedClienteId]);
+
   // Cliente seleccionado actual
   const clienteActual = (clientes || []).find((c) => c.id === selectedClienteId);
   // Producto seleccionado actual
@@ -134,11 +179,15 @@ function NuevaVenta() {
 
   // ─── Motor de Reglas Comerciales (Reactivo) ──────────────────────────────
   const calculosFinancieros = useMemo(() => {
+    const saldoAnterior = isRefinanciacion && creditoActivo ? creditoActivo.saldo_pendiente : 0;
+
     // Total Base dependiendo del Tipo de Venta
-    const totalBase = carrito.reduce((acc, item) => {
+    const sumatoriaProductos = carrito.reduce((acc, item) => {
       const precioUnitario = tipoVenta === "Credito Tradicional" ? item.precioCredito : item.precioContado;
       return acc + item.cantidad * precioUnitario;
     }, 0);
+
+    const totalBase = sumatoriaProductos + saldoAnterior;
 
     let totalVenta = totalBase;
     let recargoPct = 0;
@@ -409,6 +458,8 @@ function NuevaVenta() {
         carrito: carritoFormateado,
         fechaProximoPago: calculosFinancieros.fechaProximoPago,
         fechaFinalEstimada: calculosFinancieros.fechaFinalEstimada,
+        isRefinanciacion: isRefinanciacion,
+        creditoIdRefinanciar: isRefinanciacion && creditoActivo ? creditoActivo.id : undefined,
       });
     },
     onSuccess: (res) => {
@@ -437,6 +488,34 @@ function NuevaVenta() {
       title="Nueva Venta"
       subtitle="Registrar transacciones de contado u originar nuevos créditos con reglas comerciales"
     >
+      <AlertDialog open={openRefinanciacionDialog} onOpenChange={setOpenRefinanciacionDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              Atención: Refinanciación de Crédito
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              El cliente <strong>{clienteActual?.nombres} {clienteActual?.apellidos}</strong> ya tiene un crédito activo con un saldo pendiente de <strong>{formatearMoneda(creditoActivo?.saldo_pendiente || 0)}</strong>.
+              <br /><br />
+              Si continúas, la nueva venta se sumará a esta deuda y el plan de pagos se recalculará (Refinanciación). ¿Deseas realizar una refinanciación?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setSelectedClienteId("");
+              setIsRefinanciacion(false);
+            }}>
+              Cancelar y Limpiar
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setIsRefinanciacion(true);
+            }}>
+              Aceptar y Continuar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* COLUMNA IZQUIERDA Y CENTRAL: Selección de Cliente y Carrito */}
         <div className="space-y-6 lg:col-span-2">
@@ -764,8 +843,16 @@ function NuevaVenta() {
               {/* Resumen de totales */}
               {carrito.length > 0 && (
                 <div className="flex flex-col gap-2 rounded-lg bg-muted/20 p-4 border border-border/50">
+                  {isRefinanciacion && creditoActivo && (
+                    <div className="flex justify-between items-center text-amber-600 mb-1">
+                      <span className="text-sm font-semibold">Saldo Anterior (Refinanciación):</span>
+                      <span className="text-sm font-bold">
+                        {formatearMoneda(creditoActivo.saldo_pendiente)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-muted-foreground">Total Base ({tipoVenta === "Credito Tradicional" ? "Precio Crédito" : "Precio Contado"}):</span>
+                    <span className="text-sm font-semibold text-muted-foreground">{isRefinanciacion ? "Nuevo Total Base" : "Total Base"} ({tipoVenta === "Credito Tradicional" ? "Precio Crédito" : "Precio Contado"}):</span>
                     <span className="text-lg font-bold text-foreground">
                       {formatearMoneda(calculosFinancieros.totalBase)}
                     </span>

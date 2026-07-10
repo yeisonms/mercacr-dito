@@ -27,6 +27,8 @@ export interface ProcesarVentaInput {
   carrito: CarritoItem[];
   fechaProximoPago?: string | null;
   fechaFinalEstimada?: string | null;
+  isRefinanciacion?: boolean;
+  creditoIdRefinanciar?: string;
 }
 
 /**
@@ -113,14 +115,12 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
     };
   }
 
-  // Generamos número de factura único
-  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  const numeroFactura = `FAC-${randomSuffix}`;
+  // Generamos número de factura único si es venta nueva
+  let numeroFactura = `FAC-${Math.floor(1000 + Math.random() * 9000)}`;
 
   // Obtener un ID de vendedor válido
   const vendedorId = await obtenerVendedorId();
 
-  // Paso A: Insertar el encabezado de la venta en la tabla creditos
   const fechaVenta = new Date();
   
   // Calcular fechas de cuotas si aplica
@@ -146,37 +146,92 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
   // Estado del crédito
   const estadoCredito = input.tipoVenta === "Contado" ? "Finalizado" : "Al día";
 
-  const { data: credito, error: errorCredito } = await supabase
-    .from("creditos")
-    .insert({
-      cliente_id: input.clienteId,
-      vendedor_id: vendedorId,
-      numero_factura: numeroFactura,
-      tipo_venta: input.tipoVenta, // Guarda 'Contado' o 'Credito'
-      valor_contado: input.valorContado,
-      valor_credito: input.valorCredito,
-      cuota_inicial: input.tipoVenta === "Credito" ? input.cuotaInicial : 0,
-      saldo_pendiente: input.tipoVenta === "Credito" ? input.saldoPendiente : 0,
-      numero_cuotas: input.tipoVenta === "Credito" ? input.numeroCuotas : 0,
-      valor_cuota: input.tipoVenta === "Credito" ? input.valorCuota : 0,
-      // Para Contado: se envía 'Mensual' como valor neutro si la columna tiene NOT NULL.
-      // Semánticamente no aplica, pero evita el constraint error.
-      // Solución definitiva: ALTER TABLE creditos ALTER COLUMN frecuencia_pago DROP NOT NULL;
-      frecuencia_pago: input.tipoVenta === "Credito" ? input.frecuenciaPago : "Mensual",
-      fecha_proximo_pago: fechaProximoPago,
-      fecha_final_estimada: fechaFinalEstimada,
-      estado: estadoCredito,
-    })
-    .select("id")
-    .single();
+  let creditoId: string;
+  let startingCuotaNumber = 1;
 
-  if (errorCredito || !credito) {
-    throw new Error(`Error en el paso A (Crear Crédito): ${errorCredito?.message || "No retornó ID"}`);
+  if (input.isRefinanciacion && input.creditoIdRefinanciar) {
+    creditoId = input.creditoIdRefinanciar;
+
+    // Obtener crédito existente
+    const { data: currentCredit, error: errorFetch } = await supabase
+      .from("creditos")
+      .select("valor_credito, numero_factura")
+      .eq("id", creditoId)
+      .single();
+
+    if (errorFetch || !currentCredit) {
+      throw new Error("No se pudo obtener el crédito a refinanciar.");
+    }
+    
+    numeroFactura = currentCredit.numero_factura;
+    const nuevoValorCredito = Number(currentCredit.valor_credito) + input.valorCredito;
+
+    // Paso A (Refinanciación): Eliminar cuotas pendientes (sin pagos)
+    await supabase
+      .from("cuotas")
+      .delete()
+      .eq("credito_id", creditoId)
+      .eq("valor_pagado", 0);
+
+    // Paso B (Refinanciación): Actualizar el crédito existente
+    const { error: errorUpdate } = await supabase
+      .from("creditos")
+      .update({
+        valor_credito: nuevoValorCredito,
+        saldo_pendiente: input.saldoPendiente,
+        numero_cuotas: input.numeroCuotas,
+        valor_cuota: input.valorCuota,
+        frecuencia_pago: input.tipoVenta === "Credito" ? input.frecuenciaPago : "Mensual",
+        fecha_proximo_pago: fechaProximoPago,
+        fecha_final_estimada: fechaFinalEstimada,
+        estado: estadoCredito,
+      })
+      .eq("id", creditoId);
+
+    if (errorUpdate) throw new Error(`Error al refinanciar el crédito: ${errorUpdate.message}`);
+
+    // Obtener el máximo número de cuota existente para continuar desde ahí
+    const { data: maxCuotaData } = await supabase
+      .from("cuotas")
+      .select("numero_cuota")
+      .eq("credito_id", creditoId)
+      .order("numero_cuota", { ascending: false })
+      .limit(1);
+    
+    if (maxCuotaData && maxCuotaData.length > 0) {
+      startingCuotaNumber = maxCuotaData[0].numero_cuota + 1;
+    }
+
+  } else {
+    // Paso A (Venta Nueva): Insertar el encabezado
+    const { data: credito, error: errorCredito } = await supabase
+      .from("creditos")
+      .insert({
+        cliente_id: input.clienteId,
+        vendedor_id: vendedorId,
+        numero_factura: numeroFactura,
+        tipo_venta: input.tipoVenta,
+        valor_contado: input.valorContado,
+        valor_credito: input.valorCredito,
+        cuota_inicial: input.tipoVenta === "Credito" ? input.cuotaInicial : 0,
+        saldo_pendiente: input.tipoVenta === "Credito" ? input.saldoPendiente : 0,
+        numero_cuotas: input.tipoVenta === "Credito" ? input.numeroCuotas : 0,
+        valor_cuota: input.tipoVenta === "Credito" ? input.valorCuota : 0,
+        frecuencia_pago: input.tipoVenta === "Credito" ? input.frecuenciaPago : "Mensual",
+        fecha_proximo_pago: fechaProximoPago,
+        fecha_final_estimada: fechaFinalEstimada,
+        estado: estadoCredito,
+      })
+      .select("id")
+      .single();
+
+    if (errorCredito || !credito) {
+      throw new Error(`Error en el paso A (Crear Crédito): ${errorCredito?.message || "No retornó ID"}`);
+    }
+    creditoId = credito.id;
   }
 
-  const creditoId = credito.id;
-
-  // Paso B: Insertar masivamente en la tabla detalles_venta
+  // Paso C: Insertar masivamente en la tabla detalles_venta (para ambos casos)
   const detalles = input.carrito.map((item) => ({
     credito_id: creditoId,
     producto_id: item.productoId,
@@ -190,12 +245,13 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
     .insert(detalles);
 
   if (errorDetalles) {
-    // Si falla, intentamos limpiar el encabezado para mantener consistencia
-    await supabase.from("creditos").delete().eq("id", creditoId);
-    throw new Error(`Error en el paso B (Insertar Detalles): ${errorDetalles.message}`);
+    if (!input.isRefinanciacion) {
+      await supabase.from("creditos").delete().eq("id", creditoId);
+    }
+    throw new Error(`Error al insertar detalles de la venta: ${errorDetalles.message}`);
   }
 
-  // Paso C: Si la venta es a Crédito, generar y guardar las cuotas
+  // Paso D: Generar y guardar las cuotas si es crédito
   if (input.tipoVenta === "Credito" && input.frecuenciaPago && input.numeroCuotas > 0) {
     const cuotasParaInsertar = [];
     
@@ -209,7 +265,6 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
 
       let valorCuotaActual = input.valorCuota;
       if (i === input.numeroCuotas) {
-        // Ajustar la última cuota al saldo restante exacto para evitar diferencias por redondeo
         valorCuotaActual = input.saldoPendiente - totalAcumuladoCuotas;
       } else {
         totalAcumuladoCuotas += valorCuotaActual;
@@ -217,7 +272,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
 
       cuotasParaInsertar.push({
         credito_id: creditoId,
-        numero_cuota: i,
+        numero_cuota: startingCuotaNumber + i - 1,
         fecha_vencimiento: fechaVencimiento,
         valor_cuota: valorCuotaActual,
         valor_pagado: 0,
@@ -231,10 +286,11 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
       .insert(cuotasParaInsertar);
 
     if (errorCuotas) {
-      // Intento de Rollback manual si falla la inserción de cuotas
-      await supabase.from("detalles_venta").delete().eq("credito_id", creditoId);
-      await supabase.from("creditos").delete().eq("id", creditoId);
-      throw new Error(`Error en el paso C (Generar Cuotas): ${errorCuotas.message}`);
+      if (!input.isRefinanciacion) {
+        await supabase.from("detalles_venta").delete().eq("credito_id", creditoId);
+        await supabase.from("creditos").delete().eq("id", creditoId);
+      }
+      throw new Error(`Error al generar cuotas: ${errorCuotas.message}`);
     }
   }
 

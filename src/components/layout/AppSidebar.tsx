@@ -78,12 +78,6 @@ const items: NavItem[] = [
     roles: ["Administrador", "Vendedor", "Cobrador"],
   },
   {
-    title: "Créditos",
-    url: "/creditos",
-    icon: Banknote,
-    roles: ["Administrador", "Gerencia", "Auxiliar"],
-  },
-  {
     title: "Estado de Cuenta",
     url: "/estado-cuenta",
     icon: Receipt,
@@ -123,12 +117,6 @@ const items: NavItem[] = [
     title: "Configuración de Mora",
     url: "/configuracion/mora",
     icon: Sliders,
-    roles: ["Administrador"],
-  },
-  {
-    title: "Configuración",
-    url: "/configuracion",
-    icon: Settings,
     roles: ["Administrador"],
   },
   {

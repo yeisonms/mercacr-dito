@@ -23,7 +23,7 @@ export interface ProcesarVentaInput {
   saldoPendiente: number;
   numeroCuotas: number;
   valorCuota: number;
-  frecuenciaPago: "Semanal" | "Quincenal" | "Mensual" | null;
+  frecuenciaPago: "Semanal" | "Quincenal" | "Mensual" | "Única" | "Decenal" | null;
   carrito: CarritoItem[];
   fechaProximoPago?: string | null;
   fechaFinalEstimada?: string | null;
@@ -37,14 +37,24 @@ export interface ProcesarVentaInput {
  */
 export function calcularFechaVencimiento(
   fechaBase: Date,
-  frecuencia: "Semanal" | "Quincenal" | "Mensual",
+  frecuencia: "Semanal" | "Quincenal" | "Mensual" | "Única" | "Decenal",
   numeroCuota: number
 ): string {
   const fecha = new Date(fechaBase);
+  let diasSumar = 0;
+
   if (frecuencia === "Semanal") {
-    fecha.setDate(fecha.getDate() + 7 * numeroCuota);
+    diasSumar = numeroCuota * 7;
+    fecha.setDate(fecha.getDate() + diasSumar);
+  } else if (frecuencia === "Decenal") {
+    diasSumar = numeroCuota * 10;
+    fecha.setDate(fecha.getDate() + diasSumar);
   } else if (frecuencia === "Quincenal") {
-    fecha.setDate(fecha.getDate() + 15 * numeroCuota);
+    diasSumar = numeroCuota * 15;
+    fecha.setDate(fecha.getDate() + diasSumar);
+  } else if (frecuencia === "Única") {
+    diasSumar = 20;
+    fecha.setDate(fecha.getDate() + diasSumar);
   } else if (frecuencia === "Mensual") {
     fecha.setMonth(fecha.getMonth() + numeroCuota);
   }

@@ -97,7 +97,7 @@ CREATE TABLE creditos (
     saldo_pendiente NUMERIC(12, 2) NOT NULL,
     numero_cuotas INT DEFAULT 0,
     valor_cuota NUMERIC(12, 2) DEFAULT 0,
-    frecuencia_pago VARCHAR(20) CHECK (frecuencia_pago IN ('Semanal', 'Quincenal', 'Mensual')),
+    frecuencia_pago VARCHAR(20) CHECK (frecuencia_pago IN ('Semanal', 'Quincenal', 'Mensual', 'Única', 'Decenal')),
     fecha_proximo_pago DATE,
     fecha_final_estimada DATE,
     estado VARCHAR(30) DEFAULT 'Al día' CHECK (estado IN ('Al día', 'Próximo a vencer', 'Atrasado', 'En mora', 'Cancelado', 'Finalizado'))

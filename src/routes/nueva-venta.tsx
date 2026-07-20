@@ -135,8 +135,8 @@ function NuevaVenta() {
   // Cuota inicial sugerida / ingresada
   const [cuotaInicial, setCuotaInicial] = useState<number>(0);
 
-  // Frecuencia de pago seleccionada por el usuario (Semanal, Quincenal, Mensual)
-  const [frecuenciaPago, setFrecuenciaPago] = useState<"Semanal" | "Quincenal" | "Mensual">("Quincenal");
+  // Frecuencia de pago seleccionada por el usuario
+  const [frecuenciaPago, setFrecuenciaPago] = useState<"Semanal" | "Quincenal" | "Mensual" | "Única" | "Decenal">("Quincenal");
 
   // Estados para Refinanciación
   const [creditoActivo, setCreditoActivo] = useState<{ id: string; saldo_pendiente: number; } | null>(null);
@@ -260,23 +260,43 @@ function NuevaVenta() {
     } else if (tipoVenta === "Credicontado Estandar") {
       totalVenta = totalBase;
       
-      let plazoDias = 20;
-      if (totalBase <= 100000) plazoDias = 20;
-      else if (totalBase <= 200000) plazoDias = 30;
-      else if (totalBase <= 500000) plazoDias = 45;
-      else plazoDias = 60;
+      if (totalBase <= 100000) {
+        // Regla estricta para <= 100.000
+        const isCompatibleFreq = frecuenciaPago === "Única" || frecuenciaPago === "Decenal" || frecuenciaPago === "Semanal";
+        const freqToUse = isCompatibleFreq ? frecuenciaPago : "Única";
 
-      let pasoDias = 15;
-      if (frecuenciaPago === "Semanal") pasoDias = 7;
-      else if (frecuenciaPago === "Quincenal") pasoDias = 15;
-      else pasoDias = 30;
+        if (freqToUse === "Única") {
+          numeroCuotas = 1;
+          fechaProximoPago = obtenerFechaFutura(20);
+          fechaFinalEstimada = obtenerFechaFutura(20);
+        } else if (freqToUse === "Decenal") {
+          numeroCuotas = 2;
+          fechaProximoPago = obtenerFechaFutura(10);
+          fechaFinalEstimada = obtenerFechaFutura(20);
+        } else {
+          numeroCuotas = 3;
+          fechaProximoPago = obtenerFechaFutura(7);
+          fechaFinalEstimada = obtenerFechaFutura(21);
+        }
+        planExplicacion = "Por política, los credicontados menores a $100.000 tienen un límite de 20 días. Seleccione un plan compatible.";
+      } else {
+        // Reglas para > 100.000 (funcionalidad anterior)
+        let plazoDias = 20;
+        if (totalBase <= 200000) plazoDias = 30;
+        else if (totalBase <= 500000) plazoDias = 45;
+        else plazoDias = 60;
 
-      numeroCuotas = Math.ceil(plazoDias / pasoDias);
+        let pasoDias = 15;
+        if (frecuenciaPago === "Semanal") pasoDias = 7;
+        else if (frecuenciaPago === "Quincenal") pasoDias = 15;
+        else pasoDias = 30;
 
-      fechaProximoPago = obtenerFechaFutura(pasoDias);
-      fechaFinalEstimada = obtenerFechaFutura(plazoDias);
+        numeroCuotas = Math.ceil(plazoDias / pasoDias);
+        fechaProximoPago = obtenerFechaFutura(pasoDias);
+        fechaFinalEstimada = obtenerFechaFutura(plazoDias);
 
-      planExplicacion = `Credicontado Estándar a 0% de interés. Plazo de ${plazoDias} días amortizado en ${numeroCuotas} cuotas ${frecuenciaPago === "Mensual" ? "mensuales" : frecuenciaPago === "Quincenal" ? "quincenales" : "semanales"}. Fecha límite: ${formatearFechaEspanol(fechaFinalEstimada)}.`;
+        planExplicacion = `Credicontado Estándar a 0% de interés. Plazo de ${plazoDias} días amortizado en ${numeroCuotas} cuotas ${frecuenciaPago === "Mensual" ? "mensuales" : frecuenciaPago === "Quincenal" ? "quincenales" : "semanales"}. Fecha límite: ${formatearFechaEspanol(fechaFinalEstimada)}.`;
+      }
     } else if (tipoVenta === "Credicontado 3 Meses") {
       // Recargos
       if (totalBase < 500000) recargoPct = 10;
@@ -364,6 +384,19 @@ function NuevaVenta() {
       setCuotaInicial(calculosFinancieros.totalVenta);
     }
   }, [calculosFinancieros.totalVenta, cuotaInicial]);
+
+  // Sincronizar estado de frecuencia de pago según las reglas
+  useEffect(() => {
+    if (tipoVenta === "Credicontado Estandar" && calculosFinancieros.totalBase <= 100000) {
+      if (frecuenciaPago !== "Única" && frecuenciaPago !== "Decenal" && frecuenciaPago !== "Semanal") {
+        setFrecuenciaPago("Única");
+      }
+    } else {
+      if (frecuenciaPago === "Única" || frecuenciaPago === "Decenal") {
+        setFrecuenciaPago("Quincenal");
+      }
+    }
+  }, [tipoVenta, calculosFinancieros.totalBase, frecuenciaPago]);
 
   // ─── Acciones del Carrito ────────────────────────────────────────────────
   const agregarAlCarrito = () => {
@@ -998,9 +1031,19 @@ function NuevaVenta() {
                       <SelectValue placeholder="Seleccione frecuencia" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Semanal">Semanal (cada 7 días)</SelectItem>
-                      <SelectItem value="Quincenal">Quincenal (cada 15 días)</SelectItem>
-                      <SelectItem value="Mensual">Mensual (cada mes)</SelectItem>
+                      {tipoVenta === "Credicontado Estandar" && calculosFinancieros.totalBase <= 100000 ? (
+                        <>
+                          <SelectItem value="Única">Única cuota (Plazo 20 días)</SelectItem>
+                          <SelectItem value="Decenal">2 cuotas (Cada 10 días)</SelectItem>
+                          <SelectItem value="Semanal">3 cuotas (Semanales)</SelectItem>
+                        </>
+                      ) : (
+                        <>
+                          <SelectItem value="Semanal">Semanal (cada 7 días)</SelectItem>
+                          <SelectItem value="Quincenal">Quincenal (cada 15 días)</SelectItem>
+                          <SelectItem value="Mensual">Mensual (cada mes)</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

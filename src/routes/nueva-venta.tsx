@@ -460,6 +460,7 @@ function NuevaVenta() {
         fechaFinalEstimada: calculosFinancieros.fechaFinalEstimada,
         isRefinanciacion: isRefinanciacion,
         creditoIdRefinanciar: isRefinanciacion && creditoActivo ? creditoActivo.id : undefined,
+        saldoAnteriorRefinanciado: isRefinanciacion && creditoActivo ? creditoActivo.saldo_pendiente : 0,
       });
     },
     onSuccess: (res) => {

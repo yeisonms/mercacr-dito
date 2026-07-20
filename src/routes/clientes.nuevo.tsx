@@ -124,7 +124,7 @@ const VALORES_INICIALES: FormValues = {
   telefono_alterno: "",
   direccion: "",
   barrio: "",
-  ciudad: "Muzo",
+  ciudad: "Popayan",
   lugar_trabajo: "",
   telefono_trabajo: "",
   ruta_id: "",
@@ -263,8 +263,8 @@ function NuevoClientePage() {
     if (!L) return;
 
     // Ubicación inicial por defecto: Muzo, Colombia
-    const initialLat = latitudValue || 5.5310;
-    const initialLng = longitudValue || -74.1080;
+    const initialLat = latitudValue || 2.4419;
+    const initialLng = longitudValue || -76.6062;
 
     if (!mapInstanceRef.current) {
       // Crear instancia de mapa
@@ -645,7 +645,7 @@ function NuevoClientePage() {
                     <FormLabel>Ciudad *</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Muzo"
+                        placeholder="Popayán"
                         disabled={enviando}
                         {...field}
                       />

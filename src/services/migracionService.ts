@@ -151,7 +151,7 @@ export async function importarCreditos(
             telefono_principal: item.telefono.trim(),
             direccion: "Dirección de Migración",
             barrio: item.barrio.trim(),
-            ciudad: "Muzo",
+            ciudad: "Popayan",
             estado: "Activo",
           })
           .select("id")

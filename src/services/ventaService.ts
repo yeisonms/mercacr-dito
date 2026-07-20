@@ -29,6 +29,7 @@ export interface ProcesarVentaInput {
   fechaFinalEstimada?: string | null;
   isRefinanciacion?: boolean;
   creditoIdRefinanciar?: string;
+  saldoAnteriorRefinanciado?: number;
 }
 
 /**
@@ -155,7 +156,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
     // Obtener crédito existente
     const { data: currentCredit, error: errorFetch } = await supabase
       .from("creditos")
-      .select("valor_credito, numero_factura")
+      .select("valor_credito, valor_contado, numero_factura")
       .eq("id", creditoId)
       .single();
 
@@ -164,7 +165,10 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
     }
     
     numeroFactura = currentCredit.numero_factura;
-    const nuevoValorCredito = Number(currentCredit.valor_credito) + input.valorCredito;
+    
+    const saldoHist = input.saldoAnteriorRefinanciado || 0;
+    const nuevoValorCredito = Number(currentCredit.valor_credito) + (input.valorCredito - saldoHist);
+    const nuevoValorContado = Number(currentCredit.valor_contado) + (input.valorContado - saldoHist);
 
     // Paso A (Refinanciación): Eliminar cuotas pendientes (sin pagos)
     await supabase
@@ -178,6 +182,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
       .from("creditos")
       .update({
         valor_credito: nuevoValorCredito,
+        valor_contado: nuevoValorContado,
         saldo_pendiente: input.saldoPendiente,
         numero_cuotas: input.numeroCuotas,
         valor_cuota: input.valorCuota,

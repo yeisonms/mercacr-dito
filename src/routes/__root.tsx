@@ -17,6 +17,8 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { OfflineFallback } from "@/components/pwa/OfflineFallback";
 
 // ── Not found ─────────────────────────────────────────────────────────────────
 
@@ -220,6 +222,8 @@ function RootComponent() {
         </RouteGuard>
       </AuthProvider>
       <Toaster richColors position="top-right" />
+      <InstallPrompt />
+      <OfflineFallback />
     </QueryClientProvider>
   );
 }

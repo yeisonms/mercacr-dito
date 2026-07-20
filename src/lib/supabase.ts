@@ -32,6 +32,18 @@ export const supabase: SupabaseClient = createClient(
   },
 );
 
+export const supabaseSecondary: SupabaseClient = createClient(
+  SUPABASE_URL ?? "http://localhost:54321",
+  SUPABASE_ANON_KEY ?? "public-anon-key-placeholder",
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  },
+);
+
 if (!isSupabaseConfigured && typeof window !== "undefined") {
   // eslint-disable-next-line no-console
   console.warn(

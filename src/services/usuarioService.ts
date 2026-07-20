@@ -9,7 +9,7 @@
  *   • INSERT: solo usuarios con rol Administrador pueden insertar.
  *   • SELECT: usuarios autenticados pueden leer.
  */
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseSecondary } from "@/lib/supabase";
 import type { RolNombre } from "@/context/AuthContext";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ async function obtenerRolId(rolNombre: RolNombre): Promise<number> {
  */
 export async function crearUsuario(input: CrearUsuarioInput): Promise<void> {
   // Paso 1: Registrar en Supabase Auth
-  const { data: authData, error: authError } = await supabase.auth.signUp({
+  const { data: authData, error: authError } = await supabaseSecondary.auth.signUp({
     email: input.email,
     password: input.password,
     options: {

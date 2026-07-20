@@ -283,7 +283,7 @@ export async function obtenerTopCobradores(): Promise<TopCobrador[]> {
       .from("recaudos")
       .select(`
         valor_recibido,
-        cobrador:usuarios ( nombre_completo )
+        cobrador:usuarios!recaudos_cobrador_id_fkey ( nombre_completo )
       `)
       .eq("estado", "Aprobado")
       .gte("fecha_recaudo", startOfMonthStr);
@@ -320,45 +320,22 @@ export async function obtenerClientesCriticos(): Promise<ClienteCritico[]> {
   if (!isSupabaseConfigured) return [];
 
   try {
-    const { data, error } = await supabase
-      .from("creditos")
-      .select(`
-        id,
-        saldo_pendiente,
-        fecha_proximo_pago,
-        cliente:clientes ( nombres, apellidos )
-      `)
-      .in("estado", ["Atrasado", "En mora"])
-      .order("fecha_proximo_pago", { ascending: true })
-      .limit(5);
+    const { obtenerCarteraMorosa } = await import("./moraService");
+    const morosos = await obtenerCarteraMorosa();
+    
+    // Filtrar aquellos que realmente tengan atraso y ordenar por días de atraso
+    const criticos = morosos
+      .filter(m => m.diasAtraso > 0)
+      .sort((a, b) => b.diasAtraso - a.diasAtraso)
+      .slice(0, 5);
 
-    if (error) throw error;
-
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    return (data ?? []).map((c: any) => {
-      const clienteObj = Array.isArray(c.cliente) ? c.cliente[0] : c.cliente;
-      const nombre = clienteObj ? `${clienteObj.nombres} ${clienteObj.apellidos}` : "Cliente Desconocido";
-      
-      let diasAtraso = 0;
-      if (c.fecha_proximo_pago) {
-        const parts = c.fecha_proximo_pago.split("-");
-        const fPago = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-        fPago.setHours(0, 0, 0, 0);
-        
-        const diffTime = hoy.getTime() - fPago.getTime();
-        diasAtraso = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
-      }
-
-      return {
-        id: c.id,
-        nombre,
-        saldoPendiente: Number(c.saldo_pendiente) || 0,
-        diasAtraso,
-        fechaProximoPago: c.fecha_proximo_pago || "",
-      };
-    });
+    return criticos.map(c => ({
+      id: c.creditoId,
+      nombre: c.nombreCliente,
+      saldoPendiente: c.saldoVencido,
+      diasAtraso: c.diasAtraso,
+      fechaProximoPago: "", // El dashboard lo puede omitir o podemos mostrar que ya venció
+    }));
   } catch (error) {
     console.error("[dashboard] Error en obtenerClientesCriticos:", error);
     return [];

@@ -297,7 +297,12 @@ export async function crearCliente(input: NuevoClienteInput) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error(`El número de cédula ${input.cedula} ya se encuentra registrado en el sistema.`);
+    }
+    throw error;
+  }
   return data;
 }
 

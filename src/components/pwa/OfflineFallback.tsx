@@ -3,9 +3,14 @@ import { WifiOff, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function OfflineFallback() {
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
+    // Check initial state after mount (client-side only)
+    if (typeof navigator !== "undefined") {
+      setIsOffline(!navigator.onLine);
+    }
+
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
 

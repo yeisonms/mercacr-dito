@@ -40,6 +40,7 @@ export const supabaseSecondary: SupabaseClient = createClient(
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
+      storageKey: "supabase.secondary.auth.token",
     },
   },
 );

@@ -19,6 +19,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { OfflineFallback } from "@/components/pwa/OfflineFallback";
+import { registerSW } from "virtual:pwa-register";
 
 // ── Not found ─────────────────────────────────────────────────────────────────
 
@@ -187,8 +188,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           content: "ERP de gestión de microcréditos y cobranza para Mercacrédito.",
         },
         { name: "author", content: "Mercacrédito" },
+        { name: "theme-color", content: "#0f766e" },
       ],
-      links: [{ rel: "stylesheet", href: appCss }],
+      links: [
+        { rel: "stylesheet", href: appCss },
+        { rel: "manifest", href: "/manifest.webmanifest" },
+        { rel: "icon", href: "/favicon.ico" }
+      ],
     }),
     shellComponent: RootShell,
     component: RootComponent,
@@ -213,6 +219,13 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    // Registra el Service Worker de la PWA
+    if ("serviceWorker" in navigator) {
+      registerSW({ immediate: true });
+    }
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

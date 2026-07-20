@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -35,6 +35,7 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
 import { AppShell } from "@/components/layout/AppShell";
+import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -215,6 +216,16 @@ function optimizarRuta(
 // ─── Componente Principal ────────────────────────────────────────────────────
 
 function CobranzaPage() {
+  const { perfil } = useAuth();
+  const navigate = useNavigate();
+
+  // Guard para Auxiliar
+  useEffect(() => {
+    if (perfil && perfil.rol === "Auxiliar") {
+      navigate({ to: "/", replace: true });
+    }
+  }, [perfil, navigate]);
+
   const queryClient = useQueryClient();
   const [busqueda, setBusqueda] = useState("");
   const [creditoSeleccionado, setCreditoSeleccionado] = useState<CreditoCobro | null>(null);

@@ -30,6 +30,7 @@ import {
 
 import { importarCreditos, type CreditoMigracionInput } from "@/services/migracionService";
 import { formatearMoneda } from "@/services/producto.service";
+import { useAuth } from "@/context/AuthContext";
 
 export const Route = createFileRoute("/migracion")({
   head: () => ({ meta: [{ title: "Migración de Cartera — Mercacrédito" }] }),
@@ -43,8 +44,9 @@ interface FilaValidada {
 }
 
 function MigracionCartera() {
-  // ─── Control de Simulación de Rol (UX y Requisito de Seguridad) ───────
-  const [userRole, setUserRole] = useState<"Administrador" | "Gerencia" | "Cobrador" | "Vendedor">("Administrador");
+  // ─── Control de Rol (Seguridad) ───────────────────────────────────────
+  const { perfil } = useAuth();
+  const userRole = perfil?.rol || "Vendedor";
 
   // ─── Estados de Carga y Previsualización ──────────────────────────────
   const [nombreArchivo, setNombreArchivo] = useState<string>("");
@@ -272,31 +274,6 @@ function MigracionCartera() {
   if (userRole !== "Administrador") {
     return (
       <AppShell title="Migración de Cartera" subtitle="Importación de saldos iniciales de clientes">
-        {/* Selector de Simulación de Rol */}
-        <div className="mb-6 flex items-center justify-between rounded-lg bg-muted/40 p-4 border border-border/50">
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-semibold text-foreground">Simulación de Rol Administrativo:</span>
-            <span className="text-xs text-muted-foreground">Alterna de rol para probar los controles de acceso.</span>
-          </div>
-          <RadioGroup
-            value={userRole}
-            onValueChange={(val) => setUserRole(val as any)}
-            className="flex items-center gap-4"
-          >
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="Administrador" id="sim-admin" />
-              <Label htmlFor="sim-admin" className="text-xs font-medium cursor-pointer">Admin</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="Cobrador" id="sim-cobrador" />
-              <Label htmlFor="sim-cobrador" className="text-xs font-medium cursor-pointer">Cobrador</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="Vendedor" id="sim-vendedor" />
-              <Label htmlFor="sim-vendedor" className="text-xs font-medium cursor-pointer">Vendedor</Label>
-            </div>
-          </RadioGroup>
-        </div>
 
         <Card className="border-border/60 shadow-sm max-w-xl mx-auto mt-12">
           <CardHeader className="text-center">
@@ -320,31 +297,7 @@ function MigracionCartera() {
 
   return (
     <AppShell title="Migración de Cartera" subtitle="Importación masiva de saldos iniciales y créditos activos desde archivos CSV">
-      {/* Selector de Simulación de Rol */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-lg bg-muted/40 p-4 border border-border/50">
-        <div className="flex flex-col gap-1">
-          <span className="text-sm font-semibold text-foreground">Simulación de Rol Administrativo:</span>
-          <span className="text-xs text-muted-foreground">Alterna de rol para probar los controles de acceso.</span>
-        </div>
-        <RadioGroup
-          value={userRole}
-          onValueChange={(val) => setUserRole(val as any)}
-          className="flex items-center gap-4"
-        >
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="Administrador" id="sim-admin" />
-            <Label htmlFor="sim-admin" className="text-xs font-medium cursor-pointer">Admin (Acceso)</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="Cobrador" id="sim-cobrador" />
-            <Label htmlFor="sim-cobrador" className="text-xs font-medium cursor-pointer">Cobrador (Bloqueo)</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem value="Vendedor" id="sim-vendedor" />
-            <Label htmlFor="sim-vendedor" className="text-xs font-medium cursor-pointer">Vendedor (Bloqueo)</Label>
-          </div>
-        </RadioGroup>
-      </div>
+
 
       <div className="grid grid-cols-1 gap-6">
         {/* TARJETA DE SUBIDA Y CARGA */}

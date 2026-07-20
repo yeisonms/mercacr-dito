@@ -23,6 +23,8 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatearMoneda } from "@/services/producto.service";
+import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -39,6 +41,9 @@ export const Route = createFileRoute("/")({
 });
 
 function DashboardPage() {
+  const { perfil } = useAuth();
+  const isAuxiliar = perfil?.rol === "Auxiliar";
+  
   const { data: kpis, isLoading: loadingKpis } = useDashboardKpis();
   const { data: recaudos } = useRecaudosSemana();
   const { data: estadoCartera, isLoading: loadingCartera } = useEstadoCartera();
@@ -69,7 +74,7 @@ VITE_SUPABASE_ANON_KEY=tu-anon-key-publica`}
         ) : null}
 
         {/* ── Tarjetas de Indicadores Clave (KPIs) ── */}
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className={cn("grid gap-4 sm:grid-cols-2", isAuxiliar ? "xl:grid-cols-1" : "xl:grid-cols-4")}>
           <KpiCard
             label="Recaudos del día"
             value={formatearMoneda(kpis?.recaudosDelDia ?? 0)}
@@ -78,45 +83,53 @@ VITE_SUPABASE_ANON_KEY=tu-anon-key-publica`}
             loading={loadingKpis}
             tone="success"
           />
-          <KpiCard
-            label="Cartera activa"
-            value={formatearMoneda(kpis?.carteraActiva ?? 0)}
-            icon={Wallet}
-            hint="Saldo por cobrar vigente"
-            loading={loadingKpis}
-            tone="default"
-          />
-          <KpiCard
-            label="Ventas del mes"
-            value={formatearMoneda(kpis?.ventasDelMes ?? 0)}
-            icon={TrendingUp}
-            hint="Total facturado este mes"
-            loading={loadingKpis}
-            tone="warning"
-          />
-          <KpiCard
-            label="Utilidad del mes"
-            value={formatearMoneda(kpis?.utilidadDelMes ?? 0)}
-            icon={PiggyBank}
-            hint="Recaudos + Contados - Gastos"
-            loading={loadingKpis}
-            tone={kpis && kpis.utilidadDelMes >= 0 ? "success" : "danger"}
-          />
+          {!isAuxiliar && (
+            <>
+              <KpiCard
+                label="Cartera activa"
+                value={formatearMoneda(kpis?.carteraActiva ?? 0)}
+                icon={Wallet}
+                hint="Saldo por cobrar vigente"
+                loading={loadingKpis}
+                tone="default"
+              />
+              <KpiCard
+                label="Ventas del mes"
+                value={formatearMoneda(kpis?.ventasDelMes ?? 0)}
+                icon={TrendingUp}
+                hint="Total facturado este mes"
+                loading={loadingKpis}
+                tone="warning"
+              />
+              <KpiCard
+                label="Utilidad del mes"
+                value={formatearMoneda(kpis?.utilidadDelMes ?? 0)}
+                icon={PiggyBank}
+                hint="Recaudos + Contados - Gastos"
+                loading={loadingKpis}
+                tone={kpis && kpis.utilidadDelMes >= 0 ? "success" : "danger"}
+              />
+            </>
+          )}
         </div>
 
         {/* ── Sección de Gráficos (Tendencia y Estado de Cartera) ── */}
         <div className="grid gap-6 lg:grid-cols-5">
-          <div className="lg:col-span-3">
+          <div className={isAuxiliar ? "lg:col-span-5" : "lg:col-span-3"}>
             <RecaudosChart data={recaudos ?? []} />
           </div>
-          <div className="lg:col-span-2">
-            <CarteraDonutChart data={estadoCartera ?? []} loading={loadingCartera} />
-          </div>
+          {!isAuxiliar && (
+            <div className="lg:col-span-2">
+              <CarteraDonutChart data={estadoCartera ?? []} loading={loadingCartera} />
+            </div>
+          )}
         </div>
 
         {/* ── Mini-Tablas de Monitoreo Rápido ── */}
-        <div className="grid gap-6 md:grid-cols-2">
-          <TopCobradoresTable data={topCobradores ?? []} loading={loadingCobradores} />
+        <div className={cn("grid gap-6", isAuxiliar ? "md:grid-cols-1" : "md:grid-cols-2")}>
+          {!isAuxiliar && (
+            <TopCobradoresTable data={topCobradores ?? []} loading={loadingCobradores} />
+          )}
           <ClientesCriticosTable data={clientesCriticos ?? []} loading={loadingCriticos} />
         </div>
       </div>

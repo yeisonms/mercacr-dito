@@ -83,7 +83,8 @@ type TipoVentaComercial =
   | "Contado"
   | "Credito Tradicional"
   | "Credicontado Estandar"
-  | "Credicontado 3 Meses";
+  | "Credicontado 3 Meses"
+  | "Manual";
 
 // Funciones auxiliares para fechas
 function obtenerFechaFutura(dias: number): string {
@@ -137,6 +138,11 @@ function NuevaVenta() {
 
   // Frecuencia de pago seleccionada por el usuario
   const [frecuenciaPago, setFrecuenciaPago] = useState<"Semanal" | "Quincenal" | "Mensual" | "Única" | "Decenal">("Quincenal");
+
+  // Estados de Crédito Manual
+  const [numeroCuotasManual, setNumeroCuotasManual] = useState<number>(1);
+  const [valorCuotaManual, setValorCuotaManual] = useState<number>(0);
+  const [fechaInicioManual, setFechaInicioManual] = useState<string>(obtenerFechaFutura(1));
 
   // Estados para Refinanciación
   const [creditoActivo, setCreditoActivo] = useState<{ id: string; saldo_pendiente: number; } | null>(null);
@@ -195,6 +201,29 @@ function NuevaVenta() {
     let fechaProximoPago: string | null = null;
     let fechaFinalEstimada: string | null = null;
     let planExplicacion = "";
+    let guiaSugerida = "";
+
+    // ─── CÁLCULO DE GUÍA (LO QUE HARÍA EL SISTEMA NORMALMENTE) ───
+    if (tipoVenta === "Manual") {
+      let calcCuotaGuia = 0;
+      let calcFreqGuia = frecuenciaPago;
+      if (totalBase <= 1000000) {
+        let cuotaQ = 20000;
+        if (totalBase <= 120000) cuotaQ = 20000;
+        else if (totalBase <= 250000) cuotaQ = 25000;
+        else if (totalBase <= 400000) cuotaQ = 30000;
+        else if (totalBase <= 600000) cuotaQ = 40000;
+        else cuotaQ = 50000;
+
+        calcCuotaGuia = cuotaQ;
+        if (calcFreqGuia === "Semanal") calcCuotaGuia = Math.round(cuotaQ / 2);
+        else if (calcFreqGuia === "Mensual") calcCuotaGuia = cuotaQ * 2;
+      } else {
+        const numeroCuotasGuia = calcFreqGuia === "Mensual" ? 10 : calcFreqGuia === "Quincenal" ? 20 : 40;
+        calcCuotaGuia = Math.ceil((totalBase / numeroCuotasGuia) / 1000) * 1000;
+      }
+      guiaSugerida = `💡 Guía de Política Sugerida: Para una venta de ${formatearMoneda(totalBase)}, la regla de la empresa sugiere cuotas de aprox. ${formatearMoneda(calcCuotaGuia)} con frecuencia ${calcFreqGuia}.`;
+    }
 
     if (tipoVenta === "Contado") {
       totalVenta = totalBase;
@@ -323,6 +352,21 @@ function NuevaVenta() {
       }
 
       planExplicacion = `Credicontado a 3 meses. Aplica un recargo del ${recargoPct}% por financiamiento (${formatearMoneda(recargoMonto)}). Proyectado a ${numeroCuotas} cuotas ${frecuenciaPago === "Mensual" ? "mensuales" : frecuenciaPago === "Quincenal" ? "quincenales" : "semanales"}.`;
+    } else if (tipoVenta === "Manual") {
+      totalVenta = totalBase;
+      numeroCuotas = numeroCuotasManual > 0 ? numeroCuotasManual : 1;
+      fechaProximoPago = fechaInicioManual || obtenerFechaFutura(1);
+      
+      // La estimación final en manual es aproximada basada en la frecuencia
+      let pasoDias = 15;
+      if (frecuenciaPago === "Semanal") pasoDias = 7;
+      else if (frecuenciaPago === "Quincenal") pasoDias = 15;
+      else if (frecuenciaPago === "Decenal") pasoDias = 10;
+      else if (frecuenciaPago === "Mensual") pasoDias = 30;
+      else pasoDias = 0; // Única
+      
+      fechaFinalEstimada = obtenerFechaFutura(pasoDias * numeroCuotas);
+      planExplicacion = `Crédito Manual Personalizado. Valores sobreescritos por el vendedor.`;
     }
 
     const saldoPendiente = tipoVenta === "Contado" ? 0 : Math.max(0, totalVenta - cuotaInicial);
@@ -336,7 +380,9 @@ function NuevaVenta() {
         valorCuota = saldoPendiente;
         ultimaCuota = saldoPendiente;
       } else {
-        if (tipoVenta === "Credito Tradicional" && totalBase <= 1000000) {
+        if (tipoVenta === "Manual") {
+          valorCuota = valorCuotaManual > 0 ? valorCuotaManual : 0;
+        } else if (tipoVenta === "Credito Tradicional" && totalBase <= 1000000) {
           // Matriz rígida de cuotas quincenales base
           let cuotaQuincenalBase = 20000;
           if (totalBase <= 120000) cuotaQuincenalBase = 20000;
@@ -375,8 +421,9 @@ function NuevaVenta() {
       fechaFinalEstimada,
       saldoPendiente,
       planExplicacion,
+      guiaSugerida,
     };
-  }, [carrito, tipoVenta, cuotaInicial, frecuenciaPago]);
+  }, [carrito, tipoVenta, cuotaInicial, frecuenciaPago, numeroCuotasManual, valorCuotaManual, fechaInicioManual]);
 
   // Ajustar cuota inicial si supera el nuevo total
   useEffect(() => {
@@ -478,9 +525,16 @@ function NuevaVenta() {
         };
       });
 
+      let dbTipoVenta = "Credito";
+      if (tipoVenta === "Contado") dbTipoVenta = "Contado";
+      else if (tipoVenta === "Credito Tradicional") dbTipoVenta = "Credito";
+      else if (tipoVenta === "Credicontado Estandar") dbTipoVenta = "Credicontado";
+      else if (tipoVenta === "Credicontado 3 Meses") dbTipoVenta = "Credicontado 3 Meses";
+      else if (tipoVenta === "Manual") dbTipoVenta = "Manual";
+
       return procesarVenta({
         clienteId: selectedClienteId,
-        tipoVenta: tipoVenta === "Contado" ? "Contado" : "Credito", // Enlace estricto a DDL 'Contado' | 'Credito'
+        tipoVenta: dbTipoVenta,
         valorContado: calculosFinancieros.totalBase,
         valorCredito: calculosFinancieros.totalVenta,
         cuotaInicial: tipoVenta === "Contado" ? 0 : cuotaInicial,
@@ -984,6 +1038,22 @@ function NuevaVenta() {
                       </div>
                     </Label>
                   </div>
+
+                  <div className="relative">
+                    <RadioGroupItem value="Manual" id="plan-manual" className="peer sr-only" />
+                    <Label
+                      htmlFor="plan-manual"
+                      className="flex items-center justify-between rounded-lg border-2 border-muted bg-popover p-3 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer transition-all duration-150"
+                    >
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold">Crédito Manual</span>
+                          <span className="text-2xs text-muted-foreground">Condiciones personalizadas</span>
+                        </div>
+                      </div>
+                    </Label>
+                  </div>
                 </RadioGroup>
               </div>
 
@@ -1037,6 +1107,14 @@ function NuevaVenta() {
                           <SelectItem value="Decenal">2 cuotas (Cada 10 días)</SelectItem>
                           <SelectItem value="Semanal">3 cuotas (Semanales)</SelectItem>
                         </>
+                      ) : tipoVenta === "Manual" ? (
+                        <>
+                          <SelectItem value="Semanal">Semanal</SelectItem>
+                          <SelectItem value="Decenal">Decenal</SelectItem>
+                          <SelectItem value="Quincenal">Quincenal</SelectItem>
+                          <SelectItem value="Mensual">Mensual</SelectItem>
+                          <SelectItem value="Única">Única</SelectItem>
+                        </>
                       ) : (
                         <>
                           <SelectItem value="Semanal">Semanal (cada 7 días)</SelectItem>
@@ -1049,7 +1127,57 @@ function NuevaVenta() {
                 </div>
               )}
 
+              {/* Controles extra para Modo Manual */}
+              {tipoVenta === "Manual" && (
+                <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Número de Cuotas</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={numeroCuotasManual}
+                      onChange={(e) => setNumeroCuotasManual(Math.max(1, parseInt(e.target.value) || 1))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Valor Cuota Base</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">$</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={valorCuotaManual || ""}
+                        onChange={(e) => setValorCuotaManual(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="pl-7"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label className="text-sm font-medium">Fecha de Primer Pago</Label>
+                    <Input
+                      type="date"
+                      value={fechaInicioManual}
+                      onChange={(e) => setFechaInicioManual(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Banners dinámicos explicativos del motor de reglas */}
+              {carrito.length > 0 && tipoVenta === "Manual" && calculosFinancieros.guiaSugerida && (
+                <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3.5 space-y-2.5 animate-in fade-in duration-300">
+                  <div className="flex items-start gap-2.5 text-blue-600 dark:text-blue-400">
+                    <Info className="h-5 w-5 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-bold uppercase tracking-wider">Política Recomendada</h4>
+                      <p className="text-xs leading-relaxed">
+                        {calculosFinancieros.guiaSugerida}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {carrito.length > 0 && (
                 <div className="rounded-lg bg-primary/5 border border-primary/10 p-3.5 space-y-2.5 animate-in fade-in duration-300">
                   <div className="flex items-start gap-2.5 text-primary">

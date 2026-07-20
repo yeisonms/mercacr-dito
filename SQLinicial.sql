@@ -90,7 +90,7 @@ CREATE TABLE creditos (
     vendedor_id UUID REFERENCES usuarios(id) ON DELETE RESTRICT,
     numero_factura VARCHAR(50) UNIQUE NOT NULL,
     fecha_venta TIMESTAMPTZ DEFAULT NOW(),
-    tipo_venta VARCHAR(20) NOT NULL CHECK (tipo_venta IN ('Contado', 'Credito')),
+    tipo_venta VARCHAR(20) NOT NULL CHECK (tipo_venta IN ('Contado', 'Credito', 'Credicontado', 'Credicontado 3 Meses', 'Manual', 'Migracion')),
     valor_contado NUMERIC(12, 2) NOT NULL,
     valor_credito NUMERIC(12, 2) NOT NULL,
     cuota_inicial NUMERIC(12, 2) DEFAULT 0,

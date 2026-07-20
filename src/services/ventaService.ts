@@ -16,7 +16,7 @@ export interface CarritoItem {
 
 export interface ProcesarVentaInput {
   clienteId: string;
-  tipoVenta: "Contado" | "Credito";
+  tipoVenta: string;
   valorContado: number;
   valorCredito: number;
   cuotaInicial: number;
@@ -42,6 +42,10 @@ export function calcularFechaVencimiento(
 ): string {
   const fecha = new Date(fechaBase);
   let diasSumar = 0;
+
+  if (numeroCuota === 0) {
+    return format(fecha, "yyyy-MM-dd");
+  }
 
   if (frecuencia === "Semanal") {
     diasSumar = numeroCuota * 7;
@@ -228,11 +232,11 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
         tipo_venta: input.tipoVenta,
         valor_contado: input.valorContado,
         valor_credito: input.valorCredito,
-        cuota_inicial: input.tipoVenta === "Credito" ? input.cuotaInicial : 0,
-        saldo_pendiente: input.tipoVenta === "Credito" ? input.saldoPendiente : 0,
-        numero_cuotas: input.tipoVenta === "Credito" ? input.numeroCuotas : 0,
-        valor_cuota: input.tipoVenta === "Credito" ? input.valorCuota : 0,
-        frecuencia_pago: input.tipoVenta === "Credito" ? input.frecuenciaPago : "Mensual",
+        cuota_inicial: input.tipoVenta !== "Contado" ? input.cuotaInicial : 0,
+        saldo_pendiente: input.tipoVenta !== "Contado" ? input.saldoPendiente : 0,
+        numero_cuotas: input.tipoVenta !== "Contado" ? input.numeroCuotas : 0,
+        valor_cuota: input.tipoVenta !== "Contado" ? input.valorCuota : 0,
+        frecuencia_pago: input.tipoVenta !== "Contado" ? input.frecuenciaPago : "Mensual",
         fecha_proximo_pago: fechaProximoPago,
         fecha_final_estimada: fechaFinalEstimada,
         estado: estadoCredito,
@@ -267,16 +271,32 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
   }
 
   // Paso D: Generar y guardar las cuotas si es crédito
-  if (input.tipoVenta === "Credito" && input.frecuenciaPago && input.numeroCuotas > 0) {
+  // Paso D: Generar y guardar las cuotas si es crédito (cualquier tipo financiado)
+  if (input.tipoVenta !== "Contado" && input.frecuenciaPago && input.numeroCuotas > 0) {
     const cuotasParaInsertar = [];
     
     let totalAcumuladoCuotas = 0;
+    // Si se pasa una fecha_proximo_pago manual (o calculada), esa será la fecha de la cuota 1
+    const baseDate = input.fechaProximoPago ? new Date(input.fechaProximoPago) : fechaVenta;
+    // Ajustar para huso horario y evitar restas de días: agregar el timezone offset de forma simple o parsear correctamente:
+    // new Date('YYYY-MM-DD') en JS puede restar 1 día si hay timezone. Usaremos Date(input.fechaProximoPago + 'T12:00:00')
+    const baseDateFixed = input.fechaProximoPago ? new Date(`${input.fechaProximoPago}T12:00:00`) : fechaVenta;
+
     for (let i = 1; i <= input.numeroCuotas; i++) {
-      const fechaVencimiento = calcularFechaVencimiento(
-        fechaVenta,
-        input.frecuenciaPago,
-        i
-      );
+      let fechaVencimiento: string;
+      if (input.fechaProximoPago) {
+        fechaVencimiento = calcularFechaVencimiento(
+          baseDateFixed,
+          input.frecuenciaPago,
+          i - 1 // Para i=1, suma 0 días (misma fecha). Para i=2, suma 1 salto.
+        );
+      } else {
+        fechaVencimiento = calcularFechaVencimiento(
+          baseDateFixed,
+          input.frecuenciaPago,
+          i
+        );
+      }
 
       let valorCuotaActual = input.valorCuota;
       if (i === input.numeroCuotas) {

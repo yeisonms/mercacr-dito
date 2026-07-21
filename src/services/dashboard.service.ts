@@ -128,21 +128,8 @@ export async function obtenerKpisDashboard(): Promise<DashboardKpis> {
       0
     );
 
-    // 2. Suma de Gastos del Mes (Safe check, try-catch por si no existe la tabla gastos)
+    // 2. Suma de Gastos del Mes (Se eliminó la tabla gastos del MVP)
     let gastosDelMes = 0;
-    try {
-      const { data: gastos, error: errorGastos } = await supabase
-        .from("gastos")
-        .select("valor")
-        .gte("fecha", startOfMonthStr.split("T")[0])
-        .lte("fecha", endOfMonthStr.split("T")[0]);
-
-      if (!errorGastos && gastos) {
-        gastosDelMes = gastos.reduce((sum, g) => sum + (Number(g.valor) || 0), 0);
-      }
-    } catch (e) {
-      console.warn("La tabla de gastos no existe o no es accesible. Ignorando gastos para utilidad.", e);
-    }
 
     // Utilidad = Recaudos aprobados + Ventas contado - Gastos
     const utilidadDelMes = (recaudosDelMes + ventasContadoMes) - gastosDelMes;

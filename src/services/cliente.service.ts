@@ -344,7 +344,7 @@ export async function obtenerCliente(id: string): Promise<Cliente> {
     `,
     )
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
   if (!data) return null as any;

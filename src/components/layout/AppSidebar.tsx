@@ -171,8 +171,8 @@ export function AppSidebar() {
       {/* ── Header: Logo ──────────────────────────────────────────────── */}
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-2">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-600 text-white shadow shadow-indigo-600/30">
-            <Wallet className="h-5 w-5" />
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg overflow-hidden bg-white shadow border border-border/50">
+            <img src="/pwa-192x192.png" alt="Logo Mercacrédito" className="h-full w-full object-cover" />
           </div>
           <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
             <span className="truncate text-sm font-semibold">Mercacrédito</span>

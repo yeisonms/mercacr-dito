@@ -98,8 +98,8 @@ function LoginPage() {
 
         {/* Logo */}
         <div className="flex items-center gap-3 relative z-10">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-600/40">
-            <Wallet className="h-6 w-6 text-white" />
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl overflow-hidden shadow-lg shadow-indigo-600/20 bg-white border border-white/10">
+            <img src="/pwa-192x192.png" alt="Logo Mercacrédito" className="h-full w-full object-cover" />
           </div>
           <div>
             <p className="text-lg font-bold text-white leading-tight">Mercacrédito</p>
@@ -152,8 +152,8 @@ function LoginPage() {
         <div className="w-full max-w-[360px] space-y-9">
           {/* Logo mobile */}
           <div className="flex items-center gap-3 lg:hidden">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600">
-              <Wallet className="h-5 w-5 text-white" />
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl overflow-hidden shadow-lg bg-white border border-white/10">
+              <img src="/pwa-192x192.png" alt="Logo Mercacrédito" className="h-full w-full object-cover" />
             </div>
             <div>
               <p className="text-base font-bold text-white">Mercacrédito</p>

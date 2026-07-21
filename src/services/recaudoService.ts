@@ -235,7 +235,10 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
  * Sube una foto de soporte al bucket 'documentos_clientes'.
  * Se guarda en la subcarpeta 'recaudos/' organizada por creditoId.
  */
-export async function subirFotoSoporte(creditoId: string, file: File): Promise<string> {
+import { compressImage } from "./imageOptimizationService";
+
+export async function subirFotoSoporte(creditoId: string, originalFile: File): Promise<string> {
+  const file = await compressImage(originalFile);
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
   const nombreSanitizado = file.name
     .replace(/\.[^/.]+$/, "")

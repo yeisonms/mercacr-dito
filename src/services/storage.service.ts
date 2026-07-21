@@ -4,6 +4,7 @@
  * Bucket: 'documentos_clientes'
  */
 import { supabase } from "@/lib/supabase";
+import { compressImage } from "./imageOptimizationService";
 
 const BUCKET = "documentos_clientes";
 
@@ -43,8 +44,10 @@ function generarRutaArchivo(
 export async function subirArchivo(
   cedula: string,
   tipo: TipoDocumento,
-  file: File,
+  originalFile: File,
 ): Promise<string> {
+  // Comprimir imagen antes de subirla
+  const file = await compressImage(originalFile);
   const ruta = generarRutaArchivo(cedula, tipo, file);
 
   const { error: uploadError } = await supabase.storage

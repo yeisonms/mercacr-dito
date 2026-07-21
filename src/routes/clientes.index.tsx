@@ -9,7 +9,11 @@ import {
   Users,
   RefreshCw,
   UserX,
+  FileSpreadsheet,
+  Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
+import { descargarRespaldoExcel } from "@/services/exportService";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -198,6 +202,20 @@ function AccionesMenu({ cliente }: { cliente: Cliente }) {
 function ClientesPage() {
   const { data: clientes = [], isLoading, isError, refetch } = useClientes();
   const [busqueda, setBusqueda] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportarExcel = async () => {
+    try {
+      setIsExporting(true);
+      toast.loading("Generando Excel, por favor espera...", { id: "export-excel" });
+      await descargarRespaldoExcel();
+      toast.success("Respaldo descargado correctamente", { id: "export-excel" });
+    } catch (error: any) {
+      toast.error(error.message || "Error al exportar la cartera", { id: "export-excel" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Filtrado en tiempo real — nombre, apellidos, cédula o código
   const clientesFiltrados = useMemo(() => {
@@ -282,16 +300,27 @@ function ClientesPage() {
                       : `${clientes.length} cliente${clientes.length !== 1 ? "s" : ""} registrado${clientes.length !== 1 ? "s" : ""}`}
                 </CardDescription>
               </div>
-              <div className="relative w-full sm:w-72">
-                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="busqueda-clientes"
-                  placeholder="Buscar por nombre, cédula o código…"
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                  className="pl-8"
-                  autoComplete="off"
-                />
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <div className="relative w-full sm:w-72">
+                  <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="busqueda-clientes"
+                    placeholder="Buscar por nombre, cédula o código…"
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    className="pl-8"
+                    autoComplete="off"
+                  />
+                </div>
+                <Button 
+                  variant="default"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center"
+                  onClick={handleExportarExcel}
+                  disabled={isExporting}
+                >
+                  {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
+                  Exportar Respaldo
+                </Button>
               </div>
             </div>
           </CardHeader>

@@ -25,7 +25,26 @@ import {
   Share2,
   MessageCircle,
   CalendarIcon,
+  GripVertical,
 } from "lucide-react";
+
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
@@ -60,6 +79,7 @@ import {
 import {
   obtenerCreditosCobro,
   registrarRecaudo,
+  actualizarSecuenciaRuta,
   type CreditoCobro,
 } from "@/services/recaudoService";
 import { registrarPromesaPago } from "@/services/gestionService";
@@ -209,8 +229,114 @@ function optimizarRuta(
     ];
   }
 
-  // Los clientes sin GPS van al final
+// Los clientes sin GPS van al final
   return [...rutaOptima, ...sinGps];
+}
+
+// ─── Sub-Componente de Tarjeta Arrastrable ────────────────────────────────────
+
+function SortableCreditoCard({ 
+  item, 
+  config, 
+  onClick,
+  disabled
+}: { 
+  item: CreditoCobro; 
+  config: any; 
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id, disabled });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : "auto",
+    opacity: isDragging ? 0.8 : 1,
+  };
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "overflow-hidden shadow-xs transition-all duration-100 border",
+        isDragging 
+          ? "border-primary/50 ring-2 ring-primary/20 scale-[1.02] shadow-md relative" 
+          : "border-border/60 hover:border-primary/40"
+      )}
+    >
+      <CardContent className="p-0 flex items-stretch">
+        {/* Grip Handle exclusivo (solo se muestra si no está deshabilitado por búsqueda) */}
+        {!disabled && (
+          <div 
+            {...attributes} 
+            {...listeners} 
+            className="w-10 bg-muted/40 hover:bg-muted flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-border/40 shrink-0 touch-none"
+          >
+            <GripVertical className="h-5 w-5 text-muted-foreground/60" />
+          </div>
+        )}
+        
+        {/* Contenido de la Tarjeta clickeable */}
+        <div className="flex-1 p-4 space-y-3 cursor-pointer active:scale-[0.99]" onClick={onClick}>
+          {/* Fila superior: Nombre y Estado */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="text-base font-semibold leading-tight text-foreground truncate">
+                {item.cliente.nombres} {item.cliente.apellidos}
+              </h3>
+              <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                CC {item.cliente.cedula} | {item.numero_factura}
+              </p>
+            </div>
+            <Badge
+              variant="outline"
+              className={cn("text-2xs px-2 py-0.5 shrink-0", config.badgeClass)}
+            >
+              {item.estado}
+            </Badge>
+          </div>
+
+          {/* Fila central: Barrio y Botón de llamada */}
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <MapPin className="h-4 w-4 text-muted-foreground/75 shrink-0" />
+              <span className="truncate">{item.cliente.barrio}</span>
+            </div>
+
+            <a
+              href={`tel:${item.cliente.telefono_principal}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center justify-center h-8 px-3 rounded-lg border border-border bg-card text-primary active:bg-muted transition-colors gap-1.5"
+            >
+              <Phone className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Llamar</span>
+            </a>
+          </div>
+
+          <div className="h-px bg-border/60" />
+
+          {/* Fila inferior: Saldo pendiente destacado */}
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-xs text-muted-foreground font-medium">
+              Saldo Pendiente:
+            </span>
+            <span className="text-lg font-bold tracking-tight text-foreground">
+              {formatearMoneda(item.saldo_pendiente)}
+            </span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 // ─── Componente Principal ────────────────────────────────────────────────────
@@ -227,6 +353,66 @@ function CobranzaPage() {
   }, [perfil, navigate]);
 
   const queryClient = useQueryClient();
+
+  // 1. Cargar datos con React Query
+  const {
+    data: creditos = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ["creditos", "cobro"],
+    queryFn: obtenerCreditosCobro,
+  });
+
+  // Drag and Drop Logic
+  const [localCreditos, setLocalCreditos] = useState<CreditoCobro[]>([]);
+
+  useEffect(() => {
+    if (creditos && !isLoading) {
+      setLocalCreditos(creditos);
+    }
+  }, [creditos, isLoading]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // Requiere mover 5px para activar el drag
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      const oldIndex = localCreditos.findIndex((item) => item.id === active.id);
+      const newIndex = localCreditos.findIndex((item) => item.id === over.id);
+      
+      const newArray = arrayMove(localCreditos, oldIndex, newIndex);
+      
+      // UI Optimista
+      setLocalCreditos(newArray);
+
+      // Mutación a DB silenciosa
+      const actualizaciones = newArray.map((item, idx) => ({
+        clienteId: item.cliente.id,
+        nuevaSecuencia: idx + 1,
+      }));
+
+      try {
+        await actualizarSecuenciaRuta(actualizaciones);
+      } catch (err: any) {
+        toast.error("Error guardando el nuevo orden", {
+          description: err.message,
+        });
+      }
+    }
+  };
+
   const [busqueda, setBusqueda] = useState("");
   const [creditoSeleccionado, setCreditoSeleccionado] = useState<CreditoCobro | null>(null);
   const [cuotaSugerida, setCuotaSugerida] = useState<number | null>(null);
@@ -344,17 +530,6 @@ function CobranzaPage() {
     };
   }, []);
 
-  // 1. Cargar datos con React Query
-  const {
-    data: creditos = [],
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery({
-    queryKey: ["creditos", "cobro"],
-    queryFn: obtenerCreditosCobro,
-  });
-
   const {
     register,
     handleSubmit,
@@ -410,15 +585,15 @@ function CobranzaPage() {
   // 4. Filtrar clientes localmente por nombre, cédula o barrio
   const creditosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return creditos;
-    return creditos.filter(
+    if (!q) return localCreditos;
+    return localCreditos.filter(
       (item) =>
         item.cliente.nombres.toLowerCase().includes(q) ||
         item.cliente.apellidos.toLowerCase().includes(q) ||
         item.cliente.cedula.includes(q) ||
         item.cliente.barrio.toLowerCase().includes(q)
     );
-  }, [creditos, busqueda]);
+  }, [localCreditos, busqueda]);
 
   // 5. Manejo del input de archivo / foto
   const handleFotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -926,67 +1101,32 @@ function CobranzaPage() {
 
         {/* Tarjetas de Clientes (Cards apiladas verticalmente) */}
         {!isLoading && !isError && vistaActiva === "lista" && creditosFiltrados.length > 0 && (
-          <div className="space-y-3">
-            {creditosFiltrados.map((item) => {
-              const config = ESTADO_CONFIG[item.estado] || ESTADO_CONFIG["Al día"];
-              return (
-                <Card
-                  key={item.id}
-                  onClick={() => abrirDrawer(item)}
-                  className="overflow-hidden border border-border/60 shadow-xs hover:border-primary/40 active:scale-[0.99] transition-all duration-100 cursor-pointer"
-                >
-                  <CardContent className="p-4 space-y-3">
-                    {/* Fila superior: Nombre y Estado */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="text-base font-semibold leading-tight text-foreground truncate">
-                          {item.cliente.nombres} {item.cliente.apellidos}
-                        </h3>
-                        <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                          CC {item.cliente.cedula} | {item.numero_factura}
-                        </p>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={`text-2xs px-2 py-0.5 shrink-0 ${config.badgeClass}`}
-                      >
-                        {item.estado}
-                      </Badge>
-                    </div>
-
-                    {/* Fila central: Barrio y Botón de llamada */}
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <MapPin className="h-4 w-4 text-muted-foreground/75 shrink-0" />
-                        <span className="truncate">{item.cliente.barrio}</span>
-                      </div>
-
-                      <a
-                        href={`tel:${item.cliente.telefono_principal}`}
-                        onClick={(e) => e.stopPropagation()} // Evita abrir el modal
-                        className="flex items-center justify-center h-8 px-3 rounded-lg border border-border bg-card text-primary active:bg-muted transition-colors gap-1.5"
-                      >
-                        <Phone className="h-3.5 w-3.5" />
-                        <span className="text-xs font-medium">Llamar</span>
-                      </a>
-                    </div>
-
-                    <div className="h-px bg-border/60" />
-
-                    {/* Fila inferior: Saldo pendiente destacado */}
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-xs text-muted-foreground font-medium">
-                        Saldo Pendiente:
-                      </span>
-                      <span className="text-lg font-bold tracking-tight text-foreground">
-                        {formatearMoneda(item.saldo_pendiente)}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={busqueda === "" ? handleDragEnd : undefined}
+          >
+            <div className="space-y-3">
+              <SortableContext 
+                items={creditosFiltrados.map((c) => c.id)} 
+                strategy={verticalListSortingStrategy}
+                disabled={busqueda !== ""}
+              >
+                {creditosFiltrados.map((item) => {
+                  const config = ESTADO_CONFIG[item.estado] || ESTADO_CONFIG["Al día"];
+                  return (
+                    <SortableCreditoCard
+                      key={item.id}
+                      item={item}
+                      config={config}
+                      onClick={() => abrirDrawer(item)}
+                      disabled={busqueda !== ""}
+                    />
+                  );
+                })}
+              </SortableContext>
+            </div>
+          </DndContext>
         )}
 
         {/* Drawer de Registro de Pago (Vaul) */}

@@ -632,3 +632,34 @@ export async function rechazarRecaudo(recaudoId: string, motivo: string): Promis
     throw new Error(`Error al rechazar el recaudo: ${errorUpdate.message}`);
   }
 }
+
+/**
+ * Actualiza en lote la secuencia_visita de los clientes en la base de datos.
+ */
+export async function actualizarSecuenciaRuta(
+  actualizaciones: { clienteId: string; nuevaSecuencia: number }[]
+): Promise<void> {
+  if (!isSupabaseConfigured) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    console.log("[recaudoService] Secuencia de ruta actualizada (Simulado).", actualizaciones);
+    return;
+  }
+
+  // Supabase no soporta un UPDATE múltiple nativo con diferentes valores directamente en un solo query 
+  // fácilmente sin usar RPC, pero podemos iterar o usar upsert.
+  // Como estamos iterando sobre un número pequeño de clientes de una ruta diaria (ej: 20-50),
+  // y lo hacemos en background, usar Promise.all con updates individuales es viable y seguro.
+  const promises = actualizaciones.map((act) =>
+    supabase
+      .from("clientes")
+      .update({ secuencia_visita: act.nuevaSecuencia })
+      .eq("id", act.clienteId)
+  );
+
+  const results = await Promise.all(promises);
+
+  const error = results.find((res) => res.error);
+  if (error) {
+    throw new Error(`Error al actualizar secuencias: ${error.error?.message}`);
+  }
+}

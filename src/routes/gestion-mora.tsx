@@ -5,6 +5,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -13,11 +24,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, isToday } from "date-fns";
+import { format, isToday, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { MessageCircle, AlertTriangle, Clock, CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
-import { obtenerCarteraMorosa, registrarAlertaCobro, ClienteMoroso } from "@/services/moraService";
+import { obtenerCarteraMorosa, registrarAlertaCobro, aplicarPenalidadIndividual, ClienteMoroso } from "@/services/moraService";
+import { obtenerConfiguracion } from "@/services/configuracionService";
 import { formatearMoneda } from "@/services/producto.service";
 
 export const Route = createFileRoute("/gestion-mora")({
@@ -47,6 +59,23 @@ function GestionMoraPage() {
     },
     onError: (error: any) => {
       toast.error(`Error al registrar seguimiento: ${error.message}`);
+    },
+  });
+
+  const { data: config } = useQuery({
+    queryKey: ["configuracion-negocio"],
+    queryFn: obtenerConfiguracion,
+  });
+
+  const penalidadMutation = useMutation({
+    mutationFn: (params: { cliente: ClienteMoroso, porcentaje: number }) =>
+      aplicarPenalidadIndividual(params.cliente, params.porcentaje),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cartera-morosa"] });
+      toast.success("Recargo aplicado exitosamente");
+    },
+    onError: (error: any) => {
+      toast.error(`Error al aplicar recargos: ${error.message}`);
     },
   });
 
@@ -81,6 +110,8 @@ function GestionMoraPage() {
     }
     return <span className="text-foreground text-xs">{format(fecha, "dd MMM yyyy", { locale: es })}</span>;
   };
+
+  const porcentajeMora = config?.porcentaje_mora_mes_3 ?? 3;
 
   return (
     <AppShell
@@ -135,11 +166,13 @@ function GestionMoraPage() {
 
         {/* Tabla de Control */}
         <Card className="border-border/60 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Listado de Clientes en Mora</CardTitle>
-            <CardDescription>
-              Gestiona los avisos de cobro y realiza el seguimiento mediante WhatsApp.
-            </CardDescription>
+          <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base font-semibold">Listado de Clientes en Mora</CardTitle>
+              <CardDescription>
+                Gestiona los avisos de cobro y realiza seguimiento. Los clientes con la fecha final del crédito vencida son elegibles para el recargo mensual.
+              </CardDescription>
+            </div>
           </CardHeader>
           <CardContent className="p-0 sm:p-6 sm:pt-0">
             {isLoading ? (
@@ -168,7 +201,8 @@ function GestionMoraPage() {
                       <TableHead>Cliente</TableHead>
                       <TableHead>Nivel de Mora</TableHead>
                       <TableHead className="text-right">Días Atraso</TableHead>
-                      <TableHead className="text-right">Saldo Vencido</TableHead>
+                      <TableHead className="text-right">Vencimiento Final</TableHead>
+                      <TableHead className="text-right">Saldo Total</TableHead>
                       <TableHead className="text-center">Último Aviso</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
@@ -177,8 +211,24 @@ function GestionMoraPage() {
                     {morosos.map((cliente) => {
                       const semaforo = determinarSemaforo(cliente.diasAtraso);
                       
+                      // Validación para aplicar penalidad mensual
+                      let penalidadDisponible = false;
+                      let diasDesdeUltimaPenalidad = 999;
+                      
+                      if (cliente.diasDesdeVencimientoFinal > 0) {
+                        if (cliente.ultimaPenalidadVencimiento) {
+                          const fechaUltima = new Date(cliente.ultimaPenalidadVencimiento);
+                          diasDesdeUltimaPenalidad = differenceInDays(new Date(), fechaUltima);
+                          penalidadDisponible = diasDesdeUltimaPenalidad >= 30;
+                        } else {
+                          penalidadDisponible = true; // Nunca se ha cobrado
+                        }
+                      }
+                      
+                      const recargoEstimado = Math.round(cliente.saldoPendienteTotal * (porcentajeMora / 100));
+                      
                       return (
-                        <TableRow key={cliente.creditoId} className="hover:bg-muted/5">
+                        <TableRow key={cliente.creditoId} className={`hover:bg-muted/5 ${penalidadDisponible ? "bg-rose-500/5" : ""}`}>
                           <TableCell>
                             <div className="font-semibold text-sm text-foreground">
                               {cliente.nombreCliente}
@@ -195,22 +245,71 @@ function GestionMoraPage() {
                           <TableCell className="text-right font-bold text-sm">
                             {cliente.diasAtraso}
                           </TableCell>
+                          <TableCell className="text-right font-medium text-sm">
+                            {cliente.fechaFinalEstimada ? (
+                              <span className={cliente.diasDesdeVencimientoFinal > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : ""}>
+                                {format(new Date(cliente.fechaFinalEstimada + "T12:00:00"), "dd MMM yyyy", { locale: es })}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">N/A</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right font-bold text-sm text-primary">
-                            {formatearMoneda(cliente.saldoVencido)}
+                            {formatearMoneda(cliente.saldoPendienteTotal)}
                           </TableCell>
                           <TableCell className="text-center">
                             {renderizarUltimoAviso(cliente.ultimoAviso)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              className="bg-[#25D366] hover:bg-[#25D366]/90 text-white font-bold rounded-xl h-8"
-                              onClick={() => handleCobrarWhatsApp(cliente)}
-                              disabled={!cliente.telefono || alertaMutation.isPending}
-                            >
-                              <MessageCircle className="w-4 h-4 mr-1.5" />
-                              Cobrar
-                            </Button>
+                            <div className="flex items-center justify-end gap-2">
+                              {penalidadDisponible && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      className="font-bold rounded-xl h-8"
+                                      disabled={penalidadMutation.isPending}
+                                      title="Aplicar Recargo por Vencimiento"
+                                    >
+                                      <AlertTriangle className="w-4 h-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Cobrar Recargo por Mora</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        El crédito de <strong>{cliente.nombreCliente}</strong> superó la fecha final de pago.
+                                        <br /><br />
+                                        Se sumará un <strong>{porcentajeMora}%</strong> sobre el saldo total de {formatearMoneda(cliente.saldoPendienteTotal)}.
+                                        <br /><br />
+                                        Monto a recargar: <strong>{formatearMoneda(recargoEstimado)}</strong>.
+                                        Este valor se distribuirá entre las cuotas que le faltan por pagar.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction 
+                                        onClick={() => penalidadMutation.mutate({ cliente, porcentaje: porcentajeMora })}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Aplicar Cargo
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
+                              
+                              <Button
+                                size="sm"
+                                className="bg-[#25D366] hover:bg-[#25D366]/90 text-white font-bold rounded-xl h-8"
+                                onClick={() => handleCobrarWhatsApp(cliente)}
+                                disabled={!cliente.telefono || alertaMutation.isPending}
+                              >
+                                <MessageCircle className="w-4 h-4 sm:mr-1.5" />
+                                <span className="hidden sm:inline">Cobrar</span>
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );

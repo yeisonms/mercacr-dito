@@ -26,6 +26,7 @@ import {
   MessageCircle,
   CalendarIcon,
   GripVertical,
+  Navigation,
 } from "lucide-react";
 
 import {
@@ -796,19 +797,45 @@ function CobranzaPage() {
     const soloClientes = latlngsRuta.slice(posicionCobrador ? 1 : 0);
 
     if (soloClientes.length > 1) {
-      // Línea principal de la ruta
-      const polyline = L.polyline(latlngsRuta, {
-        color: "#6366f1",   // Indigo — diferente al verde de los marcadores para distinguir
-        weight: 3.5,
-        opacity: 0.75,
-        dashArray: "8, 5",
-      }).addTo(map);
+      const trazarRutaCalles = async () => {
+        try {
+          // OSRM espera lon,lat
+          // Limitar a 100 puntos si la ruta es muy larga (Límite API pública de OSRM)
+          const puntosARutear = latlngsRuta.length > 100 ? latlngsRuta.slice(0, 100) : latlngsRuta;
+          const coordsString = puntosARutear.map(punto => `${punto[1]},${punto[0]}`).join(";");
+          const url = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`;
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error("OSRM no respondió correctamente");
+          const data = await resp.json();
 
-      // Flecha de dirección sobre la polilínea (usando decoradores si Leaflet los soporta)
-      polylineRef.current = polyline;
-
-      // Auto-fit mostrando toda la ruta óptima
-      map.fitBounds(polyline.getBounds(), { padding: [45, 45] });
+          if (data.routes && data.routes.length > 0) {
+            const geojson = data.routes[0].geometry;
+            const routeLayer = L.geoJSON(geojson, {
+              style: {
+                color: "#3b82f6", // Azul llamativo para la ruta real
+                weight: 4.5,
+                opacity: 0.85
+              }
+            }).addTo(map);
+            
+            polylineRef.current = routeLayer;
+            map.fitBounds(routeLayer.getBounds(), { padding: [45, 45] });
+          }
+        } catch (error) {
+          console.error("Error al obtener la ruta de calles (OSRM):", error);
+          // Fallback a línea recta punteada si falla la API
+          const polyline = L.polyline(latlngsRuta, {
+            color: "#6366f1",
+            weight: 3.5,
+            opacity: 0.75,
+            dashArray: "8, 5",
+          }).addTo(map);
+          polylineRef.current = polyline;
+          map.fitBounds(polyline.getBounds(), { padding: [45, 45] });
+        }
+      };
+      
+      trazarRutaCalles();
     } else if (soloClientes.length === 1) {
       map.setView(soloClientes[0], 15);
     }
@@ -1175,6 +1202,48 @@ function CobranzaPage() {
                     >
                       Pagar Total
                     </Button>
+                  </div>
+
+                  {/* ── Botones de Navegación Nativa ── */}
+                  <div className="flex flex-col gap-2 mt-2">
+                    {creditoSeleccionado.cliente.latitud !== null && creditoSeleccionado.cliente.longitud !== null ? (
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="flex-1 text-xs gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 shadow-none h-9"
+                          asChild
+                        >
+                          <a 
+                            href={`https://waze.com/ul?ll=${creditoSeleccionado.cliente.latitud},${creditoSeleccionado.cliente.longitud}&navigate=yes`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                          >
+                            <Navigation className="h-3.5 w-3.5" />
+                            Ir con Waze
+                          </a>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="flex-1 text-xs gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 shadow-none h-9"
+                          asChild
+                        >
+                          <a 
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${creditoSeleccionado.cliente.latitud},${creditoSeleccionado.cliente.longitud}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                          >
+                            <MapPin className="h-3.5 w-3.5" />
+                            Ir con Maps
+                          </a>
+                        </Button>
+                      </div>
+                    ) : (
+                      <Badge variant="secondary" className="w-full justify-center text-xs py-1.5 opacity-80 text-muted-foreground border-dashed bg-muted/50 font-medium">
+                        Sin ubicación GPS
+                      </Badge>
+                    )}
                   </div>
 
                   {/* Método de Pago */}

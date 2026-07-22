@@ -110,6 +110,7 @@ const formSchema = z.object({
     .optional()
     .or(z.literal("")),
   ruta_id: z.string().min(1, { message: "Selecciona una ruta" }),
+  numero_cartera: z.string().trim().max(30, { message: "Máximo 30 caracteres" }).optional().or(z.literal("")),
   latitud: z.coerce.number().optional().nullable(),
   longitud: z.coerce.number().optional().nullable(),
 });
@@ -128,6 +129,7 @@ const VALORES_INICIALES: FormValues = {
   lugar_trabajo: "",
   telefono_trabajo: "",
   ruta_id: "",
+  numero_cartera: "",
   latitud: null,
   longitud: null,
 };
@@ -406,6 +408,7 @@ function NuevoClientePage() {
         telefono_alterno: values.telefono_alterno || null,
         lugar_trabajo: values.lugar_trabajo || null,
         telefono_trabajo: values.telefono_trabajo || null,
+        numero_cartera: values.numero_cartera || null,
         foto_cliente_url: urlsDocumentos.foto ?? null,
         foto_cedula_frente_url: urlsDocumentos.cedula_frente ?? null,
         foto_cedula_respaldo_url: urlsDocumentos.cedula_respaldo ?? null,
@@ -719,6 +722,26 @@ function NuevoClientePage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="numero_cartera"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Número de Cartera (Opcional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Ej. CART-001"
+                        disabled={enviando}
+                        {...field}
+                      />
+                    </FormControl>
+                    <CardDescription className="text-xs mt-1">
+                      Identificador físico de la carpeta del cliente
+                    </CardDescription>
                     <FormMessage />
                   </FormItem>
                 )}

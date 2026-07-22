@@ -44,6 +44,7 @@ export interface Cliente {
   foto_casa_2_url: string | null;
   latitud: number | null;
   longitud: number | null;
+  numero_cartera?: string | null;
   fecha_creacion: string;
   /** Nombre de la ruta, resultado del JOIN con tabla `rutas` */
   ruta?: { nombre_ruta: string } | null;
@@ -69,6 +70,7 @@ export interface NuevoClienteInput {
   foto_casa_2_url?: string | null;
   latitud?: number | null;
   longitud?: number | null;
+  numero_cartera?: string | null;
 }
 
 // ─── Rutas ───────────────────────────────────────────────────────────────────
@@ -132,6 +134,7 @@ export async function listarClientes(): Promise<Cliente[]> {
       foto_cedula_respaldo_url,
       latitud,
       longitud,
+      numero_cartera,
       fecha_creacion,
       ruta:rutas ( nombre_ruta )
     `,
@@ -293,6 +296,7 @@ export async function crearCliente(input: NuevoClienteInput) {
       foto_casa_2_url: input.foto_casa_2_url ?? null,
       latitud: input.latitud ?? null,
       longitud: input.longitud ?? null,
+      numero_cartera: input.numero_cartera ?? null,
     })
     .select()
     .single();
@@ -339,6 +343,7 @@ export async function obtenerCliente(id: string): Promise<Cliente> {
       foto_casa_2_url,
       latitud,
       longitud,
+      numero_cartera,
       fecha_creacion,
       ruta:rutas ( nombre_ruta )
     `,
@@ -373,6 +378,7 @@ export interface ActualizarClienteInput {
   foto_cedula_respaldo_url?: string | null;
   foto_casa_1_url?: string | null;
   foto_casa_2_url?: string | null;
+  numero_cartera?: string | null;
 }
 
 /**
@@ -401,6 +407,7 @@ export async function actualizarCliente(
       telefono_trabajo: input.telefono_trabajo ?? null,
       ruta_id: input.ruta_id,
       estado: input.estado,
+      numero_cartera: input.numero_cartera ?? null,
       latitud: input.latitud ?? null,
       longitud: input.longitud ?? null,
       foto_cliente_url: input.foto_cliente_url ?? null,

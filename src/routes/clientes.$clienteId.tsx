@@ -28,6 +28,7 @@ import {
   CheckCircle2,
   Upload,
   ZoomIn,
+  FolderOpen,
 } from "lucide-react";
 import { subirArchivo } from "@/services/storage.service";
 
@@ -109,6 +110,7 @@ const editSchema = z.object({
     .optional()
     .or(z.literal("")),
   ruta_id: z.string().min(1, "Selecciona una ruta"),
+  numero_cartera: z.string().trim().max(30).optional().or(z.literal("")),
   estado: z.enum(["Activo", "Inactivo", "Moroso", "Judicial", "Finalizado"]),
   latitud: z.coerce.number().optional().nullable(),
   longitud: z.coerce.number().optional().nullable(),
@@ -197,6 +199,7 @@ function ClientePerfilPage() {
           lugar_trabajo: cliente.lugar_trabajo ?? "",
           telefono_trabajo: cliente.telefono_trabajo ?? "",
           ruta_id: cliente.ruta_id,
+          numero_cartera: cliente.numero_cartera ?? "",
           estado: cliente.estado,
           latitud: cliente.latitud ?? null,
           longitud: cliente.longitud ?? null,
@@ -450,6 +453,7 @@ function ClientePerfilPage() {
         telefono_alterno: values.telefono_alterno || null,
         lugar_trabajo: values.lugar_trabajo || null,
         telefono_trabajo: values.telefono_trabajo || null,
+        numero_cartera: values.numero_cartera || null,
         latitud: values.latitud ?? null,
         longitud: values.longitud ?? null,
         foto_cliente_url: fotoUrl || null,
@@ -597,6 +601,10 @@ function ClientePerfilPage() {
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
                       Registrado el {fechaFormateada}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <FolderOpen className="h-3 w-3" />
+                      Cartera Física: {cliente.numero_cartera || "No asignada"}
                     </span>
                     {cliente.ruta?.nombre_ruta && (
                       <span className="flex items-center gap-1">
@@ -873,6 +881,24 @@ function ClientePerfilPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="numero_cartera"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Número de Cartera</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        disabled={!modoEdicion || mutation.isPending}
+                        className={!modoEdicion ? "bg-muted/40" : ""}
+                        placeholder="Ej. CART-001 (Opcional)"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

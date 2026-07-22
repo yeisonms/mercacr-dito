@@ -13,6 +13,7 @@ export interface CreditoMigracionInput {
   frecuencia_pago: "Semanal" | "Quincenal" | "Mensual";
   fecha_proximo_pago: string;
   codigo_ruta: string;
+  numero_cartera?: string;
 }
 
 export function calcularFechaVencimientoMigracion(
@@ -153,6 +154,7 @@ export async function importarCreditos(
             barrio: item.barrio.trim(),
             ciudad: "Popayan",
             estado: "Activo",
+            numero_cartera: item.numero_cartera?.trim() || null,
           })
           .select("id")
           .single();

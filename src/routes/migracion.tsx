@@ -76,6 +76,8 @@ function MigracionCartera() {
     if (!barrio) errores.push("Barrio está vacío.");
     if (!codigoRuta) errores.push("Código de ruta está vacío.");
 
+    const numeroCartera = row["# de cartera"]?.toString().trim() || row.numero_cartera?.toString().trim();
+
     const valOriginal = parseFloat(row.valor_original_credito);
     const saldoPendiente = parseFloat(row.saldo_pendiente_actual);
     const valorCuota = parseFloat(row.valor_cuota);
@@ -136,6 +138,7 @@ function MigracionCartera() {
         frecuencia_pago: frecuenciaNormalizada,
         fecha_proximo_pago: fechaProximo || "",
         codigo_ruta: codigoRuta || "",
+        numero_cartera: numeroCartera || "",
       },
       errores,
       esValida: errores.length === 0,
@@ -166,9 +169,9 @@ function MigracionCartera() {
 
   const cargarDatosPrueba = () => {
     const csvContent =
-      "cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta\n" +
-      "1056784999,Pedro Julio,Alvarez,3114002233,Muzo Centro,1200000,900000,50000,Quincenal,2026-07-15,NOR\n" +
-      "1056784998,Maria Helena,Restrepo,3123004455,,400000,-10000,20000,Semanal,2026-07-10,SUR";
+      "cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta,# de cartera\n" +
+      "1056784999,Pedro Julio,Alvarez,3114002233,Muzo Centro,1200000,900000,50000,Quincenal,2026-07-15,NOR,CART-01\n" +
+      "1056784998,Maria Helena,Restrepo,3123004455,,400000,-10000,20000,Semanal,2026-07-10,SUR,CART-02";
       
     setNombreArchivo("sample_migration.csv");
     Papa.parse(csvContent, {
@@ -216,9 +219,9 @@ function MigracionCartera() {
 
   // ─── Descargar Plantilla CSV ───────────────────────────────────────────
   const descargarPlantilla = () => {
-    const headers = "cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta\n";
-    const sample1 = "1056784001,Juan Carlos,Ramirez,3156001122,Centro,1000000,850000,50000,Quincenal,2026-07-15,NOR\n";
-    const sample2 = "43890200,Luz Marina,Zapata,3125556677,La Playa,600000,450000,30000,Semanal,2026-07-10,SUR\n";
+    const headers = "cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta,# de cartera\n";
+    const sample1 = "1056784001,Juan Carlos,Ramirez,3156001122,Centro,1000000,850000,50000,Quincenal,2026-07-15,NOR,CART-01\n";
+    const sample2 = "43890200,Luz Marina,Zapata,3125556677,La Playa,600000,450000,30000,Semanal,2026-07-10,SUR,CART-02\n";
 
     const blob = new Blob([headers + sample1 + sample2], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -439,6 +442,7 @@ function MigracionCartera() {
                       <TableHead className="text-center">Frecuencia</TableHead>
                       <TableHead className="text-center">Fecha Pago</TableHead>
                       <TableHead className="text-center">Ruta</TableHead>
+                      <TableHead className="text-center">Cartera</TableHead>
                       <TableHead className="w-64">Validación / Detalles</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -484,6 +488,9 @@ function MigracionCartera() {
                           </TableCell>
                           <TableCell className="text-center text-xs font-bold">
                             {data.codigo_ruta || "-"}
+                          </TableCell>
+                          <TableCell className="text-center text-xs">
+                            {data.numero_cartera || "-"}
                           </TableCell>
                           <TableCell className="text-2xs text-muted-foreground leading-normal max-w-xs">
                             {fila.esValida ? (

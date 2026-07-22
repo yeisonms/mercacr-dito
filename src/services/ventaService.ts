@@ -270,6 +270,23 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
     throw new Error(`Error al insertar detalles de la venta: ${errorDetalles.message}`);
   }
 
+  // Paso C.2: Reducir el stock de los productos vendidos
+  for (const item of input.carrito) {
+    const { data: prodData } = await supabase
+      .from("productos")
+      .select("stock_disponible")
+      .eq("id", item.productoId)
+      .single();
+
+    if (prodData) {
+      const nuevoStock = Math.max(0, (prodData.stock_disponible || 0) - item.cantidad);
+      await supabase
+        .from("productos")
+        .update({ stock_disponible: nuevoStock })
+        .eq("id", item.productoId);
+    }
+  }
+
   // Paso D: Generar y guardar las cuotas si es crédito
   // Paso D: Generar y guardar las cuotas si es crédito (cualquier tipo financiado)
   if (input.tipoVenta !== "Contado" && input.frecuenciaPago && input.numeroCuotas > 0) {

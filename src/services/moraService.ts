@@ -40,7 +40,7 @@ export const obtenerCarteraMorosa = async (): Promise<ClienteMoroso[]> => {
         tipo_disparador
       )
     `)
-    .in("estado", ["Al día", "Próximo a vencer", "Atrasado", "En mora"]);
+    .not("estado", "in", '("Cancelado","Finalizado")');
 
   if (error) {
     throw new Error(`Error al cargar la cartera: ${error.message}`);

@@ -131,8 +131,8 @@ export async function obtenerKpisDashboard(): Promise<DashboardKpis> {
     // 2. Suma de Gastos del Mes (Se eliminó la tabla gastos del MVP)
     let gastosDelMes = 0;
 
-    // Utilidad = Recaudos aprobados + Ventas contado - Gastos
-    const utilidadDelMes = (recaudosDelMes + ventasContadoMes) - gastosDelMes;
+    // Utilidad = Recaudos aprobados + Ventas contado - Gastos (Ignoramos gastos ya que no se usa)
+    const utilidadDelMes = recaudosDelMes + ventasContadoMes;
 
     return {
       carteraActiva,
@@ -213,7 +213,7 @@ export async function obtenerRecaudosSemana(): Promise<RecaudoDiario[]> {
 }
 
 /**
- * Obtiene la distribución del saldo de la cartera activa por su estado.
+ * Obtiene la distribución del saldo de la cartera activa por su estado real (basado en cuotas o fecha final).
  */
 export async function obtenerEstadoCartera(): Promise<EstadoCarteraData[]> {
   if (!isSupabaseConfigured) return [];
@@ -221,7 +221,14 @@ export async function obtenerEstadoCartera(): Promise<EstadoCarteraData[]> {
   try {
     const { data, error } = await supabase
       .from("creditos")
-      .select("saldo_pendiente, estado")
+      .select(`
+        saldo_pendiente, 
+        fecha_final_estimada,
+        cuotas (
+          fecha_vencimiento,
+          estado
+        )
+      `)
       .not("estado", "in", '("Cancelado","Finalizado")');
 
     if (error) throw error;
@@ -233,15 +240,51 @@ export async function obtenerEstadoCartera(): Promise<EstadoCarteraData[]> {
       "En mora": 0,
     };
 
+    const hoy = new Date();
+    hoy.setHours(0,0,0,0);
+    const msPorDia = 24 * 60 * 60 * 1000;
+
     if (data) {
-      data.forEach((c) => {
-        const est = c.estado || "Al día";
-        if (conteo[est] !== undefined) {
-          conteo[est] += Number(c.saldo_pendiente) || 0;
+      data.forEach((c: any) => {
+        let clasificacion = "Al día";
+
+        const cuotasAtrasadas = (c.cuotas || []).filter((cuota: any) => {
+          if (cuota.estado !== "Pendiente" && cuota.estado !== "Parcial") return false;
+          const fechaVenc = new Date(cuota.fecha_vencimiento + "T12:00:00");
+          fechaVenc.setHours(0, 0, 0, 0);
+          return fechaVenc < hoy;
+        });
+
+        if (cuotasAtrasadas.length > 0) {
+          // Tomar la cuota más antigua
+          cuotasAtrasadas.sort((a: any, b: any) => {
+            return new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime();
+          });
+          const cuotaMasAntigua = cuotasAtrasadas[0];
+          const fechaVencMasAntigua = new Date(cuotaMasAntigua.fecha_vencimiento + "T12:00:00");
+          fechaVencMasAntigua.setHours(0,0,0,0);
+          const diasAtraso = Math.floor((hoy.getTime() - fechaVencMasAntigua.getTime()) / msPorDia);
+
+          if (diasAtraso > 30) {
+            clasificacion = "En mora";
+          } else {
+            clasificacion = "Atrasado";
+          }
         } else {
-          // Fallback por si hay otro estado
-          conteo["Al día"] += Number(c.saldo_pendiente) || 0;
+          // Verificar si hay cuota o fecha final próxima a vencer (en los siguientes 7 días)
+          const cuotasPendientes = (c.cuotas || []).filter((cuota: any) => {
+            if (cuota.estado !== "Pendiente" && cuota.estado !== "Parcial") return false;
+            const fechaVenc = new Date(cuota.fecha_vencimiento + "T12:00:00");
+            fechaVenc.setHours(0, 0, 0, 0);
+            return fechaVenc >= hoy && (fechaVenc.getTime() - hoy.getTime()) / msPorDia <= 7;
+          });
+          
+          if (cuotasPendientes.length > 0) {
+             clasificacion = "Próximo a vencer";
+          }
         }
+
+        conteo[clasificacion] += Number(c.saldo_pendiente) || 0;
       });
     }
 
@@ -270,7 +313,7 @@ export async function obtenerTopCobradores(): Promise<TopCobrador[]> {
       .from("recaudos")
       .select(`
         valor_recibido,
-        cobrador:usuarios!recaudos_cobrador_id_fkey ( nombre_completo )
+        cobrador:usuarios!cobrador_id ( nombre_completo )
       `)
       .eq("estado", "Aprobado")
       .gte("fecha_recaudo", startOfMonthStr);

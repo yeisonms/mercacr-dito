@@ -102,10 +102,10 @@ VITE_SUPABASE_ANON_KEY=tu-anon-key-publica`}
                 tone="warning"
               />
               <KpiCard
-                label="Utilidad del mes"
+                label="Ingresos netos (Mes)"
                 value={formatearMoneda(kpis?.utilidadDelMes ?? 0)}
                 icon={PiggyBank}
-                hint="Recaudos + Contados - Gastos"
+                hint="Recaudos Aprobados + Contados"
                 loading={loadingKpis}
                 tone={kpis && kpis.utilidadDelMes >= 0 ? "success" : "danger"}
               />

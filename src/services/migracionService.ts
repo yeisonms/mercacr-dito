@@ -112,14 +112,44 @@ export async function importarCreditos(
     try {
       // Paso A: Buscar o insertar el cliente
       let clienteId = "";
-      const { data: clienteExistente } = await supabase
-        .from("clientes")
-        .select("id")
-        .eq("cedula", item.cedula_cliente.trim())
-        .maybeSingle();
+      const cedulaLimpia = item.cedula_cliente ? String(item.cedula_cliente).trim() : "";
+      
+      let clienteExistente = null;
+      if (cedulaLimpia) {
+        const { data } = await supabase
+          .from("clientes")
+          .select("id")
+          .eq("cedula", cedulaLimpia)
+          .maybeSingle();
+        clienteExistente = data;
+      } else {
+        // Si no tiene cédula, buscamos por coincidencia exacta de nombres y apellidos
+        const { data } = await supabase
+          .from("clientes")
+          .select("id")
+          .eq("nombres", item.nombres.trim())
+          .eq("apellidos", item.apellidos.trim())
+          .limit(1)
+          .maybeSingle();
+        clienteExistente = data;
+      }
 
       if (clienteExistente) {
         clienteId = clienteExistente.id;
+        
+        // Actualizar la ruta y el número de cartera para mantenerlos al día
+        const codigoRutaKey = item.codigo_ruta.trim().toUpperCase();
+        const rutaId = mapaRutas.get(codigoRutaKey) || defaultRutaId;
+        
+        if (rutaId) {
+          await supabase
+            .from("clientes")
+            .update({ 
+              ruta_id: rutaId,
+              numero_cartera: item.numero_cartera?.trim() || null
+            })
+            .eq("id", clienteId);
+        }
       } else {
         const codigoRutaKey = item.codigo_ruta.trim().toUpperCase();
         const rutaId = mapaRutas.get(codigoRutaKey) || defaultRutaId;
@@ -148,7 +178,7 @@ export async function importarCreditos(
             secuencia_visita: secuenciaVisita,
             nombres: item.nombres.trim(),
             apellidos: item.apellidos.trim(),
-            cedula: item.cedula_cliente.trim(),
+            cedula: cedulaLimpia || null,
             telefono_principal: item.telefono.trim(),
             direccion: "Dirección de Migración",
             barrio: item.barrio.trim(),

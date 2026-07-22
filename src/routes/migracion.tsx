@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import { AppShell } from "@/components/layout/AppShell";
@@ -47,6 +48,7 @@ function MigracionCartera() {
   // ─── Control de Rol (Seguridad) ───────────────────────────────────────
   const { perfil } = useAuth();
   const userRole = perfil?.rol || "Vendedor";
+  const queryClient = useQueryClient();
 
   // ─── Estados de Carga y Previsualización ──────────────────────────────
   const [nombreArchivo, setNombreArchivo] = useState<string>("");
@@ -69,7 +71,7 @@ function MigracionCartera() {
     const barrio = row.barrio?.toString().trim();
     const codigoRuta = row.codigo_ruta?.toString().trim();
 
-    if (!cedula) errores.push("Cédula cliente está vacía.");
+
     if (!nombres) errores.push("Nombres está vacío.");
     if (!apellidos) errores.push("Apellidos está vacío.");
     if (!telefono) errores.push("Teléfono está vacío.");
@@ -251,8 +253,10 @@ function MigracionCartera() {
       });
 
       if (res.fallidos === 0) {
+        queryClient.invalidateQueries({ queryKey: ["clientes"] });
         toast.success(`🎉 Importación completada. ${res.exitosos} créditos creados con éxito.`);
       } else {
+        queryClient.invalidateQueries({ queryKey: ["clientes"] });
         toast.warning(`Importación terminada con detalles: ${res.exitosos} exitosos, ${res.fallidos} fallidos.`, {
           description: `Errores detallados:\n${res.errores.slice(0, 3).join("\n")}`,
           duration: 7000,

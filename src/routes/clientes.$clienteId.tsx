@@ -419,27 +419,27 @@ function ClientePerfilPage() {
 
       if (nuevosArchivos.foto) {
         subidas.push(
-          subirArchivo(cliente!.cedula, "foto", nuevosArchivos.foto).then(url => { fotoUrl = url; })
+          subirArchivo(cliente!.codigo_consecutivo, "foto", nuevosArchivos.foto).then(url => { fotoUrl = url; })
         );
       }
       if (nuevosArchivos.cedula_frente) {
         subidas.push(
-          subirArchivo(cliente!.cedula, "cedula_frente", nuevosArchivos.cedula_frente).then(url => { cedulaFrenteUrl = url; })
+          subirArchivo(cliente!.codigo_consecutivo, "cedula_frente", nuevosArchivos.cedula_frente).then(url => { cedulaFrenteUrl = url; })
         );
       }
       if (nuevosArchivos.cedula_respaldo) {
         subidas.push(
-          subirArchivo(cliente!.cedula, "cedula_respaldo", nuevosArchivos.cedula_respaldo).then(url => { cedulaRespaldoUrl = url; })
+          subirArchivo(cliente!.codigo_consecutivo, "cedula_respaldo", nuevosArchivos.cedula_respaldo).then(url => { cedulaRespaldoUrl = url; })
         );
       }
       if (nuevosArchivos.foto_casa_1) {
         subidas.push(
-          subirArchivo(cliente!.cedula, "foto_casa_1", nuevosArchivos.foto_casa_1).then(url => { fotoCasa1Url = url; })
+          subirArchivo(cliente!.codigo_consecutivo, "foto_casa_1", nuevosArchivos.foto_casa_1).then(url => { fotoCasa1Url = url; })
         );
       }
       if (nuevosArchivos.foto_casa_2) {
         subidas.push(
-          subirArchivo(cliente!.cedula, "foto_casa_2", nuevosArchivos.foto_casa_2).then(url => { fotoCasa2Url = url; })
+          subirArchivo(cliente!.codigo_consecutivo, "foto_casa_2", nuevosArchivos.foto_casa_2).then(url => { fotoCasa2Url = url; })
         );
       }
 
@@ -692,13 +692,14 @@ function ClientePerfilPage() {
                   <FormItem>
                     <FormLabel>Estado *</FormLabel>
                     <Select
+                      key={`estado-${field.value}`}
                       onValueChange={field.onChange}
-                      value={field.value}
+                      value={field.value || "Activo"}
                       disabled={!modoEdicion || mutation.isPending}
                     >
                       <FormControl>
                         <SelectTrigger className={!modoEdicion ? "bg-muted/40" : ""}>
-                          <SelectValue />
+                          <SelectValue placeholder="Selecciona un estado" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -864,8 +865,9 @@ function ClientePerfilPage() {
                   <FormItem>
                     <FormLabel>Ruta asignada *</FormLabel>
                     <Select
+                      key={`ruta-${rutas.length}-${field.value}`}
                       onValueChange={field.onChange}
-                      value={field.value}
+                      value={field.value ? String(field.value) : undefined}
                       disabled={!modoEdicion || mutation.isPending}
                     >
                       <FormControl>
@@ -875,7 +877,7 @@ function ClientePerfilPage() {
                       </FormControl>
                       <SelectContent>
                         {rutas.map((r) => (
-                          <SelectItem key={r.id} value={r.id}>
+                          <SelectItem key={r.id} value={String(r.id)}>
                             {r.nombre}
                           </SelectItem>
                         ))}

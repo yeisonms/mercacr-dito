@@ -91,7 +91,6 @@ export async function listarRutas(): Promise<Ruta[]> {
   const { data, error } = await supabase
     .from("rutas")
     .select("id, nombre_ruta")
-    .eq("estado", "Activa")
     .order("nombre_ruta");
 
   if (error) throw error;
@@ -277,7 +276,7 @@ export async function crearCliente(input: NuevoClienteInput) {
     .insert({
       nombres: input.nombres,
       apellidos: input.apellidos,
-      cedula: input.cedula,
+      cedula: input.cedula || null,
       telefono_principal: input.telefono_principal,
       telefono_alterno: input.telefono_alterno ?? null,
       direccion: input.direccion,

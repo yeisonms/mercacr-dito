@@ -19,10 +19,10 @@ export interface ResultadoSubida {
 
 /**
  * Genera un nombre de archivo único para evitar colisiones.
- * Formato: {cedula}/{tipo}_{timestamp}_{nombre_original_sanitizado}.{ext}
+ * Formato: {folderId}/{tipo}_{timestamp}_{nombre_original_sanitizado}.{ext}
  */
 function generarRutaArchivo(
-  cedula: string,
+  folderId: string,
   tipo: TipoDocumento,
   file: File,
 ): string {
@@ -32,7 +32,7 @@ function generarRutaArchivo(
     .replace(/[^a-zA-Z0-9_\-]/g, "_")       // solo alfanuméricos
     .slice(0, 30);                           // máximo 30 chars
   const timestamp = Date.now();
-  return `${cedula}/${tipo}_${timestamp}_${nombreSanitizado}.${extension}`;
+  return `${folderId}/${tipo}_${timestamp}_${nombreSanitizado}.${extension}`;
 }
 
 /**
@@ -42,13 +42,13 @@ function generarRutaArchivo(
  * @throws Error con mensaje descriptivo si la subida falla
  */
 export async function subirArchivo(
-  cedula: string,
+  folderId: string,
   tipo: TipoDocumento,
   originalFile: File,
 ): Promise<string> {
   // Comprimir imagen antes de subirla
   const file = await compressImage(originalFile);
-  const ruta = generarRutaArchivo(cedula, tipo, file);
+  const ruta = generarRutaArchivo(folderId, tipo, file);
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
@@ -73,11 +73,11 @@ export async function subirArchivo(
  * Si CUALQUIERA falla, lanza un error y detiene todo el proceso.
  * Retorna un mapa tipo → URL de solo los archivos que se pasaron.
  *
- * @param cedula  Cédula del cliente (usada como carpeta en el bucket)
+ * @param folderId Identificador único del cliente (ej. codigo_consecutivo) usado como carpeta
  * @param archivos Mapa con los archivos a subir (valores null son ignorados)
  */
 export async function subirDocumentosCliente(
-  cedula: string,
+  folderId: string,
   archivos: Partial<Record<TipoDocumento, File | null>>,
 ): Promise<Partial<Record<TipoDocumento, string>>> {
   // Filtrar solo los archivos que realmente existen
@@ -90,7 +90,7 @@ export async function subirDocumentosCliente(
   // Subir todos en paralelo
   const resultados = await Promise.all(
     entradas.map(async ([tipo, file]) => {
-      const url = await subirArchivo(cedula, tipo, file);
+      const url = await subirArchivo(folderId, tipo, file);
       return [tipo, url] as const;
     }),
   );

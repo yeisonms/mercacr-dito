@@ -70,9 +70,13 @@ const formSchema = z.object({
     .trim()
     .min(2, { message: "Mínimo 2 caracteres" })
     .max(80, { message: "Máximo 80 caracteres" }),
-  cedula: soloDigitos("La cédula es requerida").max(15, {
-    message: "Máximo 15 dígitos",
-  }),
+  cedula: z
+    .string()
+    .trim()
+    .max(15, { message: "Máximo 15 dígitos" })
+    .regex(/^\d*$/, { message: "Solo se permiten números" })
+    .optional()
+    .or(z.literal("")),
   telefono_principal: soloDigitos("El teléfono principal es requerido").max(
     15,
     { message: "Máximo 15 dígitos" },
@@ -375,7 +379,7 @@ function NuevoClientePage() {
             );
           }
 
-          const resultado = await subirDocumentosCliente(values.cedula, {
+          const resultado = await subirDocumentosCliente(nuevoCliente.codigo_consecutivo, {
             [tipo]: file,
           });
           urlsDocumentos = { ...urlsDocumentos, ...resultado };
@@ -699,8 +703,9 @@ function NuevoClientePage() {
                   <FormItem className="md:col-span-2">
                     <FormLabel>Ruta asignada *</FormLabel>
                     <Select
+                      key={`ruta-${rutas.length}-${field.value}`}
                       onValueChange={field.onChange}
-                      value={field.value}
+                      value={field.value ? String(field.value) : undefined}
                       disabled={enviando || cargandoRutas}
                     >
                       <FormControl>
@@ -716,7 +721,7 @@ function NuevoClientePage() {
                       </FormControl>
                       <SelectContent>
                         {rutas.map((r) => (
-                          <SelectItem key={r.id} value={r.id}>
+                          <SelectItem key={r.id} value={String(r.id)}>
                             {r.nombre}
                           </SelectItem>
                         ))}

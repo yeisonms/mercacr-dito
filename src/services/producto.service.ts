@@ -13,6 +13,8 @@ export interface Producto {
   codigo_producto: string;
   nombre: string;
   descripcion: string | null;
+  categoria?: string | null;
+  precio_compra?: number;
   precio_contado: number;
   precio_credito: number;
   stock_disponible: number;
@@ -24,6 +26,8 @@ export interface NuevoProductoInput {
   codigo_producto: string;
   nombre: string;
   descripcion?: string | null;
+  categoria?: string | null;
+  precio_compra?: number;
   precio_contado: number;
   precio_credito: number;
   stock_disponible: number;
@@ -59,7 +63,7 @@ export async function listarProductos(): Promise<Producto[]> {
   const { data, error } = await supabase
     .from("productos")
     .select(
-      "id, codigo_producto, nombre, descripcion, precio_contado, precio_credito, stock_disponible, estado",
+      "id, codigo_producto, nombre, descripcion, categoria, precio_compra, precio_contado, precio_credito, stock_disponible, estado",
     )
     .order("nombre", { ascending: true });
 
@@ -84,6 +88,8 @@ export async function crearProducto(input: NuevoProductoInput): Promise<Producto
       codigo_producto: input.codigo_producto.trim().toUpperCase(),
       nombre: input.nombre.trim(),
       descripcion: input.descripcion?.trim() || null,
+      categoria: input.categoria?.trim() || null,
+      precio_compra: input.precio_compra ? Number(input.precio_compra) : 0,
       precio_contado: Number(input.precio_contado),
       precio_credito: Number(input.precio_credito),
       stock_disponible: Math.max(0, Math.round(Number(input.stock_disponible))),
@@ -112,6 +118,8 @@ export async function actualizarProducto(
       codigo_producto: input.codigo_producto.trim().toUpperCase(),
       nombre: input.nombre.trim(),
       descripcion: input.descripcion?.trim() || null,
+      categoria: input.categoria?.trim() || null,
+      precio_compra: input.precio_compra ? Number(input.precio_compra) : 0,
       precio_contado: Number(input.precio_contado),
       precio_credito: Number(input.precio_credito),
       stock_disponible: Math.max(0, Math.round(Number(input.stock_disponible))),
@@ -123,6 +131,26 @@ export async function actualizarProducto(
 
   if (error) throw error;
   return data as Producto;
+}
+
+// ─── Eliminar ─────────────────────────────────────────────────────────────────
+
+export async function eliminarProducto(id: string): Promise<void> {
+  if (!isSupabaseConfigured) {
+    throw new Error("Supabase no está configurado.");
+  }
+
+  const { error } = await supabase
+    .from("productos")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    if (error.code === "23503") {
+      throw new Error("No se puede eliminar el producto porque ya tiene movimientos o ventas asociadas.");
+    }
+    throw error;
+  }
 }
 
 // ─── Datos demo (sin Supabase) ────────────────────────────────────────────────

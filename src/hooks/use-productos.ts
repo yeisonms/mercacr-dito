@@ -3,6 +3,7 @@ import {
   listarProductos,
   crearProducto,
   actualizarProducto,
+  eliminarProducto,
   type NuevoProductoInput,
   type ActualizarProductoInput,
 } from "@/services/producto.service";
@@ -33,6 +34,15 @@ export function useActualizarProducto() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: ActualizarProductoInput }) =>
       actualizarProducto(id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: PRODUCTOS_QUERY_KEY }),
+  });
+}
+
+/** Mutación para eliminar un producto e invalidar la lista */
+export function useEliminarProducto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => eliminarProducto(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: PRODUCTOS_QUERY_KEY }),
   });
 }

@@ -16,9 +16,12 @@ import {
   ShoppingBag,
   Tag,
   Warehouse,
+  FileSpreadsheet,
+  Trash2,
 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
+import { ImportarProductosDialog } from "@/components/productos/ImportarProductosDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -75,6 +78,7 @@ import {
   useProductos,
   useCrearProducto,
   useActualizarProducto,
+  useEliminarProducto,
 } from "@/hooks/use-productos";
 import {
   formatearMoneda,
@@ -162,8 +166,10 @@ const ESTADO_CONFIG: Record<EstadoProducto, { label: string; className: string }
 
 function ProductosPage() {
   const { data: productos = [], isLoading, isError, refetch } = useProductos();
+  const eliminarMutation = useEliminarProducto();
   const [busqueda, setBusqueda] = useState("");
   const [dialogAbierto, setDialogAbierto] = useState(false);
+  const [importarAbierto, setImportarAbierto] = useState(false);
   const [productoEditando, setProductoEditando] = useState<Producto | null>(null);
 
   // Filtrado en tiempo real
@@ -191,6 +197,18 @@ function ProductosPage() {
     setDialogAbierto(true);
   };
 
+  const handleEliminar = (producto: Producto) => {
+    if (window.confirm(`¿Estás seguro de que deseas eliminar "${producto.nombre}"?`)) {
+      eliminarMutation.mutate(producto.id, {
+        onSuccess: () => toast.success("Producto eliminado correctamente."),
+        onError: (err: any) => {
+          const msg = err instanceof Error ? err.message : "Error al eliminar";
+          toast.error("No se pudo eliminar", { description: msg });
+        }
+      });
+    }
+  };
+
   const headerActions = (
     <div className="flex items-center gap-2">
       <Button
@@ -202,6 +220,10 @@ function ProductosPage() {
         aria-label="Recargar catálogo"
       >
         <RefreshCw className="h-4 w-4" />
+      </Button>
+      <Button variant="secondary" size="sm" onClick={() => setImportarAbierto(true)}>
+        <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" />
+        Importar Excel
       </Button>
       <Button size="sm" onClick={abrirNuevo}>
         <Plus className="mr-2 h-4 w-4" />
@@ -314,6 +336,7 @@ function ProductosPage() {
                           key={producto.id}
                           producto={producto}
                           onEditar={() => abrirEditar(producto)}
+                          onEliminar={() => handleEliminar(producto)}
                         />
                       ))}
                   </TableBody>
@@ -333,6 +356,12 @@ function ProductosPage() {
         }}
         productoEditando={productoEditando}
       />
+
+      <ImportarProductosDialog 
+        open={importarAbierto} 
+        onOpenChange={setImportarAbierto} 
+        onSuccess={() => refetch()} 
+      />
     </AppShell>
   );
 }
@@ -342,9 +371,11 @@ function ProductosPage() {
 function FilaProducto({
   producto,
   onEditar,
+  onEliminar,
 }: {
   producto: Producto;
   onEditar: () => void;
+  onEliminar: () => void;
 }) {
   const sinStock = producto.stock_disponible === 0;
   const cfg = ESTADO_CONFIG[producto.estado] ?? ESTADO_CONFIG.Descontinuado;
@@ -407,15 +438,26 @@ function FilaProducto({
         </Badge>
       </TableCell>
       <TableCell className="text-right">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onEditar}
-          aria-label={`Editar ${producto.nombre}`}
-        >
-          <Edit3 className="h-4 w-4" />
-        </Button>
+        <div className="flex justify-end items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-slate-500 hover:text-slate-900"
+            onClick={onEditar}
+            aria-label={`Editar ${producto.nombre}`}
+          >
+            <Edit3 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+            onClick={onEliminar}
+            aria-label={`Eliminar ${producto.nombre}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   );

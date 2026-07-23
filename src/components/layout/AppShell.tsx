@@ -5,6 +5,7 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
+import { FooterAttribution } from "./FooterAttribution";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
@@ -61,7 +62,12 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 flex flex-col p-4 md:p-6">
+          <div className="flex-1">
+            {children}
+          </div>
+          <FooterAttribution />
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
+import { FooterAttribution } from "@/components/layout/FooterAttribution";
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
@@ -148,8 +149,9 @@ function LoginPage() {
       </aside>
 
       {/* ── Panel derecho: Formulario ── */}
-      <main className="flex flex-1 items-center justify-center px-6 py-14">
-        <div className="w-full max-w-[360px] space-y-9">
+      <main className="flex flex-col flex-1 relative px-6 py-14">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-full max-w-[360px] space-y-9">
           {/* Logo mobile */}
           <div className="flex items-center gap-3 lg:hidden">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl overflow-hidden shadow-lg bg-white border border-white/10">
@@ -254,6 +256,12 @@ function LoginPage() {
             <br />
             Contacta al administrador si olvidaste tu contraseña.
           </p>
+          </div>
+        </div>
+        
+        {/* Footer al fondo */}
+        <div className="mt-auto">
+          <FooterAttribution />
         </div>
       </main>
     </div>

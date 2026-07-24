@@ -17,6 +17,7 @@ import { Route as NuevaVentaRouteImport } from './routes/nueva-venta'
 import { Route as MigracionRouteImport } from './routes/migracion'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HistorialVentasRouteImport } from './routes/historial-ventas'
+import { Route as HistorialCobrosRouteImport } from './routes/historial-cobros'
 import { Route as GestionMoraRouteImport } from './routes/gestion-mora'
 import { Route as EstadoCuentaRouteImport } from './routes/estado-cuenta'
 import { Route as CreditosRouteImport } from './routes/creditos'
@@ -67,6 +68,11 @@ const LoginRoute = LoginRouteImport.update({
 const HistorialVentasRoute = HistorialVentasRouteImport.update({
   id: '/historial-ventas',
   path: '/historial-ventas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistorialCobrosRoute = HistorialCobrosRouteImport.update({
+  id: '/historial-cobros',
+  path: '/historial-cobros',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GestionMoraRoute = GestionMoraRouteImport.update({
@@ -132,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
   '/gestion-mora': typeof GestionMoraRoute
+  '/historial-cobros': typeof HistorialCobrosRoute
   '/historial-ventas': typeof HistorialVentasRoute
   '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
@@ -153,6 +160,7 @@ export interface FileRoutesByTo {
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
   '/gestion-mora': typeof GestionMoraRoute
+  '/historial-cobros': typeof HistorialCobrosRoute
   '/historial-ventas': typeof HistorialVentasRoute
   '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
@@ -175,6 +183,7 @@ export interface FileRoutesById {
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
   '/gestion-mora': typeof GestionMoraRoute
+  '/historial-cobros': typeof HistorialCobrosRoute
   '/historial-ventas': typeof HistorialVentasRoute
   '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
@@ -198,6 +207,7 @@ export interface FileRouteTypes {
     | '/creditos'
     | '/estado-cuenta'
     | '/gestion-mora'
+    | '/historial-cobros'
     | '/historial-ventas'
     | '/login'
     | '/migracion'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/creditos'
     | '/estado-cuenta'
     | '/gestion-mora'
+    | '/historial-cobros'
     | '/historial-ventas'
     | '/login'
     | '/migracion'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/creditos'
     | '/estado-cuenta'
     | '/gestion-mora'
+    | '/historial-cobros'
     | '/historial-ventas'
     | '/login'
     | '/migracion'
@@ -262,6 +274,7 @@ export interface RootRouteChildren {
   CreditosRoute: typeof CreditosRoute
   EstadoCuentaRoute: typeof EstadoCuentaRoute
   GestionMoraRoute: typeof GestionMoraRoute
+  HistorialCobrosRoute: typeof HistorialCobrosRoute
   HistorialVentasRoute: typeof HistorialVentasRoute
   LoginRoute: typeof LoginRoute
   MigracionRoute: typeof MigracionRoute
@@ -333,6 +346,13 @@ declare module '@tanstack/react-router' {
       path: '/historial-ventas'
       fullPath: '/historial-ventas'
       preLoaderRoute: typeof HistorialVentasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/historial-cobros': {
+      id: '/historial-cobros'
+      path: '/historial-cobros'
+      fullPath: '/historial-cobros'
+      preLoaderRoute: typeof HistorialCobrosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gestion-mora': {
@@ -422,6 +442,7 @@ const rootRouteChildren: RootRouteChildren = {
   CreditosRoute: CreditosRoute,
   EstadoCuentaRoute: EstadoCuentaRoute,
   GestionMoraRoute: GestionMoraRoute,
+  HistorialCobrosRoute: HistorialCobrosRoute,
   HistorialVentasRoute: HistorialVentasRoute,
   LoginRoute: LoginRoute,
   MigracionRoute: MigracionRoute,

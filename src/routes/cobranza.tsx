@@ -27,6 +27,7 @@ import {
   CalendarIcon,
   GripVertical,
   Navigation,
+  History,
 } from "lucide-react";
 
 import {
@@ -978,7 +979,16 @@ function CobranzaPage() {
   };
 
   return (
-    <AppShell title="Mi Ruta de Cobro" subtitle="Ruta diaria de recaudos para cobrador">
+    <AppShell 
+      title="Mi Ruta de Cobro" 
+      subtitle="Ruta diaria de recaudos para cobrador"
+      actions={
+        <Button onClick={() => navigate({ to: "/historial-cobros" })} variant="outline" className="gap-2 border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-indigo-800 dark:hover:bg-indigo-950 dark:hover:text-indigo-400 transition-colors">
+          <History className="h-4 w-4" />
+          Historial de Cobros
+        </Button>
+      }
+    >
       <div className="mx-auto max-w-md space-y-4">
         {/* Barra de Búsqueda Superior */}
         <div className="relative">

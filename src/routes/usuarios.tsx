@@ -63,6 +63,7 @@ import {
   obtenerUsuarios,
   crearUsuario,
   actualizarEstadoUsuario,
+  actualizarComisionUsuario,
   type UsuarioRow,
 } from "@/services/usuarioService";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -114,6 +115,7 @@ const crearUsuarioSchema = z
       ["Administrador", "Gerencia", "Cobrador", "Vendedor", "Auxiliar"],
       { required_error: "Selecciona un rol" }
     ),
+    porcentaje_comision: z.coerce.number().min(0).max(100).default(0),
     password: z
       .string()
       .min(8, "Mínimo 8 caracteres")
@@ -167,7 +169,50 @@ function formatFecha(ts: string): string {
   });
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Componentes ───────────────────────────────────────────────────────────────
+
+function ComisionCell({ usuario }: { usuario: UsuarioRow }) {
+  const qc = useQueryClient();
+  const [val, setVal] = useState(usuario.porcentaje_comision.toString());
+  
+  const mutation = useMutation({
+    mutationFn: (newVal: number) => actualizarComisionUsuario(usuario.id, newVal),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["usuarios"] });
+      toast.success("Comisión actualizada.");
+    },
+    onError: () => {
+      toast.error("Error al actualizar la comisión.");
+      setVal(usuario.porcentaje_comision.toString());
+    }
+  });
+
+  const handleBlur = () => {
+    const parsed = parseFloat(val);
+    if (!isNaN(parsed) && parsed !== usuario.porcentaje_comision) {
+      mutation.mutate(parsed);
+    } else {
+      setVal(usuario.porcentaje_comision.toString());
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <Input 
+        type="number" 
+        step="0.01" 
+        min="0"
+        max="100"
+        className="h-7 w-16 px-2 text-xs font-mono tabular-nums text-right" 
+        value={val} 
+        onChange={(e) => setVal(e.target.value)} 
+        onBlur={handleBlur} 
+        disabled={mutation.isPending}
+      />
+      <span className="text-xs text-muted-foreground">%</span>
+    </div>
+  );
+}
 
 function UsuariosPage() {
   const { perfil } = useAuth();
@@ -243,6 +288,7 @@ function UsuariosPage() {
       email: data.email,
       password: data.password,
       rol_nombre: data.rol_nombre,
+      porcentaje_comision: data.porcentaje_comision,
     });
   };
 
@@ -288,6 +334,9 @@ function UsuariosPage() {
                   Registrado
                 </TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wider">
+                  % Comisión
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider">
                   Estado
                 </TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">
@@ -315,6 +364,9 @@ function UsuariosPage() {
                       <Skeleton className="h-3 w-24" />
                     </TableCell>
                     <TableCell>
+                      <Skeleton className="h-7 w-16" />
+                    </TableCell>
+                    <TableCell>
                       <Skeleton className="h-5 w-16 rounded-full" />
                     </TableCell>
                     <TableCell />
@@ -322,7 +374,7 @@ function UsuariosPage() {
                 ))
               ) : usuarios.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-16 text-center">
+                  <TableCell colSpan={6} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-muted-foreground">
                       <Users className="h-10 w-10 opacity-30" />
                       <p className="text-sm">No hay usuarios registrados aún.</p>
@@ -372,6 +424,11 @@ function UsuariosPage() {
                     {/* Fecha */}
                     <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                       {formatFecha(u.fecha_creacion)}
+                    </TableCell>
+
+                    {/* Comisión */}
+                    <TableCell>
+                      <ComisionCell usuario={u} />
                     </TableCell>
 
                     {/* Estado */}
@@ -497,6 +554,25 @@ function UsuariosPage() {
                 <p className="text-xs text-rose-500">
                   {errors.rol_nombre.message}
                 </p>
+              )}
+            </div>
+
+            {/* Comisión */}
+            <div className="space-y-1.5">
+              <Label htmlFor="porcentaje_comision" className="text-xs font-medium">
+                % Comisión
+              </Label>
+              <Input
+                id="porcentaje_comision"
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                placeholder="0.00"
+                {...register("porcentaje_comision")}
+              />
+              {errors.porcentaje_comision && (
+                <p className="text-xs text-rose-500">{errors.porcentaje_comision.message}</p>
               )}
             </div>
 

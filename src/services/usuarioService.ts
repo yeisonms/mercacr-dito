@@ -22,6 +22,7 @@ export interface UsuarioRow {
   fecha_creacion: string;
   rol: RolNombre;
   rol_id: number;
+  porcentaje_comision: number;
 }
 
 export interface CrearUsuarioInput {
@@ -29,6 +30,7 @@ export interface CrearUsuarioInput {
   email: string;
   password: string;
   rol_nombre: RolNombre;
+  porcentaje_comision: number;
 }
 
 // ── Queries ──────────────────────────────────────────────────────────────────
@@ -40,7 +42,7 @@ export async function obtenerUsuarios(): Promise<UsuarioRow[]> {
   const { data, error } = await supabase
     .from("usuarios")
     .select(
-      "id, nombre_completo, email, estado, fecha_creacion, rol_id, roles ( nombre_rol )"
+      "id, nombre_completo, email, estado, fecha_creacion, rol_id, porcentaje_comision, roles ( nombre_rol )"
     )
     .order("fecha_creacion", { ascending: false });
 
@@ -61,6 +63,7 @@ export async function obtenerUsuarios(): Promise<UsuarioRow[]> {
       fecha_creacion: u.fecha_creacion,
       rol: rolNombre,
       rol_id: u.rol_id,
+      porcentaje_comision: Number(u.porcentaje_comision) || 0,
     };
   });
 }
@@ -115,6 +118,7 @@ export async function crearUsuario(input: CrearUsuarioInput): Promise<void> {
     password_hash: "managed_by_supabase_auth",
     rol_id: rolId,
     estado: "Activo",
+    porcentaje_comision: input.porcentaje_comision,
   });
 
   if (insertError) {
@@ -135,6 +139,21 @@ export async function actualizarEstadoUsuario(
   const { error } = await supabase
     .from("usuarios")
     .update({ estado })
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+/**
+ * Actualiza el porcentaje de comisión de un usuario.
+ */
+export async function actualizarComisionUsuario(
+  id: string,
+  porcentaje_comision: number
+): Promise<void> {
+  const { error } = await supabase
+    .from("usuarios")
+    .update({ porcentaje_comision })
     .eq("id", id);
 
   if (error) throw error;

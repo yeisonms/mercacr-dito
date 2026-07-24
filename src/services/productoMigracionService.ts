@@ -90,7 +90,9 @@ export async function importarProductosMasivo(filas: any[]): Promise<{ exito: nu
     const p = Math.max(0, parseNumberRobust(porcentajeRaw, true));
     
     const factorPorcentaje = p >= 1 ? p / 100 : p;
-    const precioCredito = precioVenta + (precioVenta * factorPorcentaje);
+    let precioCredito = precioVenta + (precioVenta * factorPorcentaje);
+    // Redondear a la siguiente cifra de mil (ej: 62748 -> 63000)
+    precioCredito = Math.ceil(precioCredito / 1000) * 1000;
 
     productosAInsertar.push({
       codigo_producto: codigo.toUpperCase(),

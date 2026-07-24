@@ -11,10 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
 import { Route as RutasRouteImport } from './routes/rutas'
+import { Route as ReportesComisionesRouteImport } from './routes/reportes-comisiones'
 import { Route as ProductosRouteImport } from './routes/productos'
 import { Route as NuevaVentaRouteImport } from './routes/nueva-venta'
 import { Route as MigracionRouteImport } from './routes/migracion'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as HistorialVentasRouteImport } from './routes/historial-ventas'
 import { Route as GestionMoraRouteImport } from './routes/gestion-mora'
 import { Route as EstadoCuentaRouteImport } from './routes/estado-cuenta'
 import { Route as CreditosRouteImport } from './routes/creditos'
@@ -37,6 +39,11 @@ const RutasRoute = RutasRouteImport.update({
   path: '/rutas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReportesComisionesRoute = ReportesComisionesRouteImport.update({
+  id: '/reportes-comisiones',
+  path: '/reportes-comisiones',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProductosRoute = ProductosRouteImport.update({
   id: '/productos',
   path: '/productos',
@@ -55,6 +62,11 @@ const MigracionRoute = MigracionRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistorialVentasRoute = HistorialVentasRouteImport.update({
+  id: '/historial-ventas',
+  path: '/historial-ventas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GestionMoraRoute = GestionMoraRouteImport.update({
@@ -120,10 +132,12 @@ export interface FileRoutesByFullPath {
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
   '/gestion-mora': typeof GestionMoraRoute
+  '/historial-ventas': typeof HistorialVentasRoute
   '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
   '/productos': typeof ProductosRoute
+  '/reportes-comisiones': typeof ReportesComisionesRoute
   '/rutas': typeof RutasRoute
   '/usuarios': typeof UsuariosRoute
   '/clientes/$clienteId': typeof ClientesClienteIdRoute
@@ -139,10 +153,12 @@ export interface FileRoutesByTo {
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
   '/gestion-mora': typeof GestionMoraRoute
+  '/historial-ventas': typeof HistorialVentasRoute
   '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
   '/productos': typeof ProductosRoute
+  '/reportes-comisiones': typeof ReportesComisionesRoute
   '/rutas': typeof RutasRoute
   '/usuarios': typeof UsuariosRoute
   '/clientes/$clienteId': typeof ClientesClienteIdRoute
@@ -159,10 +175,12 @@ export interface FileRoutesById {
   '/creditos': typeof CreditosRoute
   '/estado-cuenta': typeof EstadoCuentaRoute
   '/gestion-mora': typeof GestionMoraRoute
+  '/historial-ventas': typeof HistorialVentasRoute
   '/login': typeof LoginRoute
   '/migracion': typeof MigracionRoute
   '/nueva-venta': typeof NuevaVentaRoute
   '/productos': typeof ProductosRoute
+  '/reportes-comisiones': typeof ReportesComisionesRoute
   '/rutas': typeof RutasRoute
   '/usuarios': typeof UsuariosRoute
   '/clientes/$clienteId': typeof ClientesClienteIdRoute
@@ -180,10 +198,12 @@ export interface FileRouteTypes {
     | '/creditos'
     | '/estado-cuenta'
     | '/gestion-mora'
+    | '/historial-ventas'
     | '/login'
     | '/migracion'
     | '/nueva-venta'
     | '/productos'
+    | '/reportes-comisiones'
     | '/rutas'
     | '/usuarios'
     | '/clientes/$clienteId'
@@ -199,10 +219,12 @@ export interface FileRouteTypes {
     | '/creditos'
     | '/estado-cuenta'
     | '/gestion-mora'
+    | '/historial-ventas'
     | '/login'
     | '/migracion'
     | '/nueva-venta'
     | '/productos'
+    | '/reportes-comisiones'
     | '/rutas'
     | '/usuarios'
     | '/clientes/$clienteId'
@@ -218,10 +240,12 @@ export interface FileRouteTypes {
     | '/creditos'
     | '/estado-cuenta'
     | '/gestion-mora'
+    | '/historial-ventas'
     | '/login'
     | '/migracion'
     | '/nueva-venta'
     | '/productos'
+    | '/reportes-comisiones'
     | '/rutas'
     | '/usuarios'
     | '/clientes/$clienteId'
@@ -238,10 +262,12 @@ export interface RootRouteChildren {
   CreditosRoute: typeof CreditosRoute
   EstadoCuentaRoute: typeof EstadoCuentaRoute
   GestionMoraRoute: typeof GestionMoraRoute
+  HistorialVentasRoute: typeof HistorialVentasRoute
   LoginRoute: typeof LoginRoute
   MigracionRoute: typeof MigracionRoute
   NuevaVentaRoute: typeof NuevaVentaRoute
   ProductosRoute: typeof ProductosRoute
+  ReportesComisionesRoute: typeof ReportesComisionesRoute
   RutasRoute: typeof RutasRoute
   UsuariosRoute: typeof UsuariosRoute
   ClientesClienteIdRoute: typeof ClientesClienteIdRoute
@@ -265,6 +291,13 @@ declare module '@tanstack/react-router' {
       path: '/rutas'
       fullPath: '/rutas'
       preLoaderRoute: typeof RutasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reportes-comisiones': {
+      id: '/reportes-comisiones'
+      path: '/reportes-comisiones'
+      fullPath: '/reportes-comisiones'
+      preLoaderRoute: typeof ReportesComisionesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/productos': {
@@ -293,6 +326,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/historial-ventas': {
+      id: '/historial-ventas'
+      path: '/historial-ventas'
+      fullPath: '/historial-ventas'
+      preLoaderRoute: typeof HistorialVentasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gestion-mora': {
@@ -382,10 +422,12 @@ const rootRouteChildren: RootRouteChildren = {
   CreditosRoute: CreditosRoute,
   EstadoCuentaRoute: EstadoCuentaRoute,
   GestionMoraRoute: GestionMoraRoute,
+  HistorialVentasRoute: HistorialVentasRoute,
   LoginRoute: LoginRoute,
   MigracionRoute: MigracionRoute,
   NuevaVentaRoute: NuevaVentaRoute,
   ProductosRoute: ProductosRoute,
+  ReportesComisionesRoute: ReportesComisionesRoute,
   RutasRoute: RutasRoute,
   UsuariosRoute: UsuariosRoute,
   ClientesClienteIdRoute: ClientesClienteIdRoute,

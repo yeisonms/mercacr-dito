@@ -16,6 +16,7 @@ import {
   UserCog,
   LogOut,
   AlertTriangle,
+  Coins,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -112,6 +113,12 @@ const items: NavItem[] = [
     url: "/gestion-mora",
     icon: AlertTriangle,
     roles: ["Administrador", "Gerencia", "Auxiliar"],
+  },
+  {
+    title: "Reporte de Comisiones",
+    url: "/reportes-comisiones",
+    icon: Coins,
+    roles: ["Administrador", "Gerencia"],
   },
   {
     title: "Configuración de Mora",

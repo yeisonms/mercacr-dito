@@ -16,6 +16,7 @@ export interface CarritoItem {
 
 export interface ProcesarVentaInput {
   clienteId: string;
+  vendedorId: string;
   tipoVenta: string;
   valorContado: number;
   valorCredito: number;
@@ -65,49 +66,7 @@ export function calcularFechaVencimiento(
   return format(fecha, "yyyy-MM-dd");
 }
 
-/**
- * Obtiene o crea un vendedor_id válido de la tabla `usuarios`
- * para satisfacer la clave foránea en la tabla `creditos`.
- */
-async function obtenerVendedorId(): Promise<string> {
-  // 1. Intentar obtener el primer usuario disponible
-  const { data: usuarios } = await supabase
-    .from("usuarios")
-    .select("id")
-    .limit(1);
 
-  if (usuarios && usuarios.length > 0) {
-    return usuarios[0].id;
-  }
-
-  // 2. Si no hay usuarios, buscamos el rol 'Vendedor' u obtenemos el primero
-  const { data: rol } = await supabase
-    .from("roles")
-    .select("id")
-    .eq("nombre_rol", "Vendedor")
-    .single();
-
-  const rolId = rol?.id || 4; // fallback al rol Vendedor (ID 4)
-
-  // 3. Crear un vendedor por defecto
-  const { data: nuevoUsuario, error } = await supabase
-    .from("usuarios")
-    .insert({
-      nombre_completo: "Vendedor por Defecto",
-      email: `vendedor.default.${Date.now()}@mercacredito.com`,
-      password_hash: "vendedor_default_pwd_hash",
-      rol_id: rolId,
-      estado: "Activo",
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    throw new Error(`Error al crear usuario vendedor de respaldo: ${error.message}`);
-  }
-
-  return nuevoUsuario.id;
-}
 
 /**
  * Procesa la venta y genera las relaciones correspondientes de forma secuencial.
@@ -134,7 +93,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
   let numeroFactura = `FAC-${Math.floor(1000 + Math.random() * 9000)}`;
 
   // Obtener un ID de vendedor válido
-  const vendedorId = await obtenerVendedorId();
+  const vendedorId = input.vendedorId;
 
   const fechaVenta = new Date();
   

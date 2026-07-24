@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { obtenerUsuarios, type UsuarioRow } from "@/services/usuarioService";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,6 +59,7 @@ import {
   AlertTriangle,
   Info,
   Percent,
+  History,
 } from "lucide-react";
 
 import { listarClientes } from "@/services/cliente.service";
@@ -66,7 +69,7 @@ import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/nueva-venta")({
   head: () => ({ meta: [{ title: "Nueva Venta — Mercacrédito" }] }),
-  component: NuevaVenta,
+  component: NuevaVentaPage,
 });
 
 // Item interno del carrito en React con ambos precios para la reactividad
@@ -106,7 +109,8 @@ function formatearFechaEspanol(fechaStr: string | null): string {
   return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
 
-function NuevaVenta() {
+function NuevaVentaPage() {
+  const { perfil } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -119,6 +123,14 @@ function NuevaVenta() {
   const { data: productos = [], isLoading: cargandoProductos } = useQuery({
     queryKey: ["productos"],
     queryFn: listarProductos,
+  });
+
+  const isUserAdmin = perfil?.rol === "Administrador" || perfil?.rol === "Gerencia" || perfil?.rol === "Auxiliar";
+
+  const { data: vendedores = [] } = useQuery({
+    queryKey: ["vendedores_activar_venta"],
+    queryFn: obtenerUsuarios,
+    enabled: isUserAdmin,
   });
 
   // ─── Estados de Formulario / Venta ───────────────────────────────────────
@@ -148,6 +160,15 @@ function NuevaVenta() {
   const [creditoActivo, setCreditoActivo] = useState<{ id: string; saldo_pendiente: number; } | null>(null);
   const [isRefinanciacion, setIsRefinanciacion] = useState(false);
   const [openRefinanciacionDialog, setOpenRefinanciacionDialog] = useState(false);
+
+  // Vendedor (para admin)
+  const [vendedorId, setVendedorId] = useState<string>("");
+
+  useEffect(() => {
+    if (perfil && !vendedorId) {
+      setVendedorId(perfil.id);
+    }
+  }, [perfil, vendedorId]);
 
   // Consultar saldo si el cliente cambia
   useEffect(() => {
@@ -534,6 +555,7 @@ function NuevaVenta() {
 
       return procesarVenta({
         clienteId: selectedClienteId,
+        vendedorId: vendedorId || (perfil?.id as string),
         tipoVenta: dbTipoVenta,
         valorContado: calculosFinancieros.totalBase,
         valorCredito: calculosFinancieros.totalVenta,
@@ -575,6 +597,12 @@ function NuevaVenta() {
     <AppShell
       title="Nueva Venta"
       subtitle="Registrar transacciones de contado u originar nuevos créditos con reglas comerciales"
+      actions={
+        <Button onClick={() => navigate({ to: "/historial-ventas" })} variant="outline" className="gap-2 border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-indigo-800 dark:hover:bg-indigo-950 dark:hover:text-indigo-400 transition-colors">
+          <History className="h-4 w-4" />
+          Ver Historial de Ventas
+        </Button>
+      }
     >
       <AlertDialog open={openRefinanciacionDialog} onOpenChange={setOpenRefinanciacionDialog}>
         <AlertDialogContent>
@@ -619,6 +647,26 @@ function NuevaVenta() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {isUserAdmin && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="vendedor-select" className="text-sm font-medium text-indigo-700 dark:text-indigo-400">
+                    Vendedor Asignado <span className="text-indigo-400/70 text-xs font-normal">(Permiso Admin)</span>
+                  </Label>
+                  <Select value={vendedorId} onValueChange={setVendedorId}>
+                    <SelectTrigger id="vendedor-select" className="border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/20">
+                      <SelectValue placeholder="Seleccionar vendedor..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vendedores.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.nombre_completo} ({v.rol})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              
               <div className="flex flex-col gap-2">
                 <Label htmlFor="cliente-select" className="text-sm font-medium">
                   Cliente <span className="text-red-500">*</span>

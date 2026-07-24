@@ -153,7 +153,8 @@ function RouteGuard({ children }: { children: ReactNode }) {
         "/clientes",
         "/productos",
         "/estado-cuenta",
-        "/nueva-venta"
+        "/nueva-venta",
+        "/historial-ventas"
       ];
       
       const isAllowed = allowedPaths.some(path => pathname.startsWith(path)) || pathname === "/";

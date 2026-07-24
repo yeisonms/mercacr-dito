@@ -125,6 +125,9 @@ const productoSchema = z.object({
     .min(2, "Mínimo 2 caracteres")
     .max(120, "Máximo 120 caracteres"),
   descripcion: z.string().trim().max(500).optional().or(z.literal("")),
+  precio_compra: z.string().trim().optional().or(z.literal("")).refine((v) => !v || (!isNaN(Number(v)) && Number(v) >= 0), {
+    message: "Debe ser un número positivo",
+  }),
   precio_contado: precioPositivo("Precio de contado"),
   precio_credito: precioPositivo("Precio a crédito"),
   stock_disponible: z
@@ -142,6 +145,7 @@ const VALORES_INICIALES: ProductoFormValues = {
   codigo_producto: "",
   nombre: "",
   descripcion: "",
+  precio_compra: "",
   precio_contado: "",
   precio_credito: "",
   stock_disponible: "0",
@@ -300,6 +304,9 @@ function ProductosPage() {
                       <TableHead className="w-[120px]">Código</TableHead>
                       <TableHead>Producto</TableHead>
                       <TableHead className="w-[140px] text-right">
+                        Precio compra
+                      </TableHead>
+                      <TableHead className="w-[140px] text-right">
                         Precio contado
                       </TableHead>
                       <TableHead className="w-[140px] text-right">
@@ -323,7 +330,7 @@ function ProductosPage() {
                     {/* Estado vacío */}
                     {!isLoading && productosFiltrados.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="p-0">
+                        <TableCell colSpan={8} className="p-0">
                           <EstadoVacio buscando={busqueda.length > 0} onNuevo={abrirNuevo} />
                         </TableCell>
                       </TableRow>
@@ -399,6 +406,9 @@ function FilaProducto({
             )}
           </div>
         </div>
+      </TableCell>
+      <TableCell className="text-right font-medium tabular-nums text-sm text-muted-foreground">
+        {producto.precio_compra ? formatearMoneda(producto.precio_compra) : "—"}
       </TableCell>
       <TableCell className="text-right font-medium tabular-nums text-sm">
         {formatearMoneda(producto.precio_contado)}
@@ -484,7 +494,8 @@ function DialogProducto({ abierto, onCerrar, productoEditando }: DialogProductoP
       ? {
           codigo_producto: productoEditando.codigo_producto,
           nombre: productoEditando.nombre,
-          descripcion: productoEditando.descripcion ?? "",
+          descripcion: productoEditando.descripcion || "",
+          precio_compra: productoEditando.precio_compra ? String(productoEditando.precio_compra) : "",
           precio_contado: String(productoEditando.precio_contado),
           precio_credito: String(productoEditando.precio_credito),
           stock_disponible: String(productoEditando.stock_disponible),
@@ -498,6 +509,7 @@ function DialogProducto({ abierto, onCerrar, productoEditando }: DialogProductoP
       codigo_producto: values.codigo_producto,
       nombre: values.nombre,
       descripcion: values.descripcion || null,
+      precio_compra: values.precio_compra ? Number(values.precio_compra) : undefined,
       precio_contado: Number(values.precio_contado),
       precio_credito: Number(values.precio_credito),
       stock_disponible: Number(values.stock_disponible),
@@ -627,7 +639,36 @@ function DialogProducto({ abierto, onCerrar, productoEditando }: DialogProductoP
             />
 
             {/* Precios */}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="precio_compra"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>P. Compra (COP)</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                          $
+                        </span>
+                        <Input
+                          {...field}
+                          inputMode="numeric"
+                          placeholder="0"
+                          disabled={guardando}
+                          className="pl-6"
+                        />
+                      </div>
+                    </FormControl>
+                    {field.value && !isNaN(Number(field.value)) && Number(field.value) > 0 && (
+                      <FormDescription>
+                        {formatearMoneda(Number(field.value))}
+                      </FormDescription>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="precio_contado"

@@ -73,6 +73,7 @@ CREATE TABLE productos (
     codigo_producto VARCHAR(50) UNIQUE NOT NULL,
     nombre VARCHAR(150) NOT NULL,
     descripcion TEXT,
+    precio_compra NUMERIC(12, 2) DEFAULT 0,
     precio_contado NUMERIC(12, 2) NOT NULL,
     precio_credito NUMERIC(12, 2) NOT NULL,
     stock_disponible INT DEFAULT 0,

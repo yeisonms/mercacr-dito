@@ -109,6 +109,11 @@ export interface ReciboData {
   totalCredito: number;
   saldoPendiente: number;
   telefono: string;
+  tipoCredito?: string;
+  totalCredicontado?: number | null;
+  saldoCredicontado?: number | null;
+  penalidadAplicada?: boolean;
+  fechaLimitePago?: string | null;
 }
 
 // ─── Esquema de Validación Zod ──────────────────────────────────────────────
@@ -329,10 +334,19 @@ function SortableCreditoCard({
           {/* Fila inferior: Saldo pendiente destacado */}
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs text-muted-foreground font-medium">
-              Saldo Pendiente:
+              {item.tipo_venta === "Credicontado" && !item.penalidad_aplicada && item.saldo_contado != null 
+                ? "Crédito / Contado:" 
+                : "Saldo Pendiente:"}
             </span>
-            <span className="text-lg font-bold tracking-tight text-foreground">
-              {formatearMoneda(item.saldo_pendiente)}
+            <span className="text-lg font-bold tracking-tight text-foreground text-right flex flex-col items-end leading-none">
+              {item.tipo_venta === "Credicontado" && !item.penalidad_aplicada && item.saldo_contado != null ? (
+                <>
+                  <span className="text-muted-foreground/80 line-through text-xs font-semibold mb-0.5">{formatearMoneda(item.saldo_pendiente)}</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">{formatearMoneda(item.saldo_contado)}</span>
+                </>
+              ) : (
+                formatearMoneda(item.saldo_pendiente)
+              )}
             </span>
           </div>
         </div>
@@ -568,12 +582,19 @@ function CobranzaPage() {
       // Preparar datos para el recibo (si había crédito seleccionado)
       if (creditoSeleccionado) {
         setReciboData({
-          fecha: new Date().toISOString().split("T")[0],
+          fecha: format(new Date(), "yyyy-MM-dd"),
           clienteNombre: `${creditoSeleccionado.cliente.nombres} ${creditoSeleccionado.cliente.apellidos}`,
           abono: variables.valorRecibido,
           totalCredito: creditoSeleccionado.valor_credito || 0,
           saldoPendiente: creditoSeleccionado.saldo_pendiente - variables.valorRecibido,
           telefono: creditoSeleccionado.cliente.telefono_principal || "",
+          tipoCredito: creditoSeleccionado.tipo_venta,
+          totalCredicontado: creditoSeleccionado.valor_contado,
+          saldoCredicontado: creditoSeleccionado.saldo_contado 
+             ? (creditoSeleccionado.saldo_contado - variables.valorRecibido) 
+             : null,
+          penalidadAplicada: creditoSeleccionado.penalidad_aplicada,
+          fechaLimitePago: creditoSeleccionado.fecha_limite_credicontado
         });
       }
       
@@ -777,7 +798,10 @@ function CobranzaPage() {
             <div style="font-size:11px;color:#6b7280;margin-bottom:2px;">📍 ${item.cliente.barrio}</div>
             <div style="font-size:11px;color:#6b7280;margin-bottom:4px;">📏 ~${dist} km desde parada anterior</div>
             <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:6px;">
-              Saldo: ${formatearMoneda(item.saldo_pendiente)}
+              ${item.tipo_venta === "Credicontado" && !item.penalidad_aplicada && item.saldo_contado != null 
+                  ? `<span style="text-decoration:line-through;color:#6b7280;font-size:11px;margin-right:4px;">${formatearMoneda(item.saldo_pendiente)}</span> <span style="color:#059669;">${formatearMoneda(item.saldo_contado)}</span>`
+                  : `Saldo: ${formatearMoneda(item.saldo_pendiente)}`
+              }
             </div>
             <button 
               type="button" 
@@ -894,10 +918,7 @@ function CobranzaPage() {
   const onSubmit = (values: RecaudoFormValues) => {
     if (!creditoSeleccionado) return;
 
-    if (values.metodo_pago === "Transferencia" && !fotoSoporte) {
-      toast.error("La foto del comprobante es obligatoria para Transferencia.");
-      return;
-    }
+    // La foto del comprobante ya no es obligatoria para Transferencia
 
     mutation.mutate({
       creditoId: creditoSeleccionado.id,
@@ -1195,10 +1216,19 @@ function CobranzaPage() {
                   <div className="rounded-xl bg-primary/5 dark:bg-primary/10 border border-primary/15 p-4 flex items-center justify-between">
                     <div className="space-y-0.5">
                       <span className="text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
-                        Saldo Pendiente Actual
+                        {creditoSeleccionado.tipo_venta === "Credicontado" && !creditoSeleccionado.penalidad_aplicada && creditoSeleccionado.saldo_contado != null 
+                          ? "Saldo Crédito / Contado" 
+                          : "Saldo Pendiente Actual"}
                       </span>
                       <p className="text-xl font-black text-primary">
-                        {formatearMoneda(creditoSeleccionado.saldo_pendiente)}
+                        {creditoSeleccionado.tipo_venta === "Credicontado" && !creditoSeleccionado.penalidad_aplicada && creditoSeleccionado.saldo_contado != null ? (
+                          <span className="flex items-center gap-2">
+                            <span className="text-muted-foreground/60 line-through text-base">{formatearMoneda(creditoSeleccionado.saldo_pendiente)}</span>
+                            <span className="text-emerald-600 dark:text-emerald-400">{formatearMoneda(creditoSeleccionado.saldo_contado)}</span>
+                          </span>
+                        ) : (
+                          formatearMoneda(creditoSeleccionado.saldo_pendiente)
+                        )}
                       </p>
                     </div>
                     <Button
@@ -1206,7 +1236,11 @@ function CobranzaPage() {
                       variant="outline"
                       size="sm"
                       onClick={() =>
-                        setValue("valor_recibido", creditoSeleccionado.saldo_pendiente)
+                        setValue("valor_recibido", 
+                          creditoSeleccionado.tipo_venta === "Credicontado" && !creditoSeleccionado.penalidad_aplicada && creditoSeleccionado.saldo_contado != null 
+                          ? creditoSeleccionado.saldo_contado 
+                          : creditoSeleccionado.saldo_pendiente
+                        )
                       }
                       className="text-xs font-semibold h-8 border-primary/20 hover:bg-primary/10 hover:text-primary"
                     >
@@ -1319,11 +1353,7 @@ function CobranzaPage() {
                   <div className="space-y-1.5">
                     <label className="flex items-center justify-between text-xs font-bold text-foreground">
                       <span>Foto del Comprobante / Dinero</span>
-                      {watch("metodo_pago") === "Transferencia" ? (
-                        <span className="text-[10px] text-destructive bg-destructive/10 px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold">Obligatorio</span>
-                      ) : (
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Opcional</span>
-                      )}
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Opcional</span>
                     </label>
 
                     {!fotoPreview ? (
@@ -1439,6 +1469,7 @@ function CobranzaPage() {
                             onSelect={setFechaCompromiso}
                             disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                             initialFocus
+                            locale={es}
                           />
                         </PopoverContent>
                       </Popover>
@@ -1521,7 +1552,7 @@ function CobranzaPage() {
                   {/* Ticket Body */}
                   <div className="w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-5 space-y-4">
                     <div className="flex justify-between items-center pb-3 border-b border-dashed border-slate-200">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fecha</span>
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fecha de Pago</span>
                       <span className="text-sm font-bold text-foreground">{reciboData.fecha}</span>
                     </div>
                     <div className="flex justify-between items-center pb-3 border-b border-dashed border-slate-200">
@@ -1532,14 +1563,45 @@ function CobranzaPage() {
                       <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Abono Realizado</span>
                       <span className="text-base font-black text-emerald-600">${reciboData.abono.toLocaleString()}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-medium text-muted-foreground">Total del Crédito</span>
-                      <span className="text-sm font-medium text-foreground">${reciboData.totalCredito.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center pt-2">
-                      <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Saldo Pendiente</span>
-                      <span className="text-sm font-black text-amber-600">${reciboData.saldoPendiente.toLocaleString()}</span>
-                    </div>
+                    {reciboData.tipoCredito === "Credicontado" ? (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-medium text-muted-foreground">Total del Crédito</span>
+                          <span className="text-sm font-medium text-foreground">${reciboData.totalCredito.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2">
+                          <span className="text-xs font-medium text-muted-foreground">Total Credicontado</span>
+                          <span className="text-sm font-medium text-emerald-600">${reciboData.totalCredicontado?.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-dashed border-slate-200 mt-2">
+                          <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Saldo Crédito</span>
+                          <span className="text-sm font-black text-amber-600">${reciboData.saldoPendiente.toLocaleString()}</span>
+                        </div>
+                        {!reciboData.penalidadAplicada && (
+                          <div className="flex justify-between items-center pt-2">
+                            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Saldo Credicontado</span>
+                            <span className="text-sm font-black text-emerald-600">${reciboData.saldoCredicontado?.toLocaleString()}</span>
+                          </div>
+                        )}
+                        {reciboData.fechaLimitePago && (
+                          <div className="flex justify-between items-center pt-2 mt-2">
+                            <span className="text-xs font-medium text-muted-foreground">Límite Beneficio</span>
+                            <span className="text-xs font-medium text-foreground">{reciboData.fechaLimitePago.split('T')[0]}</span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-medium text-muted-foreground">Total del Crédito</span>
+                          <span className="text-sm font-medium text-foreground">${reciboData.totalCredito.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2">
+                          <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Saldo Pendiente</span>
+                          <span className="text-sm font-black text-amber-600">${reciboData.saldoPendiente.toLocaleString()}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 

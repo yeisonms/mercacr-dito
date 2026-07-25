@@ -25,14 +25,18 @@ export async function obtenerReporteComisiones(
     .from("creditos")
     .select(`
       valor_credito,
+      valor_contado,
+      tipo_venta,
+      fecha_venta,
+      fecha_penalidad,
+      penalidad_aplicada,
       usuarios:vendedor_id (
         id, 
         nombre_completo, 
         porcentaje_comision
       )
     `)
-    .gte("fecha_venta", startDate)
-    .lte("fecha_venta", endDate);
+    .or(`and(fecha_venta.gte.${startDate},fecha_venta.lte.${endDate}),and(fecha_penalidad.gte.${startDate},fecha_penalidad.lte.${endDate})`);
 
   if (error) {
     throw new Error(`Error obteniendo reporte de comisiones: ${error.message}`);
@@ -50,7 +54,6 @@ export async function obtenerReporteComisiones(
     const vendedorId = usuario.id;
     const nombreVendedor = usuario.nombre_completo;
     const porcentajeComision = Number(usuario.porcentaje_comision) || 0;
-    const valorVenta = Number(row.valor_credito) || 0;
 
     if (!map.has(vendedorId)) {
       map.set(vendedorId, {
@@ -64,8 +67,30 @@ export async function obtenerReporteComisiones(
     }
 
     const current = map.get(vendedorId)!;
-    current.cantidadVentas += 1;
-    current.totalVendido += valorVenta;
+
+    const fechaVentaDate = row.fecha_venta?.split("T")[0];
+    const fechaPenalidadDate = row.fecha_penalidad?.split("T")[0];
+    
+    const isVentaDelMes = fechaVentaDate >= startDate && fechaVentaDate <= endDate;
+    const isPenalidadDelMes = row.penalidad_aplicada && fechaPenalidadDate && fechaPenalidadDate >= startDate && fechaPenalidadDate <= endDate;
+
+    let baseComision = 0;
+
+    if (isVentaDelMes) {
+      if (row.tipo_venta === "Credicontado") {
+        baseComision += Number(row.valor_contado) || 0;
+      } else {
+        baseComision += Number(row.valor_credito) || 0;
+      }
+      current.cantidadVentas += 1;
+    }
+
+    if (isPenalidadDelMes) {
+      const extra = (Number(row.valor_credito) || 0) - (Number(row.valor_contado) || 0);
+      baseComision += extra;
+    }
+
+    current.totalVendido += baseComision;
     current.totalComision = current.totalVendido * (current.porcentajeComision / 100);
   }
 

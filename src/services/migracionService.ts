@@ -14,6 +14,8 @@ export interface CreditoMigracionInput {
   fecha_proximo_pago: string;
   codigo_ruta: string;
   numero_cartera?: string;
+  tipo_credito?: string;
+  valor_contado?: number;
 }
 
 export function calcularFechaVencimientoMigracion(
@@ -213,22 +215,58 @@ export async function importarCreditos(
         numeroCuotas - 1
       );
 
+      // Determinar si es Credicontado
+      const esCredicontado = item.tipo_credito?.trim().toLowerCase() === "credicontado";
+      const tipoVenta = esCredicontado ? "Credicontado" : "Credito";
+      
+      let originalCredito = item.valor_original_credito;
+      let valContado = esCredicontado && item.valor_contado ? item.valor_contado : originalCredito;
+      let pendienteActual = item.saldo_pendiente_actual;
+      
+      // Si el usuario los puso al revés, asignar el valor mayor al crédito y el menor al contado
+      if (esCredicontado && valContado > originalCredito) {
+        const temp = originalCredito;
+        originalCredito = valContado;
+        valContado = temp;
+      }
+      
+      let saldoContado: number | null = null;
+      let cuotaInicial = 0;
+
+      if (esCredicontado) {
+        // El saldo_pendiente_actual del Excel refleja el saldo sobre el valor de CONTADO.
+        saldoContado = item.saldo_pendiente_actual;
+        
+        // Calculamos cuánto ha pagado basándonos en el valor de contado y lo que debe del contado
+        const valorPagado = Math.max(0, valContado - saldoContado);
+        
+        // El saldo pendiente real (el mayor) es el valor del crédito menos lo que ha pagado
+        pendienteActual = Math.max(0, originalCredito - valorPagado);
+        
+        // La cuota inicial o abonos previos equivalen a lo pagado
+        cuotaInicial = valorPagado;
+      } else {
+        cuotaInicial = Math.max(0, originalCredito - pendienteActual);
+      }
+
       const { data: nuevoCredito, error: errorCredito } = await supabase
         .from("creditos")
         .insert({
           cliente_id: clienteId,
           vendedor_id: vendedorId,
           numero_factura: `MIG-${item.cedula_cliente.trim()}-${Math.floor(100 + Math.random() * 900)}`,
-          tipo_venta: "Credito", // DDL constraint
-          valor_contado: item.valor_original_credito,
-          valor_credito: item.valor_original_credito,
-          cuota_inicial: Math.max(0, item.valor_original_credito - item.saldo_pendiente_actual),
-          saldo_pendiente: item.saldo_pendiente_actual,
+          tipo_venta: tipoVenta,
+          valor_contado: valContado,
+          valor_credito: originalCredito,
+          cuota_inicial: cuotaInicial,
+          saldo_pendiente: pendienteActual,
+          saldo_contado: saldoContado,
           numero_cuotas: numeroCuotas,
           valor_cuota: valorCuotaRedondeada,
           frecuencia_pago: item.frecuencia_pago,
           fecha_proximo_pago: item.fecha_proximo_pago,
           fecha_final_estimada: fechaFinalEstimada,
+          fecha_limite_credicontado: esCredicontado ? fechaFinalEstimada : null,
           estado: "Al día",
         })
         .select("id")

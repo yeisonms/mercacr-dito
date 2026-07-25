@@ -24,6 +24,11 @@ export interface CreditoCobro {
   valor_credito: number;
   estado: "Al día" | "Próximo a vencer" | "Atrasado" | "En mora" | "Cancelado" | "Finalizado";
   numero_factura: string;
+  tipo_venta?: string;
+  valor_contado?: number | null;
+  saldo_contado?: number | null;
+  penalidad_aplicada?: boolean;
+  fecha_limite_credicontado?: string | null;
   cliente: ClienteInfo;
 }
 
@@ -174,6 +179,11 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
       estado,
       numero_factura,
       fecha_proximo_pago,
+      tipo_venta,
+      valor_contado,
+      saldo_contado,
+      penalidad_aplicada,
+      fecha_limite_credicontado,
       cliente:clientes (
         id,
         nombres,
@@ -203,6 +213,11 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
         valor_credito: Number(item.valor_credito),
         estado: item.estado,
         numero_factura: item.numero_factura,
+        tipo_venta: item.tipo_venta,
+        valor_contado: item.valor_contado != null ? Number(item.valor_contado) : null,
+        saldo_contado: item.saldo_contado != null ? Number(item.saldo_contado) : null,
+        penalidad_aplicada: Boolean(item.penalidad_aplicada),
+        fecha_limite_credicontado: item.fecha_limite_credicontado,
         cliente: clienteRaw
           ? {
               id: clienteRaw.id,
@@ -555,7 +570,7 @@ export async function aprobarRecaudo(
   // Paso A: Obtener el saldo del crédito actual
   const { data: credito, error: errorCreditoGet } = await supabase
     .from("creditos")
-    .select("saldo_pendiente")
+    .select("saldo_pendiente, tipo_venta, saldo_contado, penalidad_aplicada")
     .eq("id", creditoId)
     .single();
 
@@ -566,15 +581,39 @@ export async function aprobarRecaudo(
   }
 
   const saldoActual = Number(credito.saldo_pendiente);
-  const nuevoSaldo = Math.max(0, saldoActual - valorRecibido);
+  let nuevoSaldo = Math.max(0, saldoActual - valorRecibido);
+  
+  let nuevoSaldoContado = credito.saldo_contado != null ? Number(credito.saldo_contado) : null;
+  let descuentoProntoPago = false;
+
+  if (credito.tipo_venta === "Credicontado" && !credito.penalidad_aplicada && nuevoSaldoContado !== null) {
+    nuevoSaldoContado = Math.max(0, nuevoSaldoContado - valorRecibido);
+    if (nuevoSaldoContado <= 0) {
+      nuevoSaldo = 0; // Se pagó todo el saldo contado, se perdona el resto
+      descuentoProntoPago = true;
+    }
+  }
+
+  // Obtener observaciones actuales del recaudo si hubo descuento
+  let nuevasObservacionesRecaudo = undefined;
+  if (descuentoProntoPago) {
+    const { data: rec } = await supabase.from("recaudos").select("observaciones").eq("id", recaudoId).single();
+    const obsActual = rec?.observaciones ? `${rec.observaciones}\n` : "";
+    nuevasObservacionesRecaudo = `${obsActual}Descuento por pronto pago (Credicontado)`;
+  }
 
   // Paso B: Marcar recaudo como Aprobado
+  const updateDataRecaudo: any = {
+    estado: "Aprobado",
+    fecha_revision: new Date().toISOString(),
+  };
+  if (nuevasObservacionesRecaudo) {
+    updateDataRecaudo.observaciones = nuevasObservacionesRecaudo;
+  }
+
   const { error: errorRecaudoUpdate } = await supabase
     .from("recaudos")
-    .update({
-      estado: "Aprobado",
-      fecha_revision: new Date().toISOString(),
-    })
+    .update(updateDataRecaudo)
     .eq("id", recaudoId);
 
   if (errorRecaudoUpdate) {
@@ -586,6 +625,7 @@ export async function aprobarRecaudo(
     .from("creditos")
     .update({
       saldo_pendiente: nuevoSaldo,
+      ...(nuevoSaldoContado !== null ? { saldo_contado: nuevoSaldoContado } : {}),
       ...(nuevoSaldo <= 0 ? { estado: "Finalizado" } : {}),
     })
     .eq("id", creditoId);

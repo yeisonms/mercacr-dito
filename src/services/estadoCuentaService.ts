@@ -13,6 +13,9 @@ export interface CreditoResumen {
   valorCredito: number;
   valorContado: number;
   saldoPendiente: number;
+  saldoContado?: number;
+  penalidadAplicada?: boolean;
+  fechaLimiteCredicontado?: string | null;
   fechaVenta: string;
   fechaProximoPago: string | null;
   estado: string;
@@ -110,7 +113,7 @@ export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuen
     const { data: creditos, error: creditsError } = await supabase
       .from("creditos")
       .select(
-        "id, valor_credito, valor_contado, saldo_pendiente, fecha_venta, fecha_proximo_pago, estado, tipo_venta, numero_factura, numero_cuotas, frecuencia_pago"
+        "id, valor_credito, valor_contado, saldo_pendiente, saldo_contado, penalidad_aplicada, fecha_limite_credicontado, fecha_venta, fecha_proximo_pago, estado, tipo_venta, numero_factura, numero_cuotas, frecuencia_pago"
       )
       .eq("cliente_id", clienteId)
       .order("fecha_venta", { ascending: false });
@@ -216,6 +219,9 @@ export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuen
         valorCredito: Number(creditoActual.valor_credito) || 0,
         valorContado: Number(creditoActual.valor_contado) || 0,
         saldoPendiente: Number(creditoActual.saldo_pendiente) || 0,
+        saldoContado: creditoActual.saldo_contado != null ? Number(creditoActual.saldo_contado) : undefined,
+        penalidadAplicada: Boolean(creditoActual.penalidad_aplicada),
+        fechaLimiteCredicontado: creditoActual.fecha_limite_credicontado,
         fechaVenta: creditoActual.fecha_venta,
         fechaProximoPago: creditoActual.fecha_proximo_pago,
         estado: creditoActual.estado,
@@ -249,3 +255,70 @@ function mapCliente(c: any) {
     codigoConsecutivo: c.codigo_consecutivo ?? "",
   };
 }
+
+/**
+ * Aplica la penalidad a un crédito tipo Credicontado, pasando el cliente
+ * a deber el valor del crédito de forma obligatoria y eliminando el saldo_contado.
+ */
+export async function aplicarPenalidadCredicontado(creditoId: string): Promise<void> {
+  // 1. Obtener la diferencia entre el valor de crédito y contado
+  const { data: credito, error: fetchError } = await supabase
+    .from("creditos")
+    .select("valor_credito, valor_contado, numero_cuotas")
+    .eq("id", creditoId)
+    .single();
+
+  if (fetchError || !credito) {
+    throw new Error(`Error al obtener crédito: ${fetchError?.message}`);
+  }
+
+  const diferencia = Number(credito.valor_credito) - Number(credito.valor_contado);
+  let incrementCuotas = 0;
+
+  if (diferencia > 0) {
+    // 2. Buscar la última cuota para seguir el consecutivo
+    const { data: cuotas, error: cuotasError } = await supabase
+      .from("cuotas")
+      .select("*")
+      .eq("credito_id", creditoId)
+      .order("numero_cuota", { ascending: false })
+      .limit(1);
+
+    if (!cuotasError && cuotas && cuotas.length > 0) {
+      const ultimaCuota = cuotas[0];
+      
+      // Crear una nueva cuota para el saldo de la penalidad
+      const { error: insertError } = await supabase
+        .from("cuotas")
+        .insert({
+          credito_id: creditoId,
+          numero_cuota: ultimaCuota.numero_cuota + 1,
+          fecha_vencimiento: ultimaCuota.fecha_vencimiento, // Se deja la misma fecha límite
+          valor_cuota: diferencia,
+          valor_pagado: 0,
+          saldo_cuota: diferencia,
+          estado: "Pendiente"
+        });
+        
+      if (!insertError) {
+        incrementCuotas = 1;
+      }
+    }
+  }
+
+  // 3. Aplicar la penalidad en el crédito principal
+  const { error } = await supabase
+    .from("creditos")
+    .update({
+      penalidad_aplicada: true,
+      fecha_penalidad: new Date().toISOString(),
+      saldo_contado: null,
+      numero_cuotas: Number(credito.numero_cuotas || 0) + incrementCuotas,
+    })
+    .eq("id", creditoId);
+
+  if (error) {
+    throw new Error(`Error al aplicar penalidad: ${error.message}`);
+  }
+}
+

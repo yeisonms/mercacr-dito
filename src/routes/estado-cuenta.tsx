@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Search,
   User,
@@ -16,7 +16,9 @@ import {
   Clock,
   Loader2,
   CalendarClock,
+  AlertTriangle,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -29,6 +31,14 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Command,
   CommandEmpty,
@@ -49,6 +59,7 @@ import {
 import {
   buscarClientesParaEstadoCuenta,
   obtenerEstadoCuenta,
+  aplicarPenalidadCredicontado,
 } from "@/services/estadoCuentaService";
 import { formatearMoneda } from "@/services/producto.service";
 
@@ -87,6 +98,33 @@ function formatearFechaHora(timestampStr: string | null): string {
 function EstadoCuentaPage() {
   const [selectedClienteId, setSelectedClienteId] = useState<string>("");
   const [openCliente, setOpenCliente] = useState(false);
+  const [dialogPenalidadOpen, setDialogPenalidadOpen] = useState(false);
+  const [creditoAPenalizar, setCreditoAPenalizar] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
+
+  const mutationPenalidad = useMutation({
+    mutationFn: aplicarPenalidadCredicontado,
+    onSuccess: () => {
+      toast.success("Penalidad aplicada correctamente", {
+        description: "El saldo de contado ha sido eliminado y el crédito ahora tiene el valor original.",
+      });
+      setDialogPenalidadOpen(false);
+      setCreditoAPenalizar(null);
+      queryClient.invalidateQueries({ queryKey: ["estado-cuenta", selectedClienteId] });
+      queryClient.invalidateQueries({ queryKey: ["creditosCobro"] }); // Refrescar cobranza
+    },
+    onError: (err: any) => {
+      toast.error("Error al aplicar la penalidad", {
+        description: err.message,
+      });
+    },
+  });
+
+  const handleAplicarPenalidad = (creditoId: string) => {
+    setCreditoAPenalizar(creditoId);
+    setDialogPenalidadOpen(true);
+  };
 
   // Query para cargar la lista de clientes del buscador
   const { data: clientes = [], isLoading: loadingClientes } = useQuery({
@@ -312,17 +350,51 @@ function EstadoCuentaPage() {
                         <span className="text-xs font-bold text-foreground">{estadoCuenta.credito.numeroFactura}</span>
                       </div>
                       <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
-                        <span className="text-xs text-muted-foreground">Total del Crédito:</span>
+                        <span className="text-xs text-muted-foreground">Tipo de Crédito:</span>
                         <span className="text-xs font-bold text-foreground">
-                          {formatearMoneda(estadoCuenta.credito.valorCredito)}
+                          {estadoCuenta.credito.tipoVenta === "Credicontado" ? "Credicontado" : "Crédito Normal"}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
-                        <span className="text-xs text-muted-foreground font-semibold">Saldo Pendiente:</span>
-                        <span className="text-sm font-extrabold text-primary">
-                          {formatearMoneda(estadoCuenta.credito.saldoPendiente)}
-                        </span>
-                      </div>
+                      
+                      {estadoCuenta.credito.tipoVenta === "Credicontado" ? (
+                        <>
+                          <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                            <span className="text-xs text-muted-foreground">Total del Crédito:</span>
+                            <span className="text-xs font-bold text-foreground">
+                              {formatearMoneda(estadoCuenta.credito.valorCredito)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                            <span className="text-xs text-muted-foreground">Total Credicontado:</span>
+                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                              {formatearMoneda(estadoCuenta.credito.valorContado)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                            <span className="text-xs text-muted-foreground font-semibold">Saldo Pendiente:</span>
+                            <span className="text-sm font-extrabold text-primary">
+                              {estadoCuenta.credito.penalidadAplicada || estadoCuenta.credito.saldoContado == null
+                                ? formatearMoneda(estadoCuenta.credito.saldoPendiente) 
+                                : formatearMoneda(estadoCuenta.credito.saldoContado)}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                            <span className="text-xs text-muted-foreground">Total del Crédito:</span>
+                            <span className="text-xs font-bold text-foreground">
+                              {formatearMoneda(estadoCuenta.credito.valorCredito)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                            <span className="text-xs text-muted-foreground font-semibold">Saldo Pendiente:</span>
+                            <span className="text-sm font-extrabold text-primary">
+                              {formatearMoneda(estadoCuenta.credito.saldoPendiente)}
+                            </span>
+                          </div>
+                        </>
+                      )}
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Próximo Pago:</span>
                         <div className="flex items-center gap-1.5">
@@ -332,6 +404,20 @@ function EstadoCuentaPage() {
                           </span>
                         </div>
                       </div>
+
+                      {estadoCuenta.credito.tipoVenta === "Credicontado" && !estadoCuenta.credito.penalidadAplicada && (
+                        <div className="pt-3 mt-2 border-t border-border/50">
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            className="w-full text-xs font-semibold" 
+                            onClick={() => handleAplicarPenalidad(estadoCuenta.credito!.id)}
+                          >
+                            <AlertTriangle className="h-4 w-4 mr-1.5" />
+                            Aplicar Penalidad (Incumplimiento)
+                          </Button>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div className="text-center py-8 text-xs text-muted-foreground italic">
@@ -598,6 +684,54 @@ function EstadoCuentaPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={dialogPenalidadOpen} onOpenChange={setDialogPenalidadOpen}>
+        <DialogContent className="max-w-md rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-600">
+              <AlertTriangle className="h-5 w-5" />
+              Aplicar Penalidad
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              ¿Estás seguro que deseas aplicar la penalidad por incumplimiento a este crédito de <strong>Credicontado</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="text-sm text-muted-foreground space-y-2 mt-2 bg-rose-50/50 p-4 rounded-xl border border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/30">
+            <p>Al aplicar esta penalidad:</p>
+            <ul className="list-disc list-inside space-y-1 ml-1 text-rose-700/80 dark:text-rose-400/80">
+              <li>El <strong>saldo de contado</strong> será eliminado.</li>
+              <li>El cliente deberá pagar el <strong>valor total de crédito</strong>.</li>
+              <li>Se calculará la <strong>comisión extra</strong> para el vendedor.</li>
+            </ul>
+            <p className="font-semibold text-rose-700 dark:text-rose-400 mt-3">Esta acción no se puede deshacer.</p>
+          </div>
+          <DialogFooter className="mt-4 sm:justify-between gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDialogPenalidadOpen(false)}
+              disabled={mutationPenalidad.isPending}
+              className="flex-1 rounded-xl"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => creditoAPenalizar && mutationPenalidad.mutate(creditoAPenalizar)}
+              disabled={mutationPenalidad.isPending}
+              className="flex-1 rounded-xl bg-rose-600 hover:bg-rose-700"
+            >
+              {mutationPenalidad.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Aplicando...
+                </>
+              ) : (
+                "Sí, aplicar penalidad"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

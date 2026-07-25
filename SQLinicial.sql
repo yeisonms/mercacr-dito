@@ -101,6 +101,10 @@ CREATE TABLE creditos (
     frecuencia_pago VARCHAR(20) CHECK (frecuencia_pago IN ('Semanal', 'Quincenal', 'Mensual', 'Única', 'Decenal')),
     fecha_proximo_pago DATE,
     fecha_final_estimada DATE,
+    fecha_limite_credicontado DATE,
+    saldo_contado NUMERIC(12, 2),
+    penalidad_aplicada BOOLEAN DEFAULT FALSE,
+    fecha_penalidad DATE,
     estado VARCHAR(30) DEFAULT 'Al día' CHECK (estado IN ('Al día', 'Próximo a vencer', 'Atrasado', 'En mora', 'Cancelado', 'Finalizado'))
 );
 

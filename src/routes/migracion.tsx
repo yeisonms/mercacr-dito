@@ -84,6 +84,10 @@ function MigracionCartera() {
     const saldoPendiente = parseFloat(row.saldo_pendiente_actual);
     const valorCuota = parseFloat(row.valor_cuota);
 
+    const tipoCredito = row.tipo_credito?.toString().trim() || row.Tipo_Credito?.toString().trim();
+    const valContadoRaw = row.valor_contado || row.Valor_Contado;
+    const valContado = valContadoRaw ? parseFloat(valContadoRaw) : undefined;
+
     if (isNaN(valOriginal) || valOriginal <= 0) {
       errores.push("Valor original debe ser un número mayor a 0.");
     }
@@ -141,6 +145,8 @@ function MigracionCartera() {
         fecha_proximo_pago: fechaProximo || "",
         codigo_ruta: codigoRuta || "",
         numero_cartera: numeroCartera || "",
+        tipo_credito: tipoCredito || "",
+        valor_contado: valContado,
       },
       errores,
       esValida: errores.length === 0,
@@ -171,9 +177,9 @@ function MigracionCartera() {
 
   const cargarDatosPrueba = () => {
     const csvContent =
-      "cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta,# de cartera\n" +
-      "1056784999,Pedro Julio,Alvarez,3114002233,Muzo Centro,1200000,900000,50000,Quincenal,2026-07-15,NOR,CART-01\n" +
-      "1056784998,Maria Helena,Restrepo,3123004455,,400000,-10000,20000,Semanal,2026-07-10,SUR,CART-02";
+      "cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta,# de cartera,tipo_credito,valor_contado\n" +
+      "1056784999,Pedro Julio,Alvarez,3114002233,Muzo Centro,1200000,900000,50000,Quincenal,2026-07-15,NOR,CART-01,Credicontado,900000\n" +
+      "1056784998,Maria Helena,Restrepo,3123004455,,400000,-10000,20000,Semanal,2026-07-10,SUR,CART-02,,";
       
     setNombreArchivo("sample_migration.csv");
     Papa.parse(csvContent, {
@@ -221,9 +227,9 @@ function MigracionCartera() {
 
   // ─── Descargar Plantilla CSV ───────────────────────────────────────────
   const descargarPlantilla = () => {
-    const headers = "cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta,# de cartera\n";
-    const sample1 = "1056784001,Juan Carlos,Ramirez,3156001122,Centro,1000000,850000,50000,Quincenal,2026-07-15,NOR,CART-01\n";
-    const sample2 = "43890200,Luz Marina,Zapata,3125556677,La Playa,600000,450000,30000,Semanal,2026-07-10,SUR,CART-02\n";
+    const headers = "cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta,# de cartera,tipo_credito,valor_contado\n";
+    const sample1 = "1056784001,Juan Carlos,Ramirez,3156001122,Centro,1000000,850000,50000,Quincenal,2026-07-15,NOR,CART-01,Credito,\n";
+    const sample2 = "43890200,Luz Marina,Zapata,3125556677,La Playa,600000,450000,30000,Semanal,2026-07-10,SUR,CART-02,Credicontado,400000\n";
 
     const blob = new Blob([headers + sample1 + sample2], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -447,6 +453,8 @@ function MigracionCartera() {
                       <TableHead className="text-center">Fecha Pago</TableHead>
                       <TableHead className="text-center">Ruta</TableHead>
                       <TableHead className="text-center">Cartera</TableHead>
+                      <TableHead className="text-center">Tipo</TableHead>
+                      <TableHead className="text-right">V. Contado</TableHead>
                       <TableHead className="w-64">Validación / Detalles</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -495,6 +503,12 @@ function MigracionCartera() {
                           </TableCell>
                           <TableCell className="text-center text-xs">
                             {data.numero_cartera || "-"}
+                          </TableCell>
+                          <TableCell className="text-center text-xs">
+                            {data.tipo_credito || "-"}
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            {data.valor_contado ? formatearMoneda(data.valor_contado) : "-"}
                           </TableCell>
                           <TableCell className="text-2xs text-muted-foreground leading-normal max-w-xs">
                             {fila.esValida ? (

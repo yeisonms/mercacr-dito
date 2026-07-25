@@ -28,6 +28,7 @@ import {
   GripVertical,
   Navigation,
   History,
+  Banknote,
 } from "lucide-react";
 
 import {
@@ -85,6 +86,8 @@ import {
   type CreditoCobro,
 } from "@/services/recaudoService";
 import { registrarPromesaPago } from "@/services/gestionService";
+import { buscarClientesParaEstadoCuenta, obtenerEstadoCuenta } from "@/services/estadoCuentaService";
+import { ModalPago } from "@/components/pago/ModalPago";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 // ─── Definición de Ruta ───────────────────────────────────────────────────────
@@ -370,6 +373,51 @@ function CobranzaPage() {
 
   const queryClient = useQueryClient();
 
+  // --- NUEVO: ESTADO PARA PAGO LIBRE ---
+  const [openQuickSearch, setOpenQuickSearch] = useState(false);
+  const [quickSearchTerm, setQuickSearchTerm] = useState("");
+  const [isModalPagoLibreOpen, setIsModalPagoLibreOpen] = useState(false);
+  const [creditoLibre, setCreditoLibre] = useState<CreditoCobro | null>(null);
+
+  const { data: clientesLibres = [] } = useQuery({
+    queryKey: ["clientesBusquedaRapida"],
+    queryFn: buscarClientesParaEstadoCuenta,
+    enabled: openQuickSearch,
+  });
+
+  const handleSeleccionarClienteLibre = async (clienteId: string) => {
+    setOpenQuickSearch(false);
+    const estado = await obtenerEstadoCuenta(clienteId);
+    if (estado?.credito && estado.credito.estado !== "Finalizado" && estado.credito.estado !== "Cancelado" && estado.cliente) {
+      setCreditoLibre({
+        id: estado.credito.id,
+        saldo_pendiente: estado.credito.saldoPendiente,
+        valor_credito: estado.credito.valorCredito,
+        estado: estado.credito.estado as any,
+        numero_factura: estado.credito.numeroFactura,
+        tipo_venta: estado.credito.tipoVenta,
+        valor_contado: estado.credito.valorContado,
+        saldo_contado: estado.credito.saldoContado,
+        penalidad_aplicada: estado.credito.penalidadAplicada,
+        fecha_limite_credicontado: estado.credito.fechaLimiteCredicontado,
+        cliente: {
+          id: estado.cliente.id,
+          nombres: estado.cliente.nombres,
+          apellidos: estado.cliente.apellidos,
+          cedula: estado.cliente.cedula,
+          telefono_principal: estado.cliente.telefono,
+          barrio: estado.cliente.barrio,
+          latitud: null, 
+          longitud: null, 
+        }
+      });
+      setIsModalPagoLibreOpen(true);
+    } else {
+      toast.error("Este cliente no tiene créditos activos para abonar.");
+    }
+  };
+  // ------------------------------------
+
   // 1. Cargar datos con React Query
   const {
     data: creditos = [],
@@ -582,7 +630,11 @@ function CobranzaPage() {
       // Preparar datos para el recibo (si había crédito seleccionado)
       if (creditoSeleccionado) {
         setReciboData({
-          fecha: format(new Date(), "yyyy-MM-dd"),
+          fecha: new Date().toLocaleString("es-CO", { 
+            timeZone: "America/Bogota",
+            day: "2-digit", month: "short", year: "numeric",
+            hour: "2-digit", minute: "2-digit", hour12: true 
+          }).replace(',', ''),
           clienteNombre: `${creditoSeleccionado.cliente.nombres} ${creditoSeleccionado.cliente.apellidos}`,
           abono: variables.valorRecibido,
           totalCredito: creditoSeleccionado.valor_credito || 0,
@@ -1011,24 +1063,34 @@ function CobranzaPage() {
       }
     >
       <div className="mx-auto max-w-md space-y-4">
-        {/* Barra de Búsqueda Superior */}
-        <div className="relative">
-          <Search className="absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Buscar por nombre, cédula o barrio..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="h-12 pl-10 pr-10 text-base rounded-xl shadow-xs"
-          />
-          {busqueda && (
-            <button
-              onClick={() => setBusqueda("")}
-              className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
+        {/* Barra de Búsqueda Superior y Botón Fuera de Ruta */}
+        <div className="flex flex-col gap-2">
+          <div className="relative">
+            <Search className="absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Buscar por nombre, cédula o barrio..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="h-12 pl-10 pr-10 text-base rounded-xl shadow-xs"
+            />
+            {busqueda && (
+              <button
+                onClick={() => setBusqueda("")}
+                className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <Button 
+            variant="outline" 
+            className="h-11 rounded-xl text-emerald-700 border-emerald-500/30 hover:bg-emerald-500/10 font-bold gap-2 w-full justify-center"
+            onClick={() => setOpenQuickSearch(true)}
+          >
+            <Banknote className="h-4 w-4" />
+            Pago Rápido / Fuera de Ruta
+          </Button>
         </div>
 
         {/* Selector de Vista: Lista vs Mapa */}
@@ -1186,6 +1248,64 @@ function CobranzaPage() {
             </div>
           </DndContext>
         )}
+
+      {/* --- NUEVO: MODALES PAGO LIBRE --- */}
+      {creditoLibre && (
+        <ModalPago
+          isOpen={isModalPagoLibreOpen}
+          onClose={() => setIsModalPagoLibreOpen(false)}
+          onSuccess={() => refetch()}
+          creditoSeleccionado={creditoLibre}
+        />
+      )}
+
+      <Dialog open={openQuickSearch} onOpenChange={setOpenQuickSearch}>
+        <DialogContent className="sm:max-w-md p-4 bg-background">
+          <DialogHeader>
+            <DialogTitle>Pago Fuera de Ruta</DialogTitle>
+            <DialogDescription>
+              Busca cualquier cliente del sistema para registrarle un pago libre.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <Input 
+              placeholder="Buscar por nombre o cédula..." 
+              value={quickSearchTerm}
+              onChange={(e) => setQuickSearchTerm(e.target.value)}
+              autoFocus
+            />
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {clientesLibres
+                .filter(c => 
+                  c.nombres.toLowerCase().includes(quickSearchTerm.toLowerCase()) || 
+                  c.apellidos.toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
+                  c.cedula.includes(quickSearchTerm)
+                )
+                .slice(0, 10)
+                .map(c => (
+                <div 
+                  key={c.id} 
+                  className="flex items-center justify-between p-3 border rounded-xl hover:bg-muted/50 cursor-pointer transition-colors"
+                  onClick={() => handleSeleccionarClienteLibre(c.id)}
+                >
+                  <div>
+                    <p className="text-sm font-bold">{c.nombres} {c.apellidos}</p>
+                    <p className="text-xs text-muted-foreground">CC: {c.cedula} | Cód: {c.codigo_consecutivo}</p>
+                  </div>
+                </div>
+              ))}
+              {clientesLibres.length > 0 && quickSearchTerm.length > 0 && clientesLibres.filter(c => 
+                  c.nombres.toLowerCase().includes(quickSearchTerm.toLowerCase()) || 
+                  c.apellidos.toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
+                  c.cedula.includes(quickSearchTerm)
+                ).length === 0 && (
+                <p className="text-center text-sm text-muted-foreground">No se encontraron clientes.</p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* ---------------------------------- */}
 
         {/* Drawer de Registro de Pago (Vaul) */}
         <Drawer open={creditoSeleccionado !== null} onOpenChange={(open) => !open && cerrarDrawer()}>
@@ -1586,7 +1706,11 @@ function CobranzaPage() {
                         {reciboData.fechaLimitePago && (
                           <div className="flex justify-between items-center pt-2 mt-2">
                             <span className="text-xs font-medium text-muted-foreground">Límite Beneficio</span>
-                            <span className="text-xs font-medium text-foreground">{reciboData.fechaLimitePago.split('T')[0]}</span>
+                            <span className="text-xs font-medium text-foreground">
+                              {new Date(reciboData.fechaLimitePago + "T00:00:00").toLocaleDateString("es-CO", { 
+                                timeZone: "America/Bogota", day: "2-digit", month: "short", year: "numeric" 
+                              })}
+                            </span>
                           </div>
                         )}
                       </>

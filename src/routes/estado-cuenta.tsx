@@ -62,6 +62,7 @@ import {
   aplicarPenalidadCredicontado,
 } from "@/services/estadoCuentaService";
 import { formatearMoneda } from "@/services/producto.service";
+import { ModalPago } from "@/components/pago/ModalPago";
 
 export const Route = createFileRoute("/estado-cuenta")({
   head: () => ({
@@ -98,6 +99,7 @@ function formatearFechaHora(timestampStr: string | null): string {
 function EstadoCuentaPage() {
   const [selectedClienteId, setSelectedClienteId] = useState<string>("");
   const [openCliente, setOpenCliente] = useState(false);
+  const [isModalPagoOpen, setIsModalPagoOpen] = useState(false);
   const [dialogPenalidadOpen, setDialogPenalidadOpen] = useState(false);
   const [creditoAPenalizar, setCreditoAPenalizar] = useState<string | null>(null);
 
@@ -335,11 +337,23 @@ function EstadoCuentaPage() {
               {/* Card 2: Mini Resumen del Crédito */}
               <Card className="border-border/60 shadow-sm hover:shadow-md transition-all bg-muted/10">
                 <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <Banknote className="h-4 w-4 text-primary shrink-0" />
-                    <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                      Crédito Actual
-                    </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Banknote className="h-4 w-4 text-primary shrink-0" />
+                      <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                        Crédito Actual
+                      </CardTitle>
+                    </div>
+                    {estadoCuenta?.credito && estadoCuenta.credito.estado !== "Finalizado" && estadoCuenta.credito.estado !== "Cancelado" && (
+                      <Button
+                        size="sm"
+                        onClick={() => setIsModalPagoOpen(true)}
+                        className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 gap-1.5 shadow-sm"
+                      >
+                        <Banknote className="h-3.5 w-3.5" />
+                        Registrar Abono Libre
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3.5 pt-1.5">
@@ -732,6 +746,36 @@ function EstadoCuentaPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {estadoCuenta?.credito && estadoCuenta?.cliente && (
+        <ModalPago 
+          isOpen={isModalPagoOpen} 
+          onClose={() => setIsModalPagoOpen(false)} 
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["estadoCuenta", selectedClienteId] })}
+          creditoSeleccionado={{
+            id: estadoCuenta.credito.id,
+            saldo_pendiente: estadoCuenta.credito.saldoPendiente,
+            valor_credito: estadoCuenta.credito.valorCredito,
+            estado: estadoCuenta.credito.estado as any,
+            numero_factura: estadoCuenta.credito.numeroFactura,
+            tipo_venta: estadoCuenta.credito.tipoVenta,
+            valor_contado: estadoCuenta.credito.valorContado,
+            saldo_contado: estadoCuenta.credito.saldoContado,
+            penalidad_aplicada: estadoCuenta.credito.penalidadAplicada,
+            fecha_limite_credicontado: estadoCuenta.credito.fechaLimiteCredicontado,
+            cliente: {
+              id: estadoCuenta.cliente.id,
+              nombres: estadoCuenta.cliente.nombres,
+              apellidos: estadoCuenta.cliente.apellidos,
+              cedula: estadoCuenta.cliente.cedula,
+              telefono_principal: estadoCuenta.cliente.telefono,
+              barrio: estadoCuenta.cliente.barrio,
+              latitud: null, 
+              longitud: null, 
+            }
+          }}
+        />
+      )}
     </AppShell>
   );
 }

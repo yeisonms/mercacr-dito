@@ -38,6 +38,7 @@ export interface RegistrarRecaudoInput {
   metodoPago: "Efectivo" | "Transferencia";
   fotoDinero?: File | null;
   observaciones?: string;
+  usuarioId?: string;
 }
 
 export interface RecaudoPendiente {
@@ -343,7 +344,7 @@ export async function registrarRecaudo(input: RegistrarRecaudoInput): Promise<st
     return `mock-recaudo-${Date.now()}`;
   }
 
-  const cobradorId = await obtenerCobradorId();
+  const cobradorId = input.usuarioId ?? await obtenerCobradorId();
 
   let fotoUrl: string | null = null;
   if (input.fotoDinero) {
@@ -570,7 +571,7 @@ export async function aprobarRecaudo(
   // Paso A: Obtener el saldo del crédito actual
   const { data: credito, error: errorCreditoGet } = await supabase
     .from("creditos")
-    .select("saldo_pendiente, tipo_venta, saldo_contado, penalidad_aplicada")
+    .select("saldo_pendiente, tipo_venta, saldo_contado, penalidad_aplicada, cliente_id")
     .eq("id", creditoId)
     .single();
 
@@ -632,6 +633,33 @@ export async function aprobarRecaudo(
 
   if (errorCreditoUpdate) {
     throw new Error(`Error al actualizar el saldo del crédito: ${errorCreditoUpdate.message}`);
+  }
+
+  // --- ACTUALIZACIÓN INTELIGENTE DE RUTA ---
+  // Si hoy el cliente tenía ruta y no estaba visitado, lo marcamos automáticamente
+  try {
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const { data: visitaPendiente } = await supabase
+      .from("registro_visitas")
+      .select("id")
+      .eq("cliente_id", credito.cliente_id)
+      .eq("fecha_visita", todayStr)
+      .is("recaudo_id", null) 
+      .maybeSingle();
+
+    if (visitaPendiente) {
+      await supabase
+        .from("registro_visitas")
+        .update({
+          estado: "Visitado con Pago",
+          recaudo_id: recaudoId,
+          observaciones: "Pago Libre / Automático",
+          hora_gestion: new Date().toISOString()
+        })
+        .eq("id", visitaPendiente.id);
+    }
+  } catch (err) {
+    console.warn("No se pudo auto-actualizar la visita de la ruta:", err);
   }
 }
 

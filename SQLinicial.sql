@@ -60,6 +60,8 @@ CREATE TABLE clientes (
     latitud NUMERIC(10, 8),
     longitud NUMERIC(11, 8),
     observaciones TEXT,
+    bloqueado BOOLEAN DEFAULT FALSE,
+    motivo_bloqueo VARCHAR(255),
     estado VARCHAR(20) DEFAULT 'Activo' CHECK (estado IN ('Activo', 'Inactivo', 'Moroso', 'Judicial', 'Finalizado')),
     fecha_creacion TIMESTAMPTZ DEFAULT NOW()
 );

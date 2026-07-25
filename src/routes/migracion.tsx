@@ -87,6 +87,10 @@ function MigracionCartera() {
     const tipoCredito = row.tipo_credito?.toString().trim() || row.Tipo_Credito?.toString().trim();
     const valContadoRaw = row.valor_contado || row.Valor_Contado;
     const valContado = valContadoRaw ? parseFloat(valContadoRaw) : undefined;
+    
+    // Lista Negra
+    const morosos = row.morosos?.toString().trim() || row.Morosos?.toString().trim() || "";
+    const isMoroso = morosos.toLowerCase().includes("no fiar");
 
     if (isNaN(valOriginal) || valOriginal <= 0) {
       errores.push("Valor original debe ser un número mayor a 0.");
@@ -147,6 +151,8 @@ function MigracionCartera() {
         numero_cartera: numeroCartera || "",
         tipo_credito: tipoCredito || "",
         valor_contado: valContado,
+        bloqueado: isMoroso,
+        motivo_bloqueo: isMoroso ? "No fiar (Importado)" : undefined,
       },
       errores,
       esValida: errores.length === 0,
@@ -177,9 +183,9 @@ function MigracionCartera() {
 
   const cargarDatosPrueba = () => {
     const csvContent =
-      "cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta,# de cartera,tipo_credito,valor_contado\n" +
-      "1056784999,Pedro Julio,Alvarez,3114002233,Muzo Centro,1200000,900000,50000,Quincenal,2026-07-15,NOR,CART-01,Credicontado,900000\n" +
-      "1056784998,Maria Helena,Restrepo,3123004455,,400000,-10000,20000,Semanal,2026-07-10,SUR,CART-02,,";
+      "cedula_cliente,nombres,apellidos,telefono,barrio,valor_original_credito,saldo_pendiente_actual,valor_cuota,frecuencia_pago,fecha_proximo_pago,codigo_ruta,# de cartera,tipo_credito,valor_contado,Morosos\n" +
+      "1056784999,Pedro Julio,Alvarez,3114002233,Muzo Centro,1200000,900000,50000,Quincenal,2026-07-15,NOR,CART-01,Credicontado,900000,\n" +
+      "1056784998,Maria Helena,Restrepo,3123004455,,400000,-10000,20000,Semanal,2026-07-10,SUR,CART-02,,,No fiar";
       
     setNombreArchivo("sample_migration.csv");
     Papa.parse(csvContent, {

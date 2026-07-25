@@ -733,6 +733,19 @@ function NuevaVentaPage() {
                 </Popover>
               </div>
 
+              {/* Alerta de Cliente Bloqueado (Moroso) */}
+              {clienteActual?.bloqueado && (
+                <div className="flex items-start gap-3 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive animate-in fade-in slide-in-from-top-2 duration-200 mt-2">
+                  <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-sm">⛔ CLIENTE BLOQUEADO</h4>
+                    <p className="text-sm mt-1 opacity-90 leading-snug">
+                      Este cliente se encuentra en la lista de morosos (No fiar). No se le pueden autorizar nuevos créditos.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Ficha rápida del cliente seleccionado */}
               {clienteActual && (
                 <div className="rounded-lg border border-border/80 bg-muted/30 p-4 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
@@ -1315,7 +1328,7 @@ function NuevaVentaPage() {
               {/* Botón Confirmar Venta */}
               <Button
                 onClick={handleConfirmarVenta}
-                disabled={!selectedClienteId || carrito.length === 0 || mutation.isPending}
+                disabled={!selectedClienteId || carrito.length === 0 || mutation.isPending || !!clienteActual?.bloqueado}
                 className="w-full text-sm font-semibold h-11 transition-all active:scale-[0.98]"
               >
                 {mutation.isPending ? (

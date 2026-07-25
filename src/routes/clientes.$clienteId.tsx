@@ -31,6 +31,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { subirArchivo } from "@/services/storage.service";
+import { useAuth } from "@/context/AuthContext";
 
 const ARCHIVOS_MAX_MB = 5;
 
@@ -62,6 +63,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 import {
   obtenerCliente,
@@ -112,6 +114,8 @@ const editSchema = z.object({
   ruta_id: z.string().min(1, "Selecciona una ruta"),
   numero_cartera: z.string().trim().max(30).optional().or(z.literal("")),
   estado: z.enum(["Activo", "Inactivo", "Moroso", "Judicial", "Finalizado"]),
+  bloqueado: z.boolean().default(false),
+  motivo_bloqueo: z.string().optional().nullable(),
   latitud: z.coerce.number().optional().nullable(),
   longitud: z.coerce.number().optional().nullable(),
   foto_cliente_url: z.string().optional().nullable(),
@@ -141,6 +145,7 @@ function ClientePerfilPage() {
   const { clienteId } = useParams({ from: "/clientes/$clienteId" });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { perfil } = useAuth();
   const [modoEdicion, setModoEdicion] = useState(false);
 
   // ── Estados de Mapa y Leaflet ──────────────────────────────────────────────
@@ -201,6 +206,8 @@ function ClientePerfilPage() {
           ruta_id: cliente.ruta_id,
           numero_cartera: cliente.numero_cartera ?? "",
           estado: cliente.estado,
+          bloqueado: cliente.bloqueado ?? false,
+          motivo_bloqueo: cliente.motivo_bloqueo ?? "",
           latitud: cliente.latitud ?? null,
           longitud: cliente.longitud ?? null,
           foto_cliente_url: cliente.foto_cliente_url ?? null,
@@ -461,6 +468,8 @@ function ClientePerfilPage() {
         foto_cedula_respaldo_url: cedulaRespaldoUrl || null,
         foto_casa_1_url: fotoCasa1Url || null,
         foto_casa_2_url: fotoCasa2Url || null,
+        bloqueado: values.bloqueado ?? false,
+        motivo_bloqueo: values.motivo_bloqueo || null,
       });
 
       setNuevosArchivos({ foto: null, cedula_frente: null, cedula_respaldo: null, foto_casa_1: null, foto_casa_2: null });
@@ -593,6 +602,11 @@ function ClientePerfilPage() {
                     >
                       {cliente.estado}
                     </Badge>
+                    {cliente.bloqueado && (
+                      <Badge variant="destructive" className="text-xs font-semibold">
+                        ⛔ Lista Negra
+                      </Badge>
+                    )}
                   </div>
                   <p className="mt-0.5 text-sm text-muted-foreground font-mono">
                     {cliente.codigo_consecutivo}
@@ -905,6 +919,55 @@ function ClientePerfilPage() {
                   </FormItem>
                 )}
               />
+
+              {/* Controles de Lista Negra (Sólo para roles autorizados) */}
+              {(perfil?.rol === "Administrador" || perfil?.rol === "Gerencia" || perfil?.rol === "Auxiliar") && (
+                <div className="md:col-span-2 mt-2 p-4 rounded-lg border border-destructive/20 bg-destructive/5 space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="bloqueado"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border border-destructive/30 bg-background p-4 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base text-destructive font-semibold">⛔ Lista Negra / Bloquear Cliente</FormLabel>
+                          <CardDescription>
+                            Al activar esto, el cliente no podrá recibir nuevos créditos.
+                          </CardDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={!modoEdicion || mutation.isPending}
+                            className="data-[state=checked]:bg-destructive"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  {form.watch("bloqueado") && (
+                    <FormField
+                      control={form.control}
+                      name="motivo_bloqueo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-destructive">Motivo del Bloqueo *</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              disabled={!modoEdicion || mutation.isPending}
+                              placeholder="Ej. Cliente moroso incobrable"
+                              className={!modoEdicion ? "bg-muted/40" : "border-destructive focus-visible:ring-destructive"}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+              )}
 
               {/* Separador y Ubicación GPS */}
               <div className="md:col-span-2 space-y-4 pt-4 border-t border-border/50">

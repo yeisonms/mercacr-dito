@@ -45,6 +45,8 @@ export interface Cliente {
   latitud: number | null;
   longitud: number | null;
   numero_cartera?: string | null;
+  bloqueado?: boolean;
+  motivo_bloqueo?: string | null;
   fecha_creacion: string;
   /** Nombre de la ruta, resultado del JOIN con tabla `rutas` */
   ruta?: { nombre_ruta: string } | null;
@@ -134,6 +136,8 @@ export async function listarClientes(): Promise<Cliente[]> {
       latitud,
       longitud,
       numero_cartera,
+      bloqueado,
+      motivo_bloqueo,
       fecha_creacion,
       ruta:rutas ( nombre_ruta )
     `,
@@ -343,6 +347,8 @@ export async function obtenerCliente(id: string): Promise<Cliente> {
       latitud,
       longitud,
       numero_cartera,
+      bloqueado,
+      motivo_bloqueo,
       fecha_creacion,
       ruta:rutas ( nombre_ruta )
     `,
@@ -375,9 +381,10 @@ export interface ActualizarClienteInput {
   foto_cliente_url?: string | null;
   foto_cedula_frente_url?: string | null;
   foto_cedula_respaldo_url?: string | null;
-  foto_casa_1_url?: string | null;
   foto_casa_2_url?: string | null;
   numero_cartera?: string | null;
+  bloqueado?: boolean;
+  motivo_bloqueo?: string | null;
 }
 
 /**
@@ -414,6 +421,8 @@ export async function actualizarCliente(
       foto_cedula_respaldo_url: input.foto_cedula_respaldo_url ?? null,
       foto_casa_1_url: input.foto_casa_1_url ?? null,
       foto_casa_2_url: input.foto_casa_2_url ?? null,
+      bloqueado: input.bloqueado ?? false,
+      motivo_bloqueo: input.motivo_bloqueo ?? null,
     })
     .eq("id", id)
     .select()

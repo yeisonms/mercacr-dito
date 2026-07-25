@@ -16,6 +16,8 @@ export interface CreditoMigracionInput {
   numero_cartera?: string;
   tipo_credito?: string;
   valor_contado?: number;
+  bloqueado?: boolean;
+  motivo_bloqueo?: string;
 }
 
 export function calcularFechaVencimientoMigracion(
@@ -139,16 +141,15 @@ export async function importarCreditos(
       if (clienteExistente) {
         clienteId = clienteExistente.id;
         
-        // Actualizar la ruta y el número de cartera para mantenerlos al día
         const codigoRutaKey = item.codigo_ruta.trim().toUpperCase();
         const rutaId = mapaRutas.get(codigoRutaKey) || defaultRutaId;
-        
         if (rutaId) {
           await supabase
             .from("clientes")
             .update({ 
               ruta_id: rutaId,
-              numero_cartera: item.numero_cartera?.trim() || null
+              numero_cartera: item.numero_cartera?.trim() || null,
+              ...(item.bloqueado !== undefined ? { bloqueado: item.bloqueado, motivo_bloqueo: item.motivo_bloqueo } : {})
             })
             .eq("id", clienteId);
         }
@@ -187,6 +188,8 @@ export async function importarCreditos(
             ciudad: "Popayan",
             estado: "Activo",
             numero_cartera: item.numero_cartera?.trim() || null,
+            bloqueado: item.bloqueado ?? false,
+            motivo_bloqueo: item.motivo_bloqueo ?? null,
           })
           .select("id")
           .single();

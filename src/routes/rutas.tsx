@@ -18,6 +18,7 @@ import {
   Layers,
   ArrowRight,
   ClipboardList,
+  Pencil,
 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -41,6 +42,7 @@ import {
   listarRutasConCobradores,
   obtenerClientesPorRuta,
   crearRuta,
+  actualizarRuta,
   guardarSecuenciasClientes,
   type ClienteRuta,
 } from "@/services/rutaService";
@@ -70,6 +72,13 @@ function GestorRutasPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [listaClientes, setListaClientes] = useState<ClienteRuta[]>([]);
   const [haCambiado, setHaCambiado] = useState(false);
+
+  // Estado Modal Editar
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editCodigo, setEditCodigo] = useState("");
+  const [editNombre, setEditNombre] = useState("");
+  const [editCobradorId, setEditCobradorId] = useState("");
+  const [editFormErrors, setEditFormErrors] = useState<{ codigo_ruta?: string; nombre_ruta?: string }>({});
 
   // Estados de Drag & Drop
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -155,6 +164,22 @@ function GestorRutasPage() {
     },
   });
 
+  const updateRutaMutation = useMutation({
+    mutationFn: (values: { id: string; codigo: string; nombre: string; cobradorId: string | null }) =>
+      actualizarRuta(values.id, values.codigo, values.nombre, values.cobradorId),
+    onSuccess: () => {
+      setIsEditDialogOpen(false);
+      
+      setTimeout(() => {
+        toast.success("Ruta actualizada y reasignada correctamente");
+        queryClient.invalidateQueries({ queryKey: ["rutas", "lista"] });
+      }, 100);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Error al actualizar la ruta");
+    },
+  });
+
   // Manejo de Sumisiones
   const handleCrearRutaSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,6 +212,42 @@ function GestorRutasPage() {
       codigo: cod,
       nombre: nom,
       cobradorId: nuevoCobradorId || null,
+    });
+  };
+
+  const handleEditarRutaSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRutaId) return;
+
+    const errors: { codigo_ruta?: string; nombre_ruta?: string } = {};
+    const cod = editCodigo.trim();
+    const nom = editNombre.trim();
+
+    if (!cod) {
+      errors.codigo_ruta = "El código corto es obligatorio";
+    } else if (cod.length < 2 || cod.length > 10) {
+      errors.codigo_ruta = "El código debe tener entre 2 y 10 caracteres";
+    } else if (!/^[a-zA-Z0-9]+$/.test(cod)) {
+      errors.codigo_ruta = "El código solo debe tener caracteres alfanuméricos";
+    }
+
+    if (!nom) {
+      errors.nombre_ruta = "El nombre de la ruta es obligatorio";
+    } else if (nom.length < 3) {
+      errors.nombre_ruta = "El nombre debe tener al menos 3 caracteres";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setEditFormErrors(errors);
+      return;
+    }
+
+    setEditFormErrors({});
+    updateRutaMutation.mutate({
+      id: selectedRutaId,
+      codigo: cod,
+      nombre: nom,
+      cobradorId: editCobradorId || null,
     });
   };
 
@@ -287,11 +348,30 @@ function GestorRutasPage() {
           <Card className="border-border/60 shadow-xs">
             <CardHeader className="border-b border-border/40 pb-4 bg-muted/15 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Map className="h-5 w-5 text-primary" />
-                  Secuencia de Visitas — {selectedRuta?.nombre_ruta}
-                </CardTitle>
-                <CardDescription className="text-xs">
+                <div className="flex items-center gap-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Map className="h-5 w-5 text-primary" />
+                    Secuencia de Visitas — {selectedRuta?.nombre_ruta}
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      if (selectedRuta) {
+                        setEditCodigo(selectedRuta.codigo_ruta);
+                        setEditNombre(selectedRuta.nombre_ruta);
+                        setEditCobradorId(selectedRuta.cobrador_id || "");
+                        setEditFormErrors({});
+                        setIsEditDialogOpen(true);
+                      }
+                    }}
+                    title="Editar Ruta"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
+                <CardDescription className="text-xs mt-1">
                   Cobrador asignado:{" "}
                   <strong>{selectedRuta?.cobrador?.nombre_completo || "Sin Asignar"}</strong>
                 </CardDescription>
@@ -522,6 +602,110 @@ function GestorRutasPage() {
                       setIsCreateDialogOpen(false);
                       limpiarFormulario();
                     }}
+                    className="rounded-lg h-10"
+                  >
+                    Cancelar
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Modal de Edición de Ruta */}
+        {isEditDialogOpen && (
+          <Dialog open={isEditDialogOpen} onOpenChange={(open) => !open && setIsEditDialogOpen(false)}>
+            <DialogContent className="max-w-md">
+              <form onSubmit={handleEditarRutaSubmit} className="space-y-4">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Pencil className="h-5 w-5 text-primary" />
+                    Editar Ruta
+                  </DialogTitle>
+                  <DialogDescription>
+                    Actualiza los datos de la ruta y reasigna el cobrador si es necesario.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3">
+                  {/* Código de Ruta */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit_codigo_ruta" className="text-xs font-bold text-foreground">
+                      Nombre Corto (Código) <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="edit_codigo_ruta"
+                      value={editCodigo}
+                      onChange={(e) => setEditCodigo(e.target.value)}
+                      className="h-10 uppercase rounded-lg"
+                    />
+                    {editFormErrors.codigo_ruta && (
+                      <p className="text-2xs text-destructive font-medium flex items-center gap-1">
+                        <Info className="h-3 w-3 shrink-0" />
+                        {editFormErrors.codigo_ruta}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Nombre de Ruta */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit_nombre_ruta" className="text-xs font-bold text-foreground">
+                      Nombre Largo <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="edit_nombre_ruta"
+                      value={editNombre}
+                      onChange={(e) => setEditNombre(e.target.value)}
+                      className="h-10 rounded-lg"
+                    />
+                    {editFormErrors.nombre_ruta && (
+                      <p className="text-2xs text-destructive font-medium flex items-center gap-1">
+                        <Info className="h-3 w-3 shrink-0" />
+                        {editFormErrors.nombre_ruta}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Cobrador Asignado */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit_cobrador_id" className="text-xs font-bold text-foreground">
+                      Cobrador Asignado
+                    </Label>
+                    <select
+                      id="edit_cobrador_id"
+                      value={editCobradorId}
+                      onChange={(e) => setEditCobradorId(e.target.value)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Sin Asignar</option>
+                      {(cobradores || []).map((cobrador) => (
+                        <option key={cobrador.id} value={cobrador.id}>
+                          {cobrador.nombre_completo}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    type="submit"
+                    disabled={updateRutaMutation.isPending}
+                    className="bg-primary text-primary-foreground font-semibold rounded-lg h-10 px-4 flex items-center justify-center gap-2"
+                  >
+                    {updateRutaMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Guardando...
+                      </>
+                    ) : (
+                      "Guardar Cambios"
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsEditDialogOpen(false)}
                     className="rounded-lg h-10"
                   >
                     Cancelar

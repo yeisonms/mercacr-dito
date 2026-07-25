@@ -70,7 +70,7 @@ export interface RecaudoPendiente {
  * Obtiene los créditos activos que requieren cobro.
  * Filtra por estados: 'Al día', 'Próximo a vencer', 'En mora'.
  */
-export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
+export async function obtenerCreditosCobro(cobradorId?: string): Promise<CreditoCobro[]> {
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   if (!isSupabaseConfigured) {
@@ -170,8 +170,28 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
     ];
   }
 
+  // 1. Si hay cobradorId, buscar las rutas asignadas a él
+  let rutaIds: string[] = [];
+  if (cobradorId) {
+    const { data: rutasData, error: errRutas } = await supabase
+      .from("rutas")
+      .select("id")
+      .eq("cobrador_id", cobradorId);
+    
+    if (errRutas) {
+      console.error("Error al obtener rutas del cobrador:", errRutas);
+    }
+    
+    if (rutasData && rutasData.length > 0) {
+      rutaIds = rutasData.map(r => r.id);
+    } else {
+      // El cobrador no tiene rutas asignadas, entonces no debe ver ningún crédito en cobranza
+      return [];
+    }
+  }
+
   // Consulta real uniendo creditos y clientes (filtrando por fecha_proximo_pago <= hoy)
-  const { data, error } = await supabase
+  let query = supabase
     .from("creditos")
     .select(`
       id,
@@ -185,7 +205,7 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
       saldo_contado,
       penalidad_aplicada,
       fecha_limite_credicontado,
-      cliente:clientes (
+      cliente:clientes!inner (
         id,
         nombres,
         apellidos,
@@ -194,11 +214,18 @@ export async function obtenerCreditosCobro(): Promise<CreditoCobro[]> {
         barrio,
         latitud,
         longitud,
-        secuencia_visita
+        secuencia_visita,
+        ruta_id
       )
     `)
     .in("estado", ["Al día", "Próximo a vencer", "En mora"])
     .lte("fecha_proximo_pago", todayStr);
+
+  if (cobradorId && rutaIds.length > 0) {
+    query = query.in("cliente.ruta_id", rutaIds);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error al obtener créditos para cobranza:", error);

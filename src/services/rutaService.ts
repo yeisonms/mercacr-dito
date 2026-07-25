@@ -159,6 +159,66 @@ export async function crearRuta(
 }
 
 /**
+ * Actualiza los datos de una ruta existente.
+ */
+export async function actualizarRuta(
+  id: string,
+  codigo: string,
+  nombre: string,
+  cobradorId: string | null
+): Promise<RutaConCobrador> {
+  if (!isSupabaseConfigured) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const cobradorAsignado = MOCK_COBRADORES.find((c) => c.id === cobradorId) || null;
+    const index = localRutas.findIndex(r => r.id === id);
+    if (index >= 0) {
+      localRutas[index] = {
+        ...localRutas[index],
+        codigo_ruta: codigo.toUpperCase(),
+        nombre_ruta: nombre,
+        cobrador_id: cobradorId,
+        cobrador: cobradorAsignado ? { nombre_completo: cobradorAsignado.nombre_completo } : null,
+      };
+      return localRutas[index];
+    }
+    throw new Error("Ruta no encontrada");
+  }
+
+  const { data, error } = await supabase
+    .from("rutas")
+    .update({
+      codigo_ruta: codigo.toUpperCase(),
+      nombre_ruta: nombre,
+      cobrador_id: cobradorId || null,
+    })
+    .eq("id", id)
+    .select(`
+      id,
+      codigo_ruta,
+      nombre_ruta,
+      cobrador_id,
+      cobrador:usuarios (
+        nombre_completo
+      )
+    `)
+    .single();
+
+  if (error || !data) {
+    console.error("Error al actualizar ruta:", error);
+    throw new Error(`Error al actualizar la ruta: ${error?.message || "No retornó datos"}`);
+  }
+
+  const cobradorRaw = Array.isArray(data.cobrador) ? data.cobrador[0] : data.cobrador;
+  return {
+    id: data.id,
+    codigo_ruta: data.codigo_ruta,
+    nombre_ruta: data.nombre_ruta,
+    cobrador_id: data.cobrador_id,
+    cobrador: cobradorRaw,
+  };
+}
+
+/**
  * Obtiene todas las rutas activas junto con la información del cobrador.
  */
 export async function listarRutasConCobradores(): Promise<RutaConCobrador[]> {

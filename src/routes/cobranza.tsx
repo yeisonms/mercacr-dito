@@ -425,8 +425,9 @@ function CobranzaPage() {
     isError,
     refetch,
   } = useQuery({
-    queryKey: ["creditos", "cobro"],
-    queryFn: obtenerCreditosCobro,
+    queryKey: ["creditos", "cobro", perfil?.id],
+    queryFn: () => obtenerCreditosCobro(perfil?.rol === "Cobrador" ? perfil.id : undefined),
+    enabled: !!perfil,
   });
 
   // Drag and Drop Logic

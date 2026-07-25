@@ -47,6 +47,7 @@ function HistorialVentasPage() {
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(defaultDateRange);
   const [vendedorId, setVendedorId] = useState<string>("all");
+  const [metodoPagoFilter, setMetodoPagoFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
 
   const isUserAdmin = perfil?.rol === "Administrador" || perfil?.rol === "Gerencia" || perfil?.rol === "Auxiliar";
@@ -79,22 +80,41 @@ function HistorialVentasPage() {
     enabled: isSupabaseConfigured && !!perfil,
   });
 
-  // Filtrado local por buscador
+  // Filtrado local por buscador y método de pago
   const historialFiltrado = useMemo(() => {
-    if (!searchTerm) return historial;
-    const lowerSearch = searchTerm.toLowerCase();
-    return historial.filter(
-      (venta) =>
+    let result = historial;
+    
+    if (metodoPagoFilter !== "all") {
+      result = result.filter(v => v.metodoPago === metodoPagoFilter);
+    }
+    
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(
+        (venta) =>
         venta.clienteNombres.toLowerCase().includes(lowerSearch) ||
         venta.clienteApellidos.toLowerCase().includes(lowerSearch) ||
         venta.clienteCedula.includes(lowerSearch) ||
         venta.numeroFactura.toLowerCase().includes(lowerSearch)
-    );
-  }, [historial, searchTerm]);
+      );
+    }
+    
+    return result;
+  }, [historial, searchTerm, metodoPagoFilter]);
+
+  // Helper para obtener el valor real de la venta
+  const getValorVenta = (venta: any) => {
+    if (venta.tipoVenta === "Contado") return venta.valorContado;
+    if (venta.tipoVenta === "Credito") return venta.valorCredito;
+    if (venta.tipoVenta === "Credicontado") {
+      return venta.penalidadAplicada ? venta.valorCredito : venta.valorContado;
+    }
+    return venta.valorCredito;
+  };
 
   // Cálculo de totales sobre los datos actualmente visibles
   const totalFiltrado = useMemo(() => {
-    return historialFiltrado.reduce((acc, venta) => acc + venta.valorCredito, 0);
+    return historialFiltrado.reduce((acc, venta) => acc + getValorVenta(venta), 0);
   }, [historialFiltrado]);
 
   // Manejo de botones de fecha rápida
@@ -120,7 +140,7 @@ function HistorialVentasPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               
               {/* Filtro Rango de Fechas */}
               <div className="flex flex-col gap-1.5">
@@ -192,6 +212,25 @@ function HistorialVentasPage() {
                 </div>
               )}
 
+              {/* Filtro Método de Pago */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">Método de Pago</span>
+                <Select value={metodoPagoFilter} onValueChange={setMetodoPagoFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los métodos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los métodos</SelectItem>
+                    <SelectItem value="Efectivo">Efectivo</SelectItem>
+                    <SelectItem value="Transferencia">Transferencia</SelectItem>
+                    <SelectItem value="Addi">Addi</SelectItem>
+                    <SelectItem value="Sistecredito">Sistecredito</SelectItem>
+                    <SelectItem value="Brilla">Brilla</SelectItem>
+                    <SelectItem value="Alcanos">Alcanos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Buscador de Texto */}
               <div className="flex flex-col gap-1.5">
                 <span className="text-sm font-medium">Buscador</span>
@@ -222,6 +261,7 @@ function HistorialVentasPage() {
                   <TableHead className="font-semibold uppercase text-xs tracking-wider">Cliente</TableHead>
                   <TableHead className="font-semibold uppercase text-xs tracking-wider">Vendedor</TableHead>
                   <TableHead className="font-semibold uppercase text-xs tracking-wider">Tipo Venta</TableHead>
+                  <TableHead className="font-semibold uppercase text-xs tracking-wider">Medio Pago</TableHead>
                   <TableHead className="font-semibold uppercase text-xs tracking-wider text-right">Total</TableHead>
                   <TableHead className="font-semibold uppercase text-xs tracking-wider text-center">Estado</TableHead>
                 </TableRow>
@@ -233,15 +273,14 @@ function HistorialVentasPage() {
                       <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-16 mx-auto" /></TableCell>
                     </TableRow>
                   ))
                 ) : historialFiltrado.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
                       No se encontraron ventas para los filtros seleccionados.
                     </TableCell>
                   </TableRow>
@@ -265,8 +304,17 @@ function HistorialVentasPage() {
                             {venta.tipoVenta}
                           </Badge>
                         </TableCell>
+                        <TableCell>
+                          {venta.tipoVenta === "Contado" && venta.metodoPago ? (
+                            <Badge variant="secondary" className="font-normal">
+                              {venta.metodoPago}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatearMoneda(venta.valorCredito)}
+                          {formatearMoneda(getValorVenta(venta))}
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge 
@@ -285,7 +333,7 @@ function HistorialVentasPage() {
                       </TableRow>
                     ))}
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableCell colSpan={5} className="text-right font-bold uppercase text-xs tracking-wider">
+                      <TableCell colSpan={6} className="text-right font-bold uppercase text-xs tracking-wider">
                         Total Sumatoria (Visible)
                       </TableCell>
                       <TableCell className="text-right font-bold text-lg text-indigo-700 dark:text-indigo-400">

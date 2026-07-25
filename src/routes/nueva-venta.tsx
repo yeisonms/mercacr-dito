@@ -146,6 +146,7 @@ function NuevaVentaPage() {
 
   // Tipo de venta comercial del formulario
   const [tipoVenta, setTipoVenta] = useState<TipoVentaComercial>("Contado");
+  const [metodoPago, setMetodoPago] = useState<string>("Efectivo");
 
   // Cuota inicial sugerida / ingresada
   const [cuotaInicial, setCuotaInicial] = useState<number>(0);
@@ -576,6 +577,7 @@ function NuevaVentaPage() {
         isRefinanciacion: isRefinanciacion,
         creditoIdRefinanciar: isRefinanciacion && creditoActivo ? creditoActivo.id : undefined,
         saldoAnteriorRefinanciado: isRefinanciacion && creditoActivo ? creditoActivo.saldo_pendiente : 0,
+        metodoPago: tipoVenta === "Contado" ? metodoPago : undefined,
       });
     },
     onSuccess: (res) => {
@@ -1142,6 +1144,28 @@ function NuevaVentaPage() {
                   </div>
                 </RadioGroup>
               </div>
+
+              {/* Método de Pago para Ventas de Contado */}
+              {tipoVenta === "Contado" && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <Label htmlFor="metodo-pago" className="text-sm font-semibold">
+                    Método de Pago <span className="text-red-500">*</span>
+                  </Label>
+                  <Select value={metodoPago} onValueChange={setMetodoPago}>
+                    <SelectTrigger id="metodo-pago" className="w-full">
+                      <SelectValue placeholder="Seleccione un método de pago" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Efectivo">Efectivo</SelectItem>
+                      <SelectItem value="Transferencia">Transferencia</SelectItem>
+                      <SelectItem value="Addi">Addi</SelectItem>
+                      <SelectItem value="Sistecredito">Sistecredito</SelectItem>
+                      <SelectItem value="Brilla">Brilla</SelectItem>
+                      <SelectItem value="Alcanos">Alcanos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Input de Cuota Inicial (solo visible para tipos de crédito) */}
               {tipoVenta !== "Contado" && (

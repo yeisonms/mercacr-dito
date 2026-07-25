@@ -31,6 +31,7 @@ export interface ProcesarVentaInput {
   isRefinanciacion?: boolean;
   creditoIdRefinanciar?: string;
   saldoAnteriorRefinanciado?: number;
+  metodoPago?: string;
 }
 
 /**
@@ -163,6 +164,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
         fecha_proximo_pago: fechaProximoPago,
         fecha_final_estimada: fechaFinalEstimada,
         estado: estadoCredito,
+        metodo_pago: input.metodoPago,
       })
       .eq("id", creditoId);
 
@@ -199,6 +201,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
         fecha_proximo_pago: fechaProximoPago,
         fecha_final_estimada: fechaFinalEstimada,
         estado: estadoCredito,
+        metodo_pago: input.metodoPago,
       })
       .select("id")
       .single();

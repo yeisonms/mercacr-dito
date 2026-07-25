@@ -72,7 +72,7 @@ export async function obtenerKpisDashboard(): Promise<DashboardKpis> {
     const [creditosRes, recaudosRes, recaudosMesRes] = await Promise.all([
       supabase
         .from("creditos")
-        .select("saldo_pendiente, valor_credito, valor_contado, tipo_venta, fecha_venta, estado"),
+        .select("saldo_pendiente, valor_credito, valor_contado, tipo_venta, fecha_venta, estado, penalidad_aplicada, saldo_contado"),
       supabase
         .from("recaudos")
         .select("valor_recibido")
@@ -96,7 +96,13 @@ export async function obtenerKpisDashboard(): Promise<DashboardKpis> {
     // Calcular Cartera Activa (Saldo pendiente de créditos que no están cancelados ni finalizados)
     const carteraActiva = todosCreditos
       .filter(c => c.estado !== "Cancelado" && c.estado !== "Finalizado")
-      .reduce((sum, c) => sum + (Number(c.saldo_pendiente) || 0), 0);
+      .reduce((sum, c) => {
+        let saldo = Number(c.saldo_pendiente) || 0;
+        if (c.tipo_venta === "Credicontado" && !c.penalidad_aplicada) {
+          saldo = Number(c.saldo_contado) || 0;
+        }
+        return sum + saldo;
+      }, 0);
 
     // Calcular Ventas del Mes (Creditos creados en el mes actual)
     const creditosMes = todosCreditos.filter(c => {
@@ -106,8 +112,12 @@ export async function obtenerKpisDashboard(): Promise<DashboardKpis> {
     });
 
     const ventasDelMes = creditosMes.reduce((sum, c) => {
-      // Si es crédito sumamos el valor_credito, si es de contado sumamos el valor_contado
-      const valor = c.tipo_venta === "Contado" ? c.valor_contado : c.valor_credito;
+      let valor = 0;
+      if (c.tipo_venta === "Contado") valor = c.valor_contado;
+      else if (c.tipo_venta === "Credito") valor = c.valor_credito;
+      else if (c.tipo_venta === "Credicontado") {
+        valor = c.penalidad_aplicada ? c.valor_credito : c.valor_contado;
+      }
       return sum + (Number(valor) || 0);
     }, 0);
 

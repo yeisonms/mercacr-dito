@@ -15,6 +15,8 @@ export interface VentaHistorialRow {
   clienteCedula: string;
   vendedorId: string;
   vendedorNombre: string;
+  penalidadAplicada: boolean;
+  metodoPago?: string;
 }
 
 export interface FiltrosHistorial {
@@ -44,6 +46,8 @@ export async function obtenerHistorialVentas({
       valor_credito,
       valor_contado,
       estado,
+      penalidad_aplicada,
+      metodo_pago,
       cliente_id,
       clientes:cliente_id (nombres, apellidos, cedula),
       vendedor_id,
@@ -81,6 +85,8 @@ export async function obtenerHistorialVentas({
       clienteCedula: cliente?.cedula || "N/A",
       vendedorId: row.vendedor_id,
       vendedorNombre: usuario?.nombre_completo || "Desconocido",
+      penalidadAplicada: Boolean(row.penalidad_aplicada),
+      metodoPago: row.metodo_pago,
     };
   });
 }

@@ -190,7 +190,7 @@ function ClientePerfilPage() {
   });
 
   // ── Formulario ─────────────────────────────────────────────────────────────
-  const form = useForm<EditValues>({
+  const form = useForm({
     resolver: zodResolver(editSchema),
     values: cliente
       ? {
@@ -956,6 +956,7 @@ function ClientePerfilPage() {
                           <FormControl>
                             <Input
                               {...field}
+                              value={field.value || ""}
                               disabled={!modoEdicion || mutation.isPending}
                               placeholder="Ej. Cliente moroso incobrable"
                               className={!modoEdicion ? "bg-muted/40" : "border-destructive focus-visible:ring-destructive"}

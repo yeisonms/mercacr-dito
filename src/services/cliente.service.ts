@@ -381,6 +381,7 @@ export interface ActualizarClienteInput {
   foto_cliente_url?: string | null;
   foto_cedula_frente_url?: string | null;
   foto_cedula_respaldo_url?: string | null;
+  foto_casa_1_url?: string | null;
   foto_casa_2_url?: string | null;
   numero_cartera?: string | null;
   bloqueado?: boolean;

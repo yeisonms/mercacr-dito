@@ -379,7 +379,7 @@ function NuevoClientePage() {
             );
           }
 
-          const resultado = await subirDocumentosCliente(nuevoCliente.codigo_consecutivo, {
+          const resultado = await subirDocumentosCliente(values.cedula || "sin-cedula", {
             [tipo]: file,
           });
           urlsDocumentos = { ...urlsDocumentos, ...resultado };
@@ -409,6 +409,7 @@ function NuevoClientePage() {
     try {
       await crearCliente({
         ...values,
+        cedula: values.cedula || "",
         telefono_alterno: values.telefono_alterno || null,
         lugar_trabajo: values.lugar_trabajo || null,
         telefono_trabajo: values.telefono_trabajo || null,

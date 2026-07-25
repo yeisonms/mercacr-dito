@@ -61,6 +61,7 @@ import {
   Percent,
   History,
 } from "lucide-react";
+import { ModalTicketVenta, type TicketVentaData } from "@/components/ventas/ModalTicketVenta";
 
 import { listarClientes } from "@/services/cliente.service";
 import { listarProductos, formatearMoneda } from "@/services/producto.service";
@@ -136,6 +137,7 @@ function NuevaVentaPage() {
   // ─── Estados de Formulario / Venta ───────────────────────────────────────
   const [selectedClienteId, setSelectedClienteId] = useState<string>("");
   const [openCliente, setOpenCliente] = useState(false);
+  const [ticketVentaData, setTicketVentaData] = useState<TicketVentaData | null>(null);
 
   const [selectedProductoId, setSelectedProductoId] = useState<string>("");
   const [openProducto, setOpenProducto] = useState(false);
@@ -213,6 +215,9 @@ function NuevaVentaPage() {
       const precioUnitario = tipoVenta === "Credito Tradicional" ? item.precioCredito : item.precioContado;
       return acc + item.cantidad * precioUnitario;
     }, 0);
+
+    const sumatoriaCreditoProductos = carrito.reduce((acc, item) => acc + item.cantidad * item.precioCredito, 0);
+    const totalCreditoBase = sumatoriaCreditoProductos + saldoAnterior;
 
     const totalBase = sumatoriaProductos + saldoAnterior;
 
@@ -433,6 +438,7 @@ function NuevaVentaPage() {
     return {
       totalBase,
       totalVenta,
+      totalCreditoBase,
       recargoPct,
       numeroCuotas,
       valorCuota,
@@ -558,7 +564,7 @@ function NuevaVentaPage() {
         vendedorId: vendedorId || (perfil?.id as string),
         tipoVenta: dbTipoVenta,
         valorContado: calculosFinancieros.totalBase,
-        valorCredito: calculosFinancieros.totalVenta,
+        valorCredito: dbTipoVenta.startsWith("Credicontado") ? calculosFinancieros.totalCreditoBase : calculosFinancieros.totalVenta,
         cuotaInicial: tipoVenta === "Contado" ? 0 : cuotaInicial,
         saldoPendiente: calculosFinancieros.saldoPendiente,
         numeroCuotas: calculosFinancieros.numeroCuotas,
@@ -575,12 +581,22 @@ function NuevaVentaPage() {
     onSuccess: (res) => {
       toast.success(`🎉 Venta registrada correctamente. Factura: ${res.numeroFactura}`);
       queryClient.invalidateQueries({ queryKey: ["kpis-dashboard"] });
-      // Limpiar formulario
-      setSelectedClienteId("");
-      setCarrito([]);
-      setTipoVenta("Contado");
-      setCuotaInicial(0);
-      navigate({ to: "/" });
+      
+      setTicketVentaData({
+        fecha: new Date().toLocaleString("es-CO", { 
+          timeZone: "America/Bogota", day: "2-digit", month: "short", year: "numeric", 
+          hour: "2-digit", minute: "2-digit", hour12: true 
+        }).replace(',', ''),
+        clienteNombre: `${clienteActual?.nombres} ${clienteActual?.apellidos}`,
+        numeroFactura: res.numeroFactura,
+        tipoVenta: tipoVenta,
+        totalVenta: tipoVenta.includes("Credicontado") ? calculosFinancieros.totalCreditoBase : calculosFinancieros.totalVenta,
+        totalCredicontado: tipoVenta.includes("Credicontado") ? calculosFinancieros.totalVenta : null,
+        abonoInicial: tipoVenta === "Contado" ? calculosFinancieros.totalBase : cuotaInicial,
+        saldoPendiente: calculosFinancieros.saldoPendiente,
+        fechaLimiteCredicontado: calculosFinancieros.fechaFinalEstimada,
+        telefono: clienteActual?.telefono_principal || "",
+      });
     },
     onError: (error: any) => {
       toast.error("Error al procesar la venta", {
@@ -591,6 +607,15 @@ function NuevaVentaPage() {
 
   const handleConfirmarVenta = () => {
     mutation.mutate();
+  };
+
+  const handleCloseTicket = () => {
+    setTicketVentaData(null);
+    setSelectedClienteId("");
+    setCarrito([]);
+    setTipoVenta("Contado");
+    setCuotaInicial(0);
+    navigate({ to: "/" });
   };
 
   return (
@@ -1344,6 +1369,11 @@ function NuevaVentaPage() {
           </Card>
         </div>
       </div>
+      <ModalTicketVenta 
+        isOpen={ticketVentaData !== null} 
+        onClose={handleCloseTicket} 
+        ticketData={ticketVentaData} 
+      />
     </AppShell>
   );
 }

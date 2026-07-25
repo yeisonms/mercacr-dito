@@ -280,9 +280,9 @@ function UsuariosPage() {
     watch,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<CrearUsuarioForm>({ resolver: zodResolver(crearUsuarioSchema) });
+  } = useForm({ resolver: zodResolver(crearUsuarioSchema) });
 
-  const onSubmit = (data: CrearUsuarioForm) => {
+  const onSubmit = (data: any) => {
     crearMutation.mutate({
       nombre_completo: data.nombre_completo,
       email: data.email,

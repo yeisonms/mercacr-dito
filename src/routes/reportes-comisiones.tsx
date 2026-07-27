@@ -20,7 +20,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { obtenerReporteComisiones } from "@/services/comisiones.service";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  obtenerReporteComisiones, 
+  obtenerReporteComisionesCobranza 
+} from "@/services/comisiones.service";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
 export const Route = createFileRoute("/reportes-comisiones")({
@@ -58,36 +62,57 @@ function ReportesComisionesPage() {
   const [mes, setMes] = useState<number>(new Date().getMonth() + 1);
   const [anio, setAnio] = useState<number>(new Date().getFullYear());
 
-  const { data: reporte = [], isLoading } = useQuery({
-    queryKey: ["reporte-comisiones", mes, anio],
+  const { data: reporteVentas = [], isLoading: isLoadingVentas } = useQuery({
+    queryKey: ["reporte-comisiones-ventas", mes, anio],
     queryFn: () => obtenerReporteComisiones(mes, anio),
     enabled: isSupabaseConfigured,
   });
 
+  const { data: reporteCobranza = [], isLoading: isLoadingCobranza } = useQuery({
+    queryKey: ["reporte-comisiones-cobranza", mes, anio],
+    queryFn: () => obtenerReporteComisionesCobranza(mes, anio),
+    enabled: isSupabaseConfigured,
+  });
+
   const exportarExcel = () => {
-    if (!reporte || reporte.length === 0) {
+    if (reporteVentas.length === 0 && reporteCobranza.length === 0) {
       toast.error("No hay datos para exportar.");
       return;
     }
 
-    const dataExcel = reporte.map(r => ({
-      "Nombre Vendedor": r.nombreVendedor,
-      "Cantidad Ventas": r.cantidadVentas,
-      "Total Vendido": r.totalVendido,
-      "% Comisión": r.porcentajeComision,
-      "Comisión a Pagar": r.totalComision,
-    }));
-
-    const ws = utils.json_to_sheet(dataExcel);
     const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, "Comisiones");
+
+    if (reporteVentas.length > 0) {
+      const dataVentas = reporteVentas.map(r => ({
+        "Nombre Vendedor": r.nombreVendedor,
+        "Cantidad Ventas": r.cantidadVentas,
+        "Total Vendido": r.totalVendido,
+        "% Comisión": r.porcentajeVentas,
+        "Comisión a Pagar": r.totalComision,
+      }));
+      const wsVentas = utils.json_to_sheet(dataVentas);
+      utils.book_append_sheet(wb, wsVentas, "Comisiones Ventas");
+    }
+
+    if (reporteCobranza.length > 0) {
+      const dataCobranza = reporteCobranza.map(r => ({
+        "Nombre Cobrador": r.nombreCobrador,
+        "Cantidad Recaudos": r.cantidadRecaudos,
+        "Total Recaudado": r.totalRecaudado,
+        "% Comisión": r.porcentajeCobranza,
+        "Comisión a Pagar": r.totalComision,
+      }));
+      const wsCobranza = utils.json_to_sheet(dataCobranza);
+      utils.book_append_sheet(wb, wsCobranza, "Comisiones Cobranza");
+    }
 
     const nombreMes = MESES.find(m => m.value === mes)?.label || "";
     writeFile(wb, `Reporte_Comisiones_${nombreMes}_${anio}.xlsx`);
     toast.success("Excel descargado correctamente.");
   };
 
-  const totalPagar = reporte.reduce((acc, curr) => acc + curr.totalComision, 0);
+  const totalPagarVentas = reporteVentas.reduce((acc, curr) => acc + curr.totalComision, 0);
+  const totalPagarCobranza = reporteCobranza.reduce((acc, curr) => acc + curr.totalComision, 0);
 
   return (
     <AppShell
@@ -137,62 +162,130 @@ function ReportesComisionesPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/60 shadow-sm">
-          <div className="rounded-xl overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40">
-                  <TableHead className="font-semibold uppercase text-xs tracking-wider">Vendedor</TableHead>
-                  <TableHead className="font-semibold uppercase text-xs tracking-wider text-right">Ventas</TableHead>
-                  <TableHead className="font-semibold uppercase text-xs tracking-wider text-right">Total Vendido</TableHead>
-                  <TableHead className="font-semibold uppercase text-xs tracking-wider text-right">% Comisión</TableHead>
-                  <TableHead className="font-semibold uppercase text-xs tracking-wider text-right text-indigo-700 dark:text-indigo-400">Comisión a Pagar</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  Array.from({ length: 3 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-12 ml-auto" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
+        <Tabs defaultValue="ventas" className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="ventas">Comisiones por Ventas</TabsTrigger>
+            <TabsTrigger value="cobranza">Comisiones por Cobranza</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="ventas">
+            <Card className="border-border/60 shadow-sm">
+              <div className="rounded-xl overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead className="font-semibold uppercase text-xs tracking-wider">Vendedor</TableHead>
+                      <TableHead className="font-semibold uppercase text-xs tracking-wider text-right">Ventas</TableHead>
+                      <TableHead className="font-semibold uppercase text-xs tracking-wider text-right">Total Vendido</TableHead>
+                      <TableHead className="font-semibold uppercase text-xs tracking-wider text-right">% Comisión</TableHead>
+                      <TableHead className="font-semibold uppercase text-xs tracking-wider text-right text-indigo-700 dark:text-indigo-400">Comisión a Pagar</TableHead>
                     </TableRow>
-                  ))
-                ) : reporte.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
-                      No hay comisiones registradas en este periodo.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  <>
-                    {reporte.map((r) => (
-                      <TableRow key={r.vendedorId}>
-                        <TableCell className="font-medium">{r.nombreVendedor}</TableCell>
-                        <TableCell className="text-right">{r.cantidadVentas}</TableCell>
-                        <TableCell className="text-right">{formatearMoneda(r.totalVendido)}</TableCell>
-                        <TableCell className="text-right font-mono">{r.porcentajeComision}%</TableCell>
-                        <TableCell className="text-right font-semibold text-indigo-700 dark:text-indigo-400">
-                          {formatearMoneda(r.totalComision)}
+                  </TableHeader>
+                  <TableBody>
+                    {isLoadingVentas ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <TableRow key={i}>
+                          <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-12 ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : reporteVentas.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
+                          No hay comisiones de ventas en este periodo.
                         </TableCell>
                       </TableRow>
-                    ))}
-                    <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableCell colSpan={4} className="text-right font-bold uppercase text-xs tracking-wider">
-                        Total Liquidación Nómina
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-lg text-indigo-700 dark:text-indigo-400">
-                        {formatearMoneda(totalPagar)}
-                      </TableCell>
+                    ) : (
+                      <>
+                        {reporteVentas.map((r) => (
+                          <TableRow key={r.vendedorId}>
+                            <TableCell className="font-medium">{r.nombreVendedor}</TableCell>
+                            <TableCell className="text-right">{r.cantidadVentas}</TableCell>
+                            <TableCell className="text-right">{formatearMoneda(r.totalVendido)}</TableCell>
+                            <TableCell className="text-right font-mono">{r.porcentajeVentas}%</TableCell>
+                            <TableCell className="text-right font-semibold text-indigo-700 dark:text-indigo-400">
+                              {formatearMoneda(r.totalComision)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                          <TableCell colSpan={4} className="text-right font-bold uppercase text-xs tracking-wider">
+                            Total Liquidación Ventas
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-lg text-indigo-700 dark:text-indigo-400">
+                            {formatearMoneda(totalPagarVentas)}
+                          </TableCell>
+                        </TableRow>
+                      </>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="cobranza">
+            <Card className="border-border/60 shadow-sm">
+              <div className="rounded-xl overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead className="font-semibold uppercase text-xs tracking-wider">Cobrador</TableHead>
+                      <TableHead className="font-semibold uppercase text-xs tracking-wider text-right">Recaudos</TableHead>
+                      <TableHead className="font-semibold uppercase text-xs tracking-wider text-right">Total Recaudado</TableHead>
+                      <TableHead className="font-semibold uppercase text-xs tracking-wider text-right">% Comisión</TableHead>
+                      <TableHead className="font-semibold uppercase text-xs tracking-wider text-right text-indigo-700 dark:text-indigo-400">Comisión a Pagar</TableHead>
                     </TableRow>
-                  </>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoadingCobranza ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <TableRow key={i}>
+                          <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-12 ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : reporteCobranza.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
+                          No hay comisiones de cobranza en este periodo.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      <>
+                        {reporteCobranza.map((r) => (
+                          <TableRow key={r.cobradorId}>
+                            <TableCell className="font-medium">{r.nombreCobrador}</TableCell>
+                            <TableCell className="text-right">{r.cantidadRecaudos}</TableCell>
+                            <TableCell className="text-right">{formatearMoneda(r.totalRecaudado)}</TableCell>
+                            <TableCell className="text-right font-mono">{r.porcentajeCobranza}%</TableCell>
+                            <TableCell className="text-right font-semibold text-indigo-700 dark:text-indigo-400">
+                              {formatearMoneda(r.totalComision)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                          <TableCell colSpan={4} className="text-right font-bold uppercase text-xs tracking-wider">
+                            Total Liquidación Cobranza
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-lg text-indigo-700 dark:text-indigo-400">
+                            {formatearMoneda(totalPagarCobranza)}
+                          </TableCell>
+                        </TableRow>
+                      </>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </AppShell>
   );

@@ -1,11 +1,20 @@
 import { supabase } from "@/lib/supabase";
 
-export interface ReporteComisionRow {
+export interface ReporteComisionVentasRow {
   vendedorId: string;
   nombreVendedor: string;
   cantidadVentas: number;
   totalVendido: number;
-  porcentajeComision: number;
+  porcentajeVentas: number;
+  totalComision: number;
+}
+
+export interface ReporteComisionCobranzaRow {
+  cobradorId: string;
+  nombreCobrador: string;
+  cantidadRecaudos: number;
+  totalRecaudado: number;
+  porcentajeCobranza: number;
   totalComision: number;
 }
 
@@ -16,7 +25,7 @@ export interface ReporteComisionRow {
 export async function obtenerReporteComisiones(
   mes: number,
   anio: number
-): Promise<ReporteComisionRow[]> {
+): Promise<ReporteComisionVentasRow[]> {
   // Construir primer y último día del mes (formato YYYY-MM-DD)
   const startDate = new Date(anio, mes - 1, 1).toISOString().split("T")[0];
   const endDate = new Date(anio, mes, 0).toISOString().split("T")[0];
@@ -33,7 +42,7 @@ export async function obtenerReporteComisiones(
       usuarios:vendedor_id (
         id, 
         nombre_completo, 
-        porcentaje_comision
+        porcentaje_ventas
       )
     `)
     .or(`and(fecha_venta.gte.${startDate},fecha_venta.lte.${endDate}),and(fecha_penalidad.gte.${startDate},fecha_penalidad.lte.${endDate})`);
@@ -43,7 +52,7 @@ export async function obtenerReporteComisiones(
   }
 
   // Agrupar por vendedor
-  const map = new Map<string, ReporteComisionRow>();
+  const map = new Map<string, ReporteComisionVentasRow>();
 
   for (const row of data || []) {
     const usuario = Array.isArray(row.usuarios) ? row.usuarios[0] : row.usuarios;
@@ -53,7 +62,7 @@ export async function obtenerReporteComisiones(
 
     const vendedorId = usuario.id;
     const nombreVendedor = usuario.nombre_completo;
-    const porcentajeComision = Number(usuario.porcentaje_comision) || 0;
+    const porcentajeVentas = Number(usuario.porcentaje_ventas) || 0;
 
     if (!map.has(vendedorId)) {
       map.set(vendedorId, {
@@ -61,7 +70,7 @@ export async function obtenerReporteComisiones(
         nombreVendedor,
         cantidadVentas: 0,
         totalVendido: 0,
-        porcentajeComision,
+        porcentajeVentas,
         totalComision: 0,
       });
     }
@@ -91,7 +100,69 @@ export async function obtenerReporteComisiones(
     }
 
     current.totalVendido += baseComision;
-    current.totalComision = current.totalVendido * (current.porcentajeComision / 100);
+    current.totalComision = current.totalVendido * (current.porcentajeVentas / 100);
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.totalComision - a.totalComision);
+}
+
+/**
+ * Obtiene el reporte de comisiones agrupado por cobrador (para abonos/recaudos)
+ * para un mes y año específicos.
+ */
+export async function obtenerReporteComisionesCobranza(
+  mes: number,
+  anio: number
+): Promise<ReporteComisionCobranzaRow[]> {
+  const startDate = new Date(anio, mes - 1, 1).toISOString();
+  const endDate = new Date(anio, mes, 0, 23, 59, 59, 999).toISOString();
+
+  const { data, error } = await supabase
+    .from("recaudos")
+    .select(`
+      valor_recibido,
+      estado,
+      usuarios:cobrador_id (
+        id, 
+        nombre_completo, 
+        porcentaje_cobranza
+      )
+    `)
+    .gte("fecha_recaudo", startDate)
+    .lte("fecha_recaudo", endDate)
+    .eq("estado", "Aprobado");
+
+  if (error) {
+    throw new Error(`Error obteniendo reporte de comisiones de cobranza: ${error.message}`);
+  }
+
+  const map = new Map<string, ReporteComisionCobranzaRow>();
+
+  for (const row of data || []) {
+    const usuario = Array.isArray(row.usuarios) ? row.usuarios[0] : row.usuarios;
+    
+    if (!usuario) continue;
+
+    const cobradorId = usuario.id;
+    const nombreCobrador = usuario.nombre_completo;
+    const porcentajeCobranza = Number(usuario.porcentaje_cobranza) || 0;
+
+    if (!map.has(cobradorId)) {
+      map.set(cobradorId, {
+        cobradorId,
+        nombreCobrador,
+        cantidadRecaudos: 0,
+        totalRecaudado: 0,
+        porcentajeCobranza,
+        totalComision: 0,
+      });
+    }
+
+    const current = map.get(cobradorId)!;
+
+    current.cantidadRecaudos += 1;
+    current.totalRecaudado += Number(row.valor_recibido) || 0;
+    current.totalComision = current.totalRecaudado * (current.porcentajeCobranza / 100);
   }
 
   return Array.from(map.values()).sort((a, b) => b.totalComision - a.totalComision);

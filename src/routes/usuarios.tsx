@@ -115,7 +115,8 @@ const crearUsuarioSchema = z
       ["Administrador", "Gerencia", "Cobrador", "Vendedor", "Auxiliar"],
       { required_error: "Selecciona un rol" }
     ),
-    porcentaje_comision: z.coerce.number().min(0).max(100).default(0),
+    porcentaje_ventas: z.coerce.number().min(0).max(100).default(0),
+    porcentaje_cobranza: z.coerce.number().min(0).max(100).default(0),
     password: z
       .string()
       .min(8, "Mínimo 8 caracteres")
@@ -173,43 +174,55 @@ function formatFecha(ts: string): string {
 
 function ComisionCell({ usuario }: { usuario: UsuarioRow }) {
   const qc = useQueryClient();
-  const [val, setVal] = useState(usuario.porcentaje_comision.toString());
+  const [valVentas, setValVentas] = useState(usuario.porcentaje_ventas.toString());
+  const [valCobranza, setValCobranza] = useState(usuario.porcentaje_cobranza.toString());
   
   const mutation = useMutation({
-    mutationFn: (newVal: number) => actualizarComisionUsuario(usuario.id, newVal),
+    mutationFn: ({ ventas, cobranza }: { ventas: number, cobranza: number }) => actualizarComisionUsuario(usuario.id, ventas, cobranza),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["usuarios"] });
-      toast.success("Comisión actualizada.");
+      toast.success("Comisiones actualizadas.");
     },
     onError: () => {
-      toast.error("Error al actualizar la comisión.");
-      setVal(usuario.porcentaje_comision.toString());
+      toast.error("Error al actualizar las comisiones.");
+      setValVentas(usuario.porcentaje_ventas.toString());
+      setValCobranza(usuario.porcentaje_cobranza.toString());
     }
   });
 
   const handleBlur = () => {
-    const parsed = parseFloat(val);
-    if (!isNaN(parsed) && parsed !== usuario.porcentaje_comision) {
-      mutation.mutate(parsed);
+    const parsedVentas = parseFloat(valVentas);
+    const parsedCobranza = parseFloat(valCobranza);
+    
+    if (!isNaN(parsedVentas) && !isNaN(parsedCobranza) && 
+        (parsedVentas !== usuario.porcentaje_ventas || parsedCobranza !== usuario.porcentaje_cobranza)) {
+      mutation.mutate({ ventas: parsedVentas, cobranza: parsedCobranza });
     } else {
-      setVal(usuario.porcentaje_comision.toString());
+      setValVentas(usuario.porcentaje_ventas.toString());
+      setValCobranza(usuario.porcentaje_cobranza.toString());
     }
   };
 
   return (
-    <div className="flex items-center gap-1">
-      <Input 
-        type="number" 
-        step="0.01" 
-        min="0"
-        max="100"
-        className="h-7 w-16 px-2 text-xs font-mono tabular-nums text-right" 
-        value={val} 
-        onChange={(e) => setVal(e.target.value)} 
-        onBlur={handleBlur} 
-        disabled={mutation.isPending}
-      />
-      <span className="text-xs text-muted-foreground">%</span>
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1">
+        <span className="text-[10px] text-muted-foreground w-3">V:</span>
+        <Input 
+          type="number" step="0.01" min="0" max="100"
+          className="h-6 w-14 px-1 text-[10px] font-mono tabular-nums text-right" 
+          value={valVentas} onChange={(e) => setValVentas(e.target.value)} onBlur={handleBlur} disabled={mutation.isPending}
+        />
+        <span className="text-[10px] text-muted-foreground">%</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <span className="text-[10px] text-muted-foreground w-3">C:</span>
+        <Input 
+          type="number" step="0.01" min="0" max="100"
+          className="h-6 w-14 px-1 text-[10px] font-mono tabular-nums text-right" 
+          value={valCobranza} onChange={(e) => setValCobranza(e.target.value)} onBlur={handleBlur} disabled={mutation.isPending}
+        />
+        <span className="text-[10px] text-muted-foreground">%</span>
+      </div>
     </div>
   );
 }
@@ -288,7 +301,8 @@ function UsuariosPage() {
       email: data.email,
       password: data.password,
       rol_nombre: data.rol_nombre,
-      porcentaje_comision: data.porcentaje_comision,
+      porcentaje_ventas: data.porcentaje_ventas,
+      porcentaje_cobranza: data.porcentaje_cobranza,
     });
   };
 
@@ -333,8 +347,8 @@ function UsuariosPage() {
                 <TableHead className="text-xs font-semibold uppercase tracking-wider hidden md:table-cell">
                   Registrado
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider">
-                  % Comisión
+                <TableHead className="w-[120px] text-right font-medium text-xs uppercase tracking-wider text-muted-foreground">
+                  Comisiones (%)
                 </TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wider">
                   Estado
@@ -557,23 +571,42 @@ function UsuariosPage() {
               )}
             </div>
 
-            {/* Comisión */}
-            <div className="space-y-1.5">
-              <Label htmlFor="porcentaje_comision" className="text-xs font-medium">
-                % Comisión
-              </Label>
-              <Input
-                id="porcentaje_comision"
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                placeholder="0.00"
-                {...register("porcentaje_comision")}
-              />
-              {errors.porcentaje_comision && (
-                <p className="text-xs text-rose-500">{errors.porcentaje_comision.message}</p>
-              )}
+            {/* Comisiones */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="porcentaje_ventas" className="text-xs font-medium">
+                  % Ventas
+                </Label>
+                <Input
+                  id="porcentaje_ventas"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  placeholder="0.00"
+                  {...register("porcentaje_ventas")}
+                />
+                {errors.porcentaje_ventas && (
+                  <p className="text-xs text-rose-500">{errors.porcentaje_ventas.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="porcentaje_cobranza" className="text-xs font-medium">
+                  % Cobranza
+                </Label>
+                <Input
+                  id="porcentaje_cobranza"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  placeholder="0.00"
+                  {...register("porcentaje_cobranza")}
+                />
+                {errors.porcentaje_cobranza && (
+                  <p className="text-xs text-rose-500">{errors.porcentaje_cobranza.message}</p>
+                )}
+              </div>
             </div>
 
             {/* Contraseña */}

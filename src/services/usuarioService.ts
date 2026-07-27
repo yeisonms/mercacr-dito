@@ -22,7 +22,8 @@ export interface UsuarioRow {
   fecha_creacion: string;
   rol: RolNombre;
   rol_id: number;
-  porcentaje_comision: number;
+  porcentaje_ventas: number;
+  porcentaje_cobranza: number;
 }
 
 export interface CrearUsuarioInput {
@@ -30,7 +31,8 @@ export interface CrearUsuarioInput {
   email: string;
   password: string;
   rol_nombre: RolNombre;
-  porcentaje_comision: number;
+  porcentaje_ventas: number;
+  porcentaje_cobranza: number;
 }
 
 // ── Queries ──────────────────────────────────────────────────────────────────
@@ -42,7 +44,7 @@ export async function obtenerUsuarios(): Promise<UsuarioRow[]> {
   const { data, error } = await supabase
     .from("usuarios")
     .select(
-      "id, nombre_completo, email, estado, fecha_creacion, rol_id, porcentaje_comision, roles ( nombre_rol )"
+      "id, nombre_completo, email, estado, fecha_creacion, rol_id, porcentaje_ventas, porcentaje_cobranza, roles ( nombre_rol )"
     )
     .order("fecha_creacion", { ascending: false });
 
@@ -63,7 +65,8 @@ export async function obtenerUsuarios(): Promise<UsuarioRow[]> {
       fecha_creacion: u.fecha_creacion,
       rol: rolNombre,
       rol_id: u.rol_id,
-      porcentaje_comision: Number(u.porcentaje_comision) || 0,
+      porcentaje_ventas: Number(u.porcentaje_ventas) || 0,
+      porcentaje_cobranza: Number(u.porcentaje_cobranza) || 0,
     };
   });
 }
@@ -118,7 +121,8 @@ export async function crearUsuario(input: CrearUsuarioInput): Promise<void> {
     password_hash: "managed_by_supabase_auth",
     rol_id: rolId,
     estado: "Activo",
-    porcentaje_comision: input.porcentaje_comision,
+    porcentaje_ventas: input.porcentaje_ventas,
+    porcentaje_cobranza: input.porcentaje_cobranza,
   });
 
   if (insertError) {
@@ -149,11 +153,12 @@ export async function actualizarEstadoUsuario(
  */
 export async function actualizarComisionUsuario(
   id: string,
-  porcentaje_comision: number
+  porcentaje_ventas: number,
+  porcentaje_cobranza: number
 ): Promise<void> {
   const { error } = await supabase
     .from("usuarios")
-    .update({ porcentaje_comision })
+    .update({ porcentaje_ventas, porcentaje_cobranza })
     .eq("id", id);
 
   if (error) throw error;

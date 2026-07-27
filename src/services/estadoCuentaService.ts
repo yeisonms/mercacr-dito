@@ -65,13 +65,33 @@ export interface EstadoCuentaResponse {
 /**
  * Obtiene todos los clientes para el buscador autocompletable.
  */
-export async function buscarClientesParaEstadoCuenta(): Promise<ClienteBusqueda[]> {
+export async function buscarClientesParaEstadoCuenta(cobradorId?: string): Promise<ClienteBusqueda[]> {
   if (!isSupabaseConfigured) return [];
 
-  const { data, error } = await supabase
+  let rutaIds: string[] = [];
+  if (cobradorId) {
+    const { data: rutasData } = await supabase
+      .from("rutas")
+      .select("id")
+      .eq("cobrador_id", cobradorId);
+    
+    if (rutasData && rutasData.length > 0) {
+      rutaIds = rutasData.map(r => r.id);
+    } else {
+      return []; // Si el cobrador no tiene rutas, no debe ver clientes
+    }
+  }
+
+  let query = supabase
     .from("clientes")
     .select("id, nombres, apellidos, cedula, codigo_consecutivo")
     .order("nombres");
+
+  if (cobradorId && rutaIds.length > 0) {
+    query = query.in("ruta_id", rutaIds);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("[estadoCuentaService] Error al buscar clientes:", error);

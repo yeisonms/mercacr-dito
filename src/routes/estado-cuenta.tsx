@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { obtenerHistorialGestiones } from "@/services/gestionService";
+import { useAuth } from "@/context/AuthContext";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,6 +98,7 @@ function formatearFechaHora(timestampStr: string | null): string {
 }
 
 function EstadoCuentaPage() {
+  const { perfil } = useAuth();
   const [selectedClienteId, setSelectedClienteId] = useState<string>("");
   const [openCliente, setOpenCliente] = useState(false);
   const [isModalPagoOpen, setIsModalPagoOpen] = useState(false);
@@ -130,8 +132,9 @@ function EstadoCuentaPage() {
 
   // Query para cargar la lista de clientes del buscador
   const { data: clientes = [], isLoading: loadingClientes } = useQuery({
-    queryKey: ["clientes-busqueda-estado-cuenta"],
-    queryFn: buscarClientesParaEstadoCuenta,
+    queryKey: ["clientes-busqueda-estado-cuenta", perfil?.id],
+    queryFn: () => buscarClientesParaEstadoCuenta(perfil?.rol === "Cobrador" ? perfil.id : undefined),
+    enabled: !!perfil,
   });
 
   // Query para cargar el estado de cuenta del cliente seleccionado

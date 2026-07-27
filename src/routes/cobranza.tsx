@@ -86,7 +86,7 @@ import {
   type CreditoCobro,
 } from "@/services/recaudoService";
 import { registrarPromesaPago } from "@/services/gestionService";
-import { buscarClientesParaEstadoCuenta, obtenerEstadoCuenta } from "@/services/estadoCuentaService";
+import { buscarClientesParaEstadoCuenta, obtenerEstadoCuenta, ClienteBusqueda } from "@/services/estadoCuentaService";
 import { ModalPago } from "@/components/pago/ModalPago";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
@@ -379,9 +379,9 @@ function CobranzaPage() {
   const [isModalPagoLibreOpen, setIsModalPagoLibreOpen] = useState(false);
   const [creditoLibre, setCreditoLibre] = useState<CreditoCobro | null>(null);
 
-  const { data: clientesLibres = [] } = useQuery({
-    queryKey: ["clientesBusquedaRapida"],
-    queryFn: buscarClientesParaEstadoCuenta,
+  const { data: clientesLibres = [] } = useQuery<ClienteBusqueda[]>({
+    queryKey: ["clientesBusquedaRapida", perfil?.id],
+    queryFn: () => buscarClientesParaEstadoCuenta(perfil?.rol === "Cobrador" ? perfil.id : undefined),
     enabled: openQuickSearch,
   });
 

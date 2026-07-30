@@ -389,12 +389,18 @@ function EstadoCuentaPage() {
                           </div>
                           <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
                             <span className="text-xs text-muted-foreground font-semibold">Saldo Pendiente:</span>
-                            <span className="text-sm font-extrabold text-primary">
-                              {estadoCuenta.credito.penalidadAplicada || estadoCuenta.credito.saldoContado == null
-                                ? formatearMoneda(estadoCuenta.credito.saldoPendiente) 
-                                : formatearMoneda(estadoCuenta.credito.saldoContado)}
+                            <span className="text-sm font-extrabold text-foreground">
+                              {formatearMoneda(estadoCuenta.credito.saldoPendiente)}
                             </span>
                           </div>
+                          {!estadoCuenta.credito.penalidadAplicada && estadoCuenta.credito.saldoContado != null && (
+                            <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                              <span className="text-xs text-muted-foreground font-semibold">Saldo Credicontado:</span>
+                              <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                                {formatearMoneda(estadoCuenta.credito.saldoContado)}
+                              </span>
+                            </div>
+                          )}
                         </>
                       ) : (
                         <>

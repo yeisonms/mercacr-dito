@@ -74,7 +74,7 @@ export async function buscarClientesParaEstadoCuenta(cobradorId?: string): Promi
       .from("rutas")
       .select("id")
       .eq("cobrador_id", cobradorId);
-    
+
     if (rutasData && rutasData.length > 0) {
       rutaIds = rutasData.map(r => r.id);
     } else {
@@ -239,9 +239,17 @@ export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuen
         valorCredito: Number(creditoActual.valor_credito) || 0,
         valorContado: Number(creditoActual.valor_contado) || 0,
         saldoPendiente: Number(creditoActual.saldo_pendiente) || 0,
-        saldoContado: creditoActual.saldo_contado != null ? Number(creditoActual.saldo_contado) : undefined,
+        saldoContado: creditoActual.saldo_contado != null 
+          ? Number(creditoActual.saldo_contado) 
+          : (creditoActual.tipo_venta === "Credicontado" && Number(creditoActual.valor_contado) > 0 && !creditoActual.penalidad_aplicada 
+             ? Number(creditoActual.valor_contado) - (Number(creditoActual.valor_credito) - Number(creditoActual.saldo_pendiente))
+             : undefined),
         penalidadAplicada: Boolean(creditoActual.penalidad_aplicada),
-        fechaLimiteCredicontado: creditoActual.fecha_limite_credicontado,
+        fechaLimiteCredicontado: creditoActual.fecha_limite_credicontado 
+          ? creditoActual.fecha_limite_credicontado 
+          : (creditoActual.tipo_venta?.includes("Credicontado") && !creditoActual.penalidad_aplicada 
+             ? new Date(new Date(creditoActual.fecha_venta).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] 
+             : null),
         fechaVenta: creditoActual.fecha_venta,
         fechaProximoPago: creditoActual.fecha_proximo_pago,
         estado: creditoActual.estado,
@@ -306,7 +314,7 @@ export async function aplicarPenalidadCredicontado(creditoId: string): Promise<v
 
     if (!cuotasError && cuotas && cuotas.length > 0) {
       const ultimaCuota = cuotas[0];
-      
+
       // Crear una nueva cuota para el saldo de la penalidad
       const { error: insertError } = await supabase
         .from("cuotas")
@@ -319,7 +327,7 @@ export async function aplicarPenalidadCredicontado(creditoId: string): Promise<v
           saldo_cuota: diferencia,
           estado: "Pendiente"
         });
-        
+
       if (!insertError) {
         incrementCuotas = 1;
       }

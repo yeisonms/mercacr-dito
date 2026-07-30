@@ -22,6 +22,7 @@ export interface ProcesarVentaInput {
   valorCredito: number;
   cuotaInicial: number;
   saldoPendiente: number;
+  saldoContado?: number;
   numeroCuotas: number;
   valorCuota: number;
   frecuenciaPago: "Semanal" | "Quincenal" | "Mensual" | "Única" | "Decenal" | null;
@@ -158,6 +159,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
         valor_credito: nuevoValorCredito,
         valor_contado: nuevoValorContado,
         saldo_pendiente: input.saldoPendiente,
+        saldo_contado: input.saldoContado,
         numero_cuotas: input.numeroCuotas,
         valor_cuota: input.valorCuota,
         frecuencia_pago: input.tipoVenta === "Credito" ? input.frecuenciaPago : "Mensual",
@@ -195,6 +197,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
         valor_credito: input.valorCredito,
         cuota_inicial: input.tipoVenta !== "Contado" ? input.cuotaInicial : 0,
         saldo_pendiente: input.tipoVenta !== "Contado" ? input.saldoPendiente : 0,
+        saldo_contado: input.tipoVenta !== "Contado" && input.saldoContado !== undefined ? input.saldoContado : null,
         numero_cuotas: input.tipoVenta !== "Contado" ? input.numeroCuotas : 0,
         valor_cuota: input.tipoVenta !== "Contado" ? input.valorCuota : 0,
         frecuencia_pago: input.tipoVenta !== "Contado" ? input.frecuenciaPago : "Mensual",
@@ -278,8 +281,12 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
       }
 
       let valorCuotaActual = input.valorCuota;
+      const targetBalance = (input.tipoVenta.includes("Credicontado") && input.saldoContado !== undefined && input.saldoContado !== null)
+        ? input.saldoContado
+        : input.saldoPendiente;
+
       if (i === input.numeroCuotas) {
-        valorCuotaActual = input.saldoPendiente - totalAcumuladoCuotas;
+        valorCuotaActual = targetBalance - totalAcumuladoCuotas;
       } else {
         totalAcumuladoCuotas += valorCuotaActual;
       }

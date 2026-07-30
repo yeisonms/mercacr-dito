@@ -13,7 +13,8 @@ export interface TicketVentaData {
   totalVenta: number;
   totalCredicontado: number | null;
   abonoInicial: number;
-  saldoPendiente: number;
+  saldoPendiente: number; // Saldo Crédito
+  saldoCredicontado?: number | null; // Saldo Credicontado
   fechaLimiteCredicontado: string | null;
   telefono: string;
 }
@@ -81,6 +82,9 @@ export function ModalTicketVenta({ isOpen, onClose, ticketData }: ModalTicketVen
       }
       mensaje += `✅ *Abono Inicial:* $${ticketData.abonoInicial.toLocaleString()}\n`;
       mensaje += `⚠️ *Saldo Crédito:* $${ticketData.saldoPendiente.toLocaleString()}\n`;
+      if (ticketData.saldoCredicontado !== undefined && ticketData.saldoCredicontado !== null) {
+        mensaje += `⚠️ *Saldo Credicontado:* $${ticketData.saldoCredicontado.toLocaleString()}\n`;
+      }
       
       if (ticketData.fechaLimiteCredicontado) {
         const fechaLimite = new Date(ticketData.fechaLimiteCredicontado + "T00:00:00").toLocaleDateString("es-CO", { 
@@ -170,12 +174,18 @@ export function ModalTicketVenta({ isOpen, onClose, ticketData }: ModalTicketVen
                     </div>
                     <div className="flex justify-between items-center pt-2">
                       <span className="text-xs font-medium text-muted-foreground">Total Credicontado</span>
-                      <span className="text-sm font-medium text-blue-600">${ticketData.totalCredicontado?.toLocaleString()}</span>
+                      <span className="text-sm font-medium text-emerald-600">${ticketData.totalCredicontado?.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center pt-2 border-t border-dashed border-slate-200 mt-2">
                       <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Saldo Crédito</span>
                       <span className="text-sm font-black text-amber-600">${ticketData.saldoPendiente.toLocaleString()}</span>
                     </div>
+                    {ticketData.saldoCredicontado !== undefined && ticketData.saldoCredicontado !== null && (
+                      <div className="flex justify-between items-center pt-2">
+                        <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Saldo Credicontado</span>
+                        <span className="text-sm font-black text-emerald-600">${ticketData.saldoCredicontado.toLocaleString()}</span>
+                      </div>
+                    )}
                     {ticketData.fechaLimiteCredicontado && (
                       <div className="flex justify-between items-center pt-2 mt-2">
                         <span className="text-xs font-medium text-muted-foreground">Límite Beneficio</span>

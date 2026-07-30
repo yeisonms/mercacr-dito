@@ -237,10 +237,28 @@ export function ModalPago({ isOpen, onClose, creditoSeleccionado, onSuccess }: M
 
   const enviarWhatsApp = () => {
     if (!reciboData) return;
-    const { clienteNombre, abono, saldoPendiente, telefono } = reciboData;
+    const { clienteNombre, abono, saldoPendiente, saldoCredicontado, penalidadAplicada, fechaLimitePago, telefono } = reciboData;
     let tel = telefono.replace(/\D/g, "");
     if (!tel.startsWith("57") && tel.length === 10) tel = "57" + tel;
-    const mensaje = `Hola *${clienteNombre}*, confirmamos el pago de tu cuota con *Mercacrédito*. Abono: *$${abono.toLocaleString()}*. Tu saldo pendiente es: *$${saldoPendiente.toLocaleString()}*. ¡Gracias por tu pago!`;
+    
+    let mensaje = `*MERCACRÉDITO - PAGO REGISTRADO*\n\n`;
+    mensaje += `Hola *${clienteNombre}*, confirmamos el pago de tu cuota.\n\n`;
+    mensaje += `✅ *Abono Realizado:* $${abono.toLocaleString()}\n`;
+    mensaje += `⚠️ *Saldo Crédito:* $${saldoPendiente.toLocaleString()}\n`;
+    
+    if (saldoCredicontado !== undefined && saldoCredicontado !== null && !penalidadAplicada) {
+      mensaje += `⚠️ *Saldo Credicontado:* $${saldoCredicontado.toLocaleString()}\n`;
+    }
+    
+    if (fechaLimitePago) {
+      const fechaLimite = new Date(fechaLimitePago + "T00:00:00").toLocaleDateString("es-CO", { 
+        timeZone: "America/Bogota", day: "2-digit", month: "short", year: "numeric" 
+      });
+      mensaje += `⏰ *Límite Beneficio:* ${fechaLimite}\n`;
+    }
+    
+    mensaje += `\n_¡Gracias por tu pago!_`;
+    
     const encoded = encodeURIComponent(mensaje);
     window.open(`https://wa.me/${tel}?text=${encoded}`, "_blank");
   };
@@ -267,24 +285,26 @@ export function ModalPago({ isOpen, onClose, creditoSeleccionado, onSuccess }: M
               <TabsContent value="pago">
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                   <div className="px-4 space-y-4 mt-2">
-                    <div className="rounded-xl bg-primary/5 dark:bg-primary/10 border border-primary/15 p-4 flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <span className="text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
-                          {creditoSeleccionado.tipo_venta === "Credicontado" && !creditoSeleccionado.penalidad_aplicada && creditoSeleccionado.saldo_contado != null 
-                            ? "Saldo Crédito / Contado" 
-                            : "Saldo Pendiente Actual"}
-                        </span>
-                        <p className="text-xl font-black text-primary">
-                          {creditoSeleccionado.tipo_venta === "Credicontado" && !creditoSeleccionado.penalidad_aplicada && creditoSeleccionado.saldo_contado != null ? (
-                            <span className="flex items-center gap-2">
-                              <span className="text-muted-foreground/60 line-through text-base">{formatearMoneda(creditoSeleccionado.saldo_pendiente)}</span>
-                              <span className="text-emerald-600 dark:text-emerald-400">{formatearMoneda(creditoSeleccionado.saldo_contado)}</span>
-                            </span>
-                          ) : (
-                            formatearMoneda(creditoSeleccionado.saldo_pendiente)
-                          )}
-                        </p>
-                      </div>
+                    <div className="flex flex-col gap-2">
+                      {creditoSeleccionado.tipo_venta === "Credicontado" && !creditoSeleccionado.penalidad_aplicada && creditoSeleccionado.saldo_contado != null ? (
+                        <div className="flex w-full justify-between gap-4">
+                          <div className="flex-1 rounded-xl bg-muted/30 p-3 flex flex-col justify-center text-center">
+                            <span className="text-2xs uppercase tracking-wider font-semibold text-muted-foreground">Saldo Crédito</span>
+                            <span className="text-lg font-bold text-foreground">{formatearMoneda(creditoSeleccionado.saldo_pendiente)}</span>
+                          </div>
+                          <div className="flex-1 rounded-xl bg-emerald-500/10 p-3 flex flex-col justify-center text-center border border-emerald-500/20">
+                            <span className="text-2xs uppercase tracking-wider font-bold text-emerald-700">Saldo Credicontado</span>
+                            <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">{formatearMoneda(creditoSeleccionado.saldo_contado)}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex-1 rounded-xl bg-muted/30 p-3 flex flex-col justify-center items-center text-center w-full">
+                          <span className="text-2xs uppercase tracking-wider font-semibold text-muted-foreground">Saldo Pendiente Actual</span>
+                          <p className="text-xl font-black text-primary">
+                            {formatearMoneda(creditoSeleccionado.saldo_pendiente)}
+                          </p>
+                        </div>
+                      )}
                       <Button
                         type="button"
                         variant="outline"
@@ -448,16 +468,20 @@ export function ModalPago({ isOpen, onClose, creditoSeleccionado, onSuccess }: M
                         <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Saldo Crédito</span>
                         <span className="text-sm font-black text-amber-600">${reciboData.saldoPendiente.toLocaleString()}</span>
                       </div>
-                      {!reciboData.penalidadAplicada && (
+                      {reciboData.saldoCredicontado !== undefined && reciboData.saldoCredicontado !== null && !reciboData.penalidadAplicada && (
                         <div className="flex justify-between items-center pt-2">
                           <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Saldo Credicontado</span>
-                          <span className="text-sm font-black text-emerald-600">${reciboData.saldoCredicontado?.toLocaleString()}</span>
+                          <span className="text-sm font-black text-emerald-600">${reciboData.saldoCredicontado.toLocaleString()}</span>
                         </div>
                       )}
                       {reciboData.fechaLimitePago && (
                         <div className="flex justify-between items-center pt-2 mt-2">
                           <span className="text-xs font-medium text-muted-foreground">Límite Beneficio</span>
-                          <span className="text-xs font-medium text-foreground">{reciboData.fechaLimitePago.split('T')[0]}</span>
+                          <span className="text-xs font-medium text-foreground">
+                            {new Date(reciboData.fechaLimitePago + "T00:00:00").toLocaleDateString("es-CO", { 
+                              timeZone: "America/Bogota", day: "2-digit", month: "short", year: "numeric" 
+                            })}
+                          </span>
                         </div>
                       )}
                     </>

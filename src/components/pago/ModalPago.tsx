@@ -90,6 +90,8 @@ export function ModalPago({ isOpen, onClose, creditoSeleccionado, onSuccess }: M
 
   useEffect(() => {
     if (isOpen && creditoSeleccionado) {
+      if (reciboData !== null) return;
+      
       setReciboData(null);
       setFotoSoporte(null);
       setFotoPreview(null);

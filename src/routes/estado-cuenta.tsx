@@ -394,12 +394,23 @@ function EstadoCuentaPage() {
                             </span>
                           </div>
                           {!estadoCuenta.credito.penalidadAplicada && estadoCuenta.credito.saldoContado != null && (
-                            <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
-                              <span className="text-xs text-muted-foreground font-semibold">Saldo Credicontado:</span>
-                              <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
-                                {formatearMoneda(estadoCuenta.credito.saldoContado)}
-                              </span>
-                            </div>
+                            <>
+                              <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                                <span className="text-xs text-muted-foreground font-semibold">Saldo Credicontado:</span>
+                                <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                                  {formatearMoneda(estadoCuenta.credito.saldoContado)}
+                                </span>
+                              </div>
+                              {estadoCuenta.credito.fechaLimiteCredicontado && (
+                                <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                                  <span className="text-xs text-muted-foreground font-semibold">Límite Beneficio:</span>
+                                  <span className="text-xs font-bold text-amber-600 dark:text-amber-500 flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    {new Date(estadoCuenta.credito.fechaLimiteCredicontado).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
+                                  </span>
+                                </div>
+                              )}
+                            </>
                           )}
                         </>
                       ) : (
@@ -760,7 +771,7 @@ function EstadoCuentaPage() {
         <ModalPago 
           isOpen={isModalPagoOpen} 
           onClose={() => setIsModalPagoOpen(false)} 
-          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["estadoCuenta", selectedClienteId] })}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["estado-cuenta", selectedClienteId] })}
           creditoSeleccionado={{
             id: estadoCuenta.credito.id,
             saldo_pendiente: estadoCuenta.credito.saldoPendiente,

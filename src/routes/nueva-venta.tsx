@@ -157,7 +157,7 @@ function NuevaVentaPage() {
   // Estados de Crédito Manual
   const [numeroCuotasManual, setNumeroCuotasManual] = useState<number>(1);
   const [valorCuotaManual, setValorCuotaManual] = useState<number>(0);
-  const [fechaInicioManual, setFechaInicioManual] = useState<string>(obtenerFechaFutura(1));
+  const [fechaPrimerPagoOverride, setFechaPrimerPagoOverride] = useState<string>("");
 
   // Estados para Refinanciación
   const [creditoActivo, setCreditoActivo] = useState<{ id: string; saldo_pendiente: number; } | null>(null);
@@ -382,7 +382,7 @@ function NuevaVentaPage() {
     } else if (tipoVenta === "Manual") {
       totalVenta = totalBase;
       numeroCuotas = numeroCuotasManual > 0 ? numeroCuotasManual : 1;
-      fechaProximoPago = fechaInicioManual || obtenerFechaFutura(1);
+      fechaProximoPago = obtenerFechaFutura(1);
       
       // La estimación final en manual es aproximada basada en la frecuencia
       let pasoDias = 15;
@@ -436,6 +436,28 @@ function NuevaVentaPage() {
       }
     }
 
+    if (tipoVenta !== "Contado" && fechaPrimerPagoOverride) {
+      fechaProximoPago = fechaPrimerPagoOverride;
+      
+      const base = new Date(`${fechaPrimerPagoOverride}T12:00:00`);
+      let pasoDias = 15;
+      if (frecuenciaPago === "Semanal") pasoDias = 7;
+      else if (frecuenciaPago === "Quincenal") pasoDias = 15;
+      else if (frecuenciaPago === "Decenal") pasoDias = 10;
+      else if (frecuenciaPago === "Mensual") pasoDias = 30;
+      else pasoDias = 0; // Única
+      
+      if (numeroCuotas > 1) {
+        const final = new Date(base);
+        final.setDate(final.getDate() + (pasoDias * (numeroCuotas - 1)));
+        fechaFinalEstimada = final.toISOString().split("T")[0];
+      } else {
+        fechaFinalEstimada = fechaProximoPago;
+      }
+      
+      planExplicacion += ` (Inicia el ${formatearFechaEspanol(fechaProximoPago)})`;
+    }
+
     return {
       totalBase,
       totalVenta,
@@ -451,7 +473,7 @@ function NuevaVentaPage() {
       planExplicacion,
       guiaSugerida,
     };
-  }, [carrito, tipoVenta, cuotaInicial, frecuenciaPago, numeroCuotasManual, valorCuotaManual, fechaInicioManual]);
+  }, [carrito, tipoVenta, cuotaInicial, frecuenciaPago, numeroCuotasManual, valorCuotaManual, fechaPrimerPagoOverride]);
 
   // Ajustar cuota inicial si supera el nuevo total
   useEffect(() => {
@@ -1204,43 +1226,57 @@ function NuevaVentaPage() {
                 </div>
               )}
 
-              {/* Selector de Frecuencia de Pago (obligatorio para Créditos) */}
+              {/* Selector de Frecuencia de Pago y Fecha Inicial (obligatorio para Créditos) */}
               {tipoVenta !== "Contado" && (
-                <div className="space-y-2 animate-in fade-in duration-200">
-                  <Label htmlFor="frecuencia-pago-select" className="text-sm font-medium">
-                    Frecuencia de Pago <span className="text-red-500">*</span>
-                  </Label>
-                  <Select
-                    value={frecuenciaPago}
-                    onValueChange={(val) => setFrecuenciaPago(val as any)}
-                  >
-                    <SelectTrigger id="frecuencia-pago-select">
-                      <SelectValue placeholder="Seleccione frecuencia" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tipoVenta === "Credicontado Estandar" && calculosFinancieros.totalBase <= 100000 ? (
-                        <>
-                          <SelectItem value="Única">Única cuota (Plazo 20 días)</SelectItem>
-                          <SelectItem value="Decenal">2 cuotas (Cada 10 días)</SelectItem>
-                          <SelectItem value="Semanal">3 cuotas (Semanales)</SelectItem>
-                        </>
-                      ) : tipoVenta === "Manual" ? (
-                        <>
-                          <SelectItem value="Semanal">Semanal</SelectItem>
-                          <SelectItem value="Decenal">Decenal</SelectItem>
-                          <SelectItem value="Quincenal">Quincenal</SelectItem>
-                          <SelectItem value="Mensual">Mensual</SelectItem>
-                          <SelectItem value="Única">Única</SelectItem>
-                        </>
-                      ) : (
-                        <>
-                          <SelectItem value="Semanal">Semanal (cada 7 días)</SelectItem>
-                          <SelectItem value="Quincenal">Quincenal (cada 15 días)</SelectItem>
-                          <SelectItem value="Mensual">Mensual (cada mes)</SelectItem>
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-200">
+                  <div className="space-y-2">
+                    <Label htmlFor="frecuencia-pago-select" className="text-sm font-medium">
+                      Frecuencia de Pago <span className="text-red-500">*</span>
+                    </Label>
+                    <Select
+                      value={frecuenciaPago}
+                      onValueChange={(val) => setFrecuenciaPago(val as any)}
+                    >
+                      <SelectTrigger id="frecuencia-pago-select">
+                        <SelectValue placeholder="Seleccione frecuencia" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tipoVenta === "Credicontado Estandar" && calculosFinancieros.totalBase <= 100000 ? (
+                          <>
+                            <SelectItem value="Única">Única cuota (Plazo 20 días)</SelectItem>
+                            <SelectItem value="Decenal">2 cuotas (Cada 10 días)</SelectItem>
+                            <SelectItem value="Semanal">3 cuotas (Semanales)</SelectItem>
+                          </>
+                        ) : tipoVenta === "Manual" ? (
+                          <>
+                            <SelectItem value="Semanal">Semanal</SelectItem>
+                            <SelectItem value="Decenal">Decenal</SelectItem>
+                            <SelectItem value="Quincenal">Quincenal</SelectItem>
+                            <SelectItem value="Mensual">Mensual</SelectItem>
+                            <SelectItem value="Única">Única</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="Semanal">Semanal (cada 7 días)</SelectItem>
+                            <SelectItem value="Quincenal">Quincenal (cada 15 días)</SelectItem>
+                            <SelectItem value="Mensual">Mensual (cada mes)</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="fecha-primer-pago" className="text-sm font-medium">
+                      Fecha Inicial de Cobro
+                    </Label>
+                    <Input
+                      id="fecha-primer-pago"
+                      type="date"
+                      value={fechaPrimerPagoOverride || calculosFinancieros.fechaProximoPago || ""}
+                      onChange={(e) => setFechaPrimerPagoOverride(e.target.value)}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1268,14 +1304,6 @@ function NuevaVentaPage() {
                         className="pl-7"
                       />
                     </div>
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <Label className="text-sm font-medium">Fecha de Primer Pago</Label>
-                    <Input
-                      type="date"
-                      value={fechaInicioManual}
-                      onChange={(e) => setFechaInicioManual(e.target.value)}
-                    />
                   </div>
                 </div>
               )}

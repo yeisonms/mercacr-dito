@@ -24,6 +24,12 @@ export async function obtenerHistorialCobros(
 ): Promise<CobroHistorialRow[]> {
   const { fechaInicio, fechaFin, cobradorId } = params;
 
+  // Ajustar la fecha inicio al comienzo del día y la fecha fin al final del día
+  const start = new Date(fechaInicio);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(fechaFin);
+  end.setHours(23, 59, 59, 999);
+
   if (!isSupabaseConfigured) {
     await new Promise((resolve) => setTimeout(resolve, 800));
     return [
@@ -56,8 +62,8 @@ export async function obtenerHistorialCobros(
         cliente:clientes(nombres, apellidos, cedula)
       )
     `)
-    .gte("fecha_recaudo", fechaInicio.toISOString())
-    .lte("fecha_recaudo", fechaFin.toISOString())
+    .gte("fecha_recaudo", start.toISOString())
+    .lte("fecha_recaudo", end.toISOString())
     .order("fecha_recaudo", { ascending: false });
 
   if (cobradorId && cobradorId !== "all") {

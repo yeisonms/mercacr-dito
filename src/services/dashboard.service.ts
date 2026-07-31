@@ -53,18 +53,18 @@ export async function obtenerKpisDashboard(): Promise<DashboardKpis> {
 
   try {
     const hoy = new Date();
-    const hoyStr = formatearFechaLocal(hoy);
     
-    // Rango del día actual (00:00:00 a 23:59:59)
-    const startOfToday = `${hoyStr}T00:00:00.000Z`;
-    const endOfToday = `${hoyStr}T23:59:59.999Z`;
+    // Rango del día actual (00:00:00 a 23:59:59 local)
+    const startOfTodayDate = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    const endOfTodayDate = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 23, 59, 59, 999);
+    const startOfTodayStr = startOfTodayDate.toISOString();
+    const endOfTodayStr = endOfTodayDate.toISOString();
 
-    // Rango del mes actual
+    // Rango del mes actual (local)
     const startOfMonth = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    const startOfMonthStr = `${formatearFechaLocal(startOfMonth)}T00:00:00.000Z`;
-    
-    const endOfMonth = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
-    const endOfMonthStr = `${formatearFechaLocal(endOfMonth)}T23:59:59.999Z`;
+    const endOfMonth = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0, 23, 59, 59, 999);
+    const startOfMonthStr = startOfMonth.toISOString();
+    const endOfMonthStr = endOfMonth.toISOString();
 
     // 1. Cartera Activa y Ventas del Mes
     // Consultamos los créditos creados en el mes actual para ventas,
@@ -77,8 +77,8 @@ export async function obtenerKpisDashboard(): Promise<DashboardKpis> {
         .from("recaudos")
         .select("valor_recibido")
         .eq("estado", "Aprobado")
-        .gte("fecha_recaudo", startOfToday)
-        .lte("fecha_recaudo", endOfToday),
+        .gte("fecha_recaudo", startOfTodayStr)
+        .lte("fecha_recaudo", endOfTodayStr),
       supabase
         .from("recaudos")
         .select("valor_recibido")

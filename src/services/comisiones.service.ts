@@ -45,6 +45,7 @@ export async function obtenerReporteComisiones(
         porcentaje_ventas
       )
     `)
+    .neq("estado", "Devuelto")
     .or(`and(fecha_venta.gte.${startDate},fecha_venta.lte.${endDate}),and(fecha_penalidad.gte.${startDate},fecha_penalidad.lte.${endDate})`);
 
   if (error) {

@@ -23,6 +23,8 @@ export interface CreditoResumen {
   numeroFactura: string;
   numeroCuotas: number;
   frecuenciaPago: string | null;
+  motivoDevolucion?: string | null;
+  fechaDevolucion?: string | null;
 }
 
 export interface CuotaDetalle {
@@ -130,29 +132,29 @@ export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuen
     if (!clientData) return { cliente: null, credito: null, cuotas: [], recaudos: [] };
 
     // 2. Obtener todos los créditos del cliente (más recientes primero)
-    const { data: creditos, error: creditsError } = await supabase
+    const { data: creditoActual, error: errorCredito } = await supabase
       .from("creditos")
       .select(
-        "id, valor_credito, valor_contado, saldo_pendiente, saldo_contado, penalidad_aplicada, fecha_limite_credicontado, fecha_venta, fecha_proximo_pago, estado, tipo_venta, numero_factura, numero_cuotas, frecuencia_pago"
+        "id, valor_credito, valor_contado, saldo_pendiente, saldo_contado, penalidad_aplicada, fecha_limite_credicontado, fecha_venta, fecha_proximo_pago, estado, tipo_venta, numero_factura, numero_cuotas, frecuencia_pago, motivo_devolucion, fecha_devolucion"
       )
       .eq("cliente_id", clienteId)
       .order("fecha_venta", { ascending: false });
 
-    if (creditsError) {
-      console.error("[estadoCuentaService] Error cargando créditos:", creditsError);
-      throw creditsError;
+    if (errorCredito) {
+      console.error("[estadoCuentaService] Error cargando créditos:", errorCredito);
+      throw errorCredito;
     }
 
     // Preferir crédito vigente (no Finalizado ni Cancelado), o el más reciente
-    let creditoActual = null;
-    if (creditos && creditos.length > 0) {
-      creditoActual =
-        creditos.find((c) => c.estado !== "Finalizado" && c.estado !== "Cancelado") ||
-        creditos[0];
+    let credito = null;
+    if (creditoActual && creditoActual.length > 0) {
+      credito =
+        creditoActual.find((c: any) => c.estado !== "Finalizado" && c.estado !== "Cancelado") ||
+        creditoActual[0];
     }
 
     // Si el cliente existe pero no tiene créditos, devolver solo su info
-    if (!creditoActual) {
+    if (!credito) {
       return {
         cliente: mapCliente(clientData),
         credito: null,
@@ -165,7 +167,7 @@ export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuen
     const { data: cuotasData, error: cuotasError } = await supabase
       .from("cuotas")
       .select("id, numero_cuota, fecha_vencimiento, valor_cuota, valor_pagado, saldo_cuota, estado")
-      .eq("credito_id", creditoActual.id)
+      .eq("credito_id", credito.id)
       .order("numero_cuota", { ascending: true });
 
     if (cuotasError) {
@@ -180,7 +182,7 @@ export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuen
       .select(
         "id, fecha_recaudo, valor_recibido, observaciones, estado, cobrador_id"
       )
-      .eq("credito_id", creditoActual.id)
+      .eq("credito_id", credito.id)
       .order("fecha_recaudo", { ascending: false });
 
     if (recaudosError) {
@@ -235,28 +237,30 @@ export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuen
     return {
       cliente: mapCliente(clientData),
       credito: {
-        id: creditoActual.id,
-        valorCredito: Number(creditoActual.valor_credito) || 0,
-        valorContado: Number(creditoActual.valor_contado) || 0,
-        saldoPendiente: Number(creditoActual.saldo_pendiente) || 0,
-        saldoContado: creditoActual.saldo_contado != null 
-          ? Number(creditoActual.saldo_contado) 
-          : (creditoActual.tipo_venta === "Credicontado" && Number(creditoActual.valor_contado) > 0 && !creditoActual.penalidad_aplicada 
-             ? Number(creditoActual.valor_contado) - (Number(creditoActual.valor_credito) - Number(creditoActual.saldo_pendiente))
+        id: credito.id,
+        valorCredito: Number(credito.valor_credito) || 0,
+        valorContado: Number(credito.valor_contado) || 0,
+        saldoPendiente: Number(credito.saldo_pendiente) || 0,
+        saldoContado: credito.saldo_contado != null 
+          ? Number(credito.saldo_contado) 
+          : (credito.tipo_venta === "Credicontado" && Number(credito.valor_contado) > 0 && !credito.penalidad_aplicada 
+             ? Number(credito.valor_contado) - (Number(credito.valor_credito) - Number(credito.saldo_pendiente))
              : undefined),
-        penalidadAplicada: Boolean(creditoActual.penalidad_aplicada),
-        fechaLimiteCredicontado: creditoActual.fecha_limite_credicontado 
-          ? creditoActual.fecha_limite_credicontado 
-          : (creditoActual.tipo_venta?.includes("Credicontado") && !creditoActual.penalidad_aplicada 
-             ? new Date(new Date(creditoActual.fecha_venta).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] 
+        penalidadAplicada: Boolean(credito.penalidad_aplicada),
+        fechaLimiteCredicontado: credito.fecha_limite_credicontado 
+          ? credito.fecha_limite_credicontado 
+          : (credito.tipo_venta?.includes("Credicontado") && !credito.penalidad_aplicada 
+             ? new Date(new Date(credito.fecha_venta).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] 
              : null),
-        fechaVenta: creditoActual.fecha_venta,
-        fechaProximoPago: creditoActual.fecha_proximo_pago,
-        estado: creditoActual.estado,
-        tipoVenta: creditoActual.tipo_venta,
-        numeroFactura: creditoActual.numero_factura,
-        numeroCuotas: Number(creditoActual.numero_cuotas) || 0,
-        frecuenciaPago: creditoActual.frecuencia_pago,
+        fechaVenta: credito.fecha_venta,
+        fechaProximoPago: credito.fecha_proximo_pago,
+        estado: credito.estado,
+        tipoVenta: credito.tipo_venta,
+        numeroFactura: credito.numero_factura,
+        numeroCuotas: Number(credito.numero_cuotas) || 0,
+        frecuenciaPago: credito.frecuencia_pago,
+        motivoDevolucion: credito.motivo_devolucion,
+        fechaDevolucion: credito.fecha_devolucion,
       },
       cuotas: cuotasMapped,
       recaudos: recaudosMapped,

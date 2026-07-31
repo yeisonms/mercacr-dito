@@ -62,6 +62,7 @@ export async function obtenerHistorialCobros(
         cliente:clientes(nombres, apellidos, cedula)
       )
     `)
+    .neq("estado", "Devuelto")
     .gte("fecha_recaudo", start.toISOString())
     .lte("fecha_recaudo", end.toISOString())
     .order("fecha_recaudo", { ascending: false });

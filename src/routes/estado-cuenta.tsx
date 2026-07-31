@@ -64,6 +64,8 @@ import {
 } from "@/services/estadoCuentaService";
 import { formatearMoneda } from "@/services/producto.service";
 import { ModalPago } from "@/components/pago/ModalPago";
+import { Textarea } from "@/components/ui/textarea";
+import { anularVentaYDevolver } from "@/services/ventaService";
 
 export const Route = createFileRoute("/estado-cuenta")({
   head: () => ({
@@ -105,7 +107,36 @@ function EstadoCuentaPage() {
   const [dialogPenalidadOpen, setDialogPenalidadOpen] = useState(false);
   const [creditoAPenalizar, setCreditoAPenalizar] = useState<string | null>(null);
 
+  const [dialogDevolucionOpen, setDialogDevolucionOpen] = useState(false);
+  const [motivoDevolucion, setMotivoDevolucion] = useState("");
+
   const queryClient = useQueryClient();
+
+  const mutationDevolucion = useMutation({
+    mutationFn: async (creditoId: string) => {
+      if (!motivoDevolucion.trim()) throw new Error("Debe ingresar un motivo");
+      await anularVentaYDevolver(creditoId, motivoDevolucion);
+    },
+    onSuccess: () => {
+      toast.success("Venta anulada correctamente", {
+        description: "El crédito y sus pagos han sido revertidos. El stock ha sido devuelto.",
+      });
+      setDialogDevolucionOpen(false);
+      setMotivoDevolucion("");
+      queryClient.invalidateQueries({ queryKey: ["estado-cuenta", selectedClienteId] });
+      queryClient.invalidateQueries({ queryKey: ["creditosCobro"] }); 
+      queryClient.invalidateQueries({ queryKey: ["kpis-dashboard"] });
+    },
+    onError: (err: any) => {
+      toast.error("Error al anular la venta", {
+        description: err.message,
+      });
+    },
+  });
+
+  const handleAnularVenta = (creditoId: string) => {
+    mutationDevolucion.mutate(creditoId);
+  };
 
   const mutationPenalidad = useMutation({
     mutationFn: aplicarPenalidadCredicontado,
@@ -347,21 +378,41 @@ function EstadoCuentaPage() {
                         Crédito Actual
                       </CardTitle>
                     </div>
-                    {estadoCuenta?.credito && estadoCuenta.credito.estado !== "Finalizado" && estadoCuenta.credito.estado !== "Cancelado" && (
-                      <Button
-                        size="sm"
-                        onClick={() => setIsModalPagoOpen(true)}
-                        className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 gap-1.5 shadow-sm"
-                      >
-                        <Banknote className="h-3.5 w-3.5" />
-                        Registrar Abono Libre
-                      </Button>
+                    {estadoCuenta?.credito && estadoCuenta.credito.estado !== "Finalizado" && estadoCuenta.credito.estado !== "Cancelado" && estadoCuenta.credito.estado !== "Devuelto" && (
+                      <div className="flex gap-2">
+                        {(perfil?.rol === "Administrador" || perfil?.rol === "Gerencia") && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => setDialogDevolucionOpen(true)}
+                            className="h-8 text-xs font-bold px-3 gap-1.5 shadow-sm"
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            Anular / Devolver
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          onClick={() => setIsModalPagoOpen(true)}
+                          className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 gap-1.5 shadow-sm"
+                        >
+                          <Banknote className="h-3.5 w-3.5" />
+                          Registrar Abono Libre
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3.5 pt-1.5">
                   {estadoCuenta.credito ? (
                     <>
+                      {estadoCuenta.credito.estado === "Devuelto" && (
+                        <div className="bg-red-100 text-red-800 border border-red-500 rounded-lg p-3 text-sm font-bold text-center uppercase tracking-wide shadow-sm flex items-center justify-center gap-2">
+                          <AlertTriangle className="h-5 w-5" />
+                          <span>VENTA ANULADA POR DEVOLUCIÓN: {estadoCuenta.credito.motivoDevolucion || 'Sin motivo'}</span>
+                        </div>
+                      )}
+                      
                       <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0 last:pb-0">
                         <span className="text-xs text-muted-foreground">Factura N°:</span>
                         <span className="text-xs font-bold text-foreground">{estadoCuenta.credito.numeroFactura}</span>
@@ -767,7 +818,55 @@ function EstadoCuentaPage() {
         </DialogContent>
       </Dialog>
 
-      {estadoCuenta?.credito && estadoCuenta?.cliente && (
+        <Dialog open={dialogDevolucionOpen} onOpenChange={setDialogDevolucionOpen}>
+          <DialogContent className="max-w-md rounded-2xl p-6">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-rose-600">
+                <AlertTriangle className="h-5 w-5" />
+                Procesar Devolución / Anular Venta
+              </DialogTitle>
+              <DialogDescription className="pt-2">
+                ¿Estás seguro de que deseas anular esta venta? Esta acción no se puede deshacer. Se regresará el producto al inventario y se revertirán los cobros.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-2 space-y-3">
+              <label className="text-sm font-medium text-foreground">Motivo de la devolución (Obligatorio)</label>
+              <Textarea
+                placeholder="Escribe el motivo detallado de la anulación..."
+                className="w-full min-h-[100px] resize-none"
+                value={motivoDevolucion}
+                onChange={(e) => setMotivoDevolucion(e.target.value)}
+              />
+            </div>
+            <DialogFooter className="mt-4 sm:justify-between gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setDialogDevolucionOpen(false)}
+                disabled={mutationDevolucion.isPending}
+                className="flex-1 rounded-xl"
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => estadoCuenta?.credito?.id && handleAnularVenta(estadoCuenta.credito.id)}
+                disabled={mutationDevolucion.isPending || !motivoDevolucion.trim()}
+                className="flex-1 rounded-xl bg-rose-600 hover:bg-rose-700"
+              >
+                {mutationDevolucion.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Anulando...
+                  </>
+                ) : (
+                  "Sí, anular venta"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {estadoCuenta?.credito && estadoCuenta?.cliente && (
         <ModalPago 
           isOpen={isModalPagoOpen} 
           onClose={() => setIsModalPagoOpen(false)} 

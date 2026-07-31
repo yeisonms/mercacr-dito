@@ -352,3 +352,61 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
     numeroFactura,
   };
 }
+
+/**
+ * Anula un crédito/venta devolviendo los productos al inventario y revirtiendo pagos.
+ */
+export async function anularVentaYDevolver(creditoId: string, motivo: string): Promise<void> {
+  // Paso A: Actualizar crédito
+  const { error: errorCredito } = await supabase
+    .from("creditos")
+    .update({
+      estado: 'Devuelto',
+      saldo_pendiente: 0,
+      saldo_contado: 0,
+      motivo_devolucion: motivo,
+      fecha_devolucion: new Date().toISOString()
+    })
+    .eq("id", creditoId);
+    
+  if (errorCredito) throw new Error("Error al anular crédito: " + errorCredito.message);
+
+  // Paso B: Restaurar inventario
+  const { data: detalles } = await supabase
+    .from("detalles_venta")
+    .select("producto_id, cantidad")
+    .eq("credito_id", creditoId);
+    
+  if (detalles) {
+    for (const d of detalles) {
+      // Get current stock
+      const { data: prod } = await supabase
+        .from("productos")
+        .select("stock_disponible")
+        .eq("id", d.producto_id)
+        .single();
+        
+      if (prod) {
+        await supabase
+          .from("productos")
+          .update({ stock_disponible: (prod.stock_disponible || 0) + d.cantidad })
+          .eq("id", d.producto_id);
+      }
+    }
+  }
+
+  // Paso C: Revertir recaudos y cuotas
+  const { error: errorRecaudo } = await supabase
+    .from("recaudos")
+    .update({ estado: 'Devuelto', observaciones: 'Anulado por devolución: ' + motivo })
+    .eq("credito_id", creditoId);
+
+  if (errorRecaudo) console.error("Error al revertir recaudos:", errorRecaudo);
+
+  const { error: errorCuotas } = await supabase
+    .from("cuotas")
+    .update({ estado: 'Devuelto' })
+    .eq("credito_id", creditoId);
+    
+  if (errorCuotas) console.error("Error al revertir cuotas:", errorCuotas);
+}

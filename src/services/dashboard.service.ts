@@ -72,7 +72,8 @@ export async function obtenerKpisDashboard(): Promise<DashboardKpis> {
     const [creditosRes, recaudosRes, recaudosMesRes] = await Promise.all([
       supabase
         .from("creditos")
-        .select("saldo_pendiente, valor_credito, valor_contado, tipo_venta, fecha_venta, estado, penalidad_aplicada, saldo_contado"),
+        .select("saldo_pendiente, valor_credito, valor_contado, tipo_venta, fecha_venta, estado, penalidad_aplicada, saldo_contado")
+        .neq("estado", "Devuelto"),
       supabase
         .from("recaudos")
         .select("valor_recibido")
@@ -239,7 +240,7 @@ export async function obtenerEstadoCartera(): Promise<EstadoCarteraData[]> {
           estado
         )
       `)
-      .not("estado", "in", '("Cancelado","Finalizado")');
+      .not("estado", "in", '("Cancelado","Finalizado","Devuelto")');
 
     if (error) throw error;
 

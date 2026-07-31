@@ -53,6 +53,7 @@ export async function obtenerHistorialVentas({
       vendedor_id,
       usuarios:vendedor_id (nombre_completo)
     `)
+    .neq("estado", "Devuelto")
     .gte("fecha_venta", start.toISOString())
     .lte("fecha_venta", end.toISOString())
     .order("fecha_venta", { ascending: false });

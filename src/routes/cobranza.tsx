@@ -619,6 +619,7 @@ function CobranzaPage() {
       metodoPago: "Efectivo" | "Transferencia";
       fotoDinero?: File | null;
       observaciones?: string;
+      usuarioId?: string;
     }) => registrarRecaudo(values),
     onSuccess: (data, variables) => {
       if (variables.metodoPago === "Efectivo") {
@@ -979,6 +980,7 @@ function CobranzaPage() {
       metodoPago: values.metodo_pago,
       fotoDinero: fotoSoporte,
       observaciones: values.observaciones,
+      usuarioId: perfil?.id,
     });
   };
 
@@ -997,7 +999,7 @@ function CobranzaPage() {
     promesaMutation.mutate({
       clienteId: creditoSeleccionado.cliente.id,
       creditoId: creditoSeleccionado.id,
-      cobradorId: "52709375-28fd-4129-af98-8bc7e0536025", // Hardcoded for demo/Módulo 3, must come from Auth Context
+      cobradorId: perfil?.id || "",
       fechaCompromiso: format(fechaCompromiso, "yyyy-MM-dd"),
       observaciones: observacionesGestion,
     });

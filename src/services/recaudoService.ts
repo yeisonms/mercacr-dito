@@ -371,7 +371,24 @@ export async function registrarRecaudo(input: RegistrarRecaudoInput): Promise<st
     return `mock-recaudo-${Date.now()}`;
   }
 
-  const cobradorId = input.usuarioId ?? await obtenerCobradorId();
+  let finalCobradorId = input.usuarioId;
+
+  try {
+    const { data: cred } = await supabase.from("creditos").select("cliente_id").eq("id", input.creditoId).single();
+    if (cred?.cliente_id) {
+      const { data: cli } = await supabase.from("clientes").select("ruta_id").eq("id", cred.cliente_id).single();
+      if (cli?.ruta_id) {
+        const { data: rut } = await supabase.from("rutas").select("cobrador_id").eq("id", cli.ruta_id).single();
+        if (rut?.cobrador_id) {
+          finalCobradorId = rut.cobrador_id;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error al buscar el cobrador asignado a la ruta:", err);
+  }
+
+  const cobradorId = finalCobradorId ?? await obtenerCobradorId();
 
   let fotoUrl: string | null = null;
   if (input.fotoDinero) {

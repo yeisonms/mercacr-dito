@@ -26,9 +26,9 @@ export async function obtenerReporteComisiones(
   mes: number,
   anio: number
 ): Promise<ReporteComisionVentasRow[]> {
-  // Construir primer y último día del mes (formato YYYY-MM-DD)
-  const startDate = new Date(anio, mes - 1, 1).toISOString().split("T")[0];
-  const endDate = new Date(anio, mes, 0).toISOString().split("T")[0];
+  // Construir primer y último día del mes
+  const startDate = new Date(anio, mes - 1, 1).toISOString();
+  const endDate = new Date(anio, mes, 0, 23, 59, 59, 999).toISOString();
 
   const { data, error } = await supabase
     .from("creditos")
@@ -77,8 +77,8 @@ export async function obtenerReporteComisiones(
 
     const current = map.get(vendedorId)!;
 
-    const fechaVentaDate = row.fecha_venta?.split("T")[0];
-    const fechaPenalidadDate = row.fecha_penalidad?.split("T")[0];
+    const fechaVentaDate = row.fecha_venta || "";
+    const fechaPenalidadDate = row.fecha_penalidad || "";
     
     const isVentaDelMes = fechaVentaDate >= startDate && fechaVentaDate <= endDate;
     const isPenalidadDelMes = row.penalidad_aplicada && fechaPenalidadDate && fechaPenalidadDate >= startDate && fechaPenalidadDate <= endDate;

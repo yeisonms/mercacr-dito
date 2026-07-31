@@ -29,6 +29,7 @@ export interface ProcesarVentaInput {
   carrito: CarritoItem[];
   fechaProximoPago?: string | null;
   fechaFinalEstimada?: string | null;
+  fechaLimiteCredicontado?: string | null;
   isRefinanciacion?: boolean;
   creditoIdRefinanciar?: string;
   saldoAnteriorRefinanciado?: number;
@@ -166,6 +167,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
         fecha_proximo_pago: fechaProximoPago,
         fecha_primer_pago: fechaProximoPago,
         fecha_final_estimada: fechaFinalEstimada,
+        fecha_limite_credicontado: input.fechaLimiteCredicontado || null,
         estado: estadoCredito,
         metodo_pago: input.metodoPago,
       })
@@ -205,6 +207,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
         fecha_proximo_pago: fechaProximoPago,
         fecha_primer_pago: fechaProximoPago,
         fecha_final_estimada: fechaFinalEstimada,
+        fecha_limite_credicontado: input.fechaLimiteCredicontado || null,
         estado: estadoCredito,
         metodo_pago: input.metodoPago,
       })

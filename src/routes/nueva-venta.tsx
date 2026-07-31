@@ -602,6 +602,7 @@ function NuevaVentaPage() {
         carrito: carritoFormateado,
         fechaProximoPago: calculosFinancieros.fechaProximoPago,
         fechaFinalEstimada: calculosFinancieros.fechaFinalEstimada,
+        fechaLimiteCredicontado: dbTipoVenta.startsWith("Credicontado") ? calculosFinancieros.fechaFinalEstimada : null,
         isRefinanciacion: isRefinanciacion,
         creditoIdRefinanciar: isRefinanciacion && creditoActivo ? creditoActivo.id : undefined,
         saldoAnteriorRefinanciado: isRefinanciacion && creditoActivo ? creditoActivo.saldo_pendiente : 0,

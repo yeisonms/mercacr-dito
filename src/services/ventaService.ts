@@ -244,7 +244,15 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
       .single();
 
     if (prodData) {
-      const nuevoStock = Math.max(0, (prodData.stock_disponible || 0) - item.cantidad);
+      if ((prodData.stock_disponible || 0) < item.cantidad) {
+        if (!input.isRefinanciacion) {
+          await supabase.from("detalles_venta").delete().eq("credito_id", creditoId);
+          await supabase.from("creditos").delete().eq("id", creditoId);
+        }
+        throw new Error(`Stock insuficiente en base de datos para procesar la venta. Se canceló la operación.`);
+      }
+      
+      const nuevoStock = (prodData.stock_disponible || 0) - item.cantidad;
       await supabase
         .from("productos")
         .update({ stock_disponible: nuevoStock })

@@ -488,11 +488,16 @@ function NuevaVentaPage() {
       return;
     }
 
-    // Advertencia de Stock
-    if (prod.stock_disponible < cantidad) {
-      toast.warning(
-        `Stock insuficiente para "${prod.nombre}". Disponible: ${prod.stock_disponible}. Se agregará de todos modos.`
+    const currentInCart = carrito.find(item => item.productoId === prod.id)?.cantidad || 0;
+    const totalDesire = currentInCart + cantidad;
+
+    // Validación estricta de Stock
+    if (prod.stock_disponible < totalDesire) {
+      toast.error(
+        `Stock insuficiente para "${prod.nombre}". Disponible: ${prod.stock_disponible}.` + 
+        (currentInCart > 0 ? ` Ya tienes ${currentInCart} en el carrito.` : '')
       );
+      return;
     }
 
     setCarrito((prev) => {

@@ -48,6 +48,7 @@ function HistorialVentasPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(defaultDateRange);
   const [vendedorId, setVendedorId] = useState<string>("all");
   const [metodoPagoFilter, setMetodoPagoFilter] = useState<string>("all");
+  const [tipoVentaFilter, setTipoVentaFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
 
   const isUserAdmin = perfil?.rol === "Administrador" || perfil?.rol === "Gerencia" || perfil?.rol === "Auxiliar";
@@ -87,6 +88,10 @@ function HistorialVentasPage() {
     if (metodoPagoFilter !== "all") {
       result = result.filter(v => v.metodoPago === metodoPagoFilter);
     }
+
+    if (tipoVentaFilter !== "all") {
+      result = result.filter(v => v.tipoVenta === tipoVentaFilter);
+    }
     
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
@@ -100,7 +105,7 @@ function HistorialVentasPage() {
     }
     
     return result;
-  }, [historial, searchTerm, metodoPagoFilter]);
+  }, [historial, searchTerm, metodoPagoFilter, tipoVentaFilter]);
 
   // Helper para obtener el valor real de la venta
   const getValorVenta = (venta: any) => {
@@ -211,6 +216,22 @@ function HistorialVentasPage() {
                   </Select>
                 </div>
               )}
+
+              {/* Filtro Tipo de Venta */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">Tipo de Venta</span>
+                <Select value={tipoVentaFilter} onValueChange={setTipoVentaFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los tipos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los tipos</SelectItem>
+                    <SelectItem value="Contado">Contado</SelectItem>
+                    <SelectItem value="Credito">Crédito</SelectItem>
+                    <SelectItem value="Credicontado">Credicontado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
               {/* Filtro Método de Pago */}
               <div className="flex flex-col gap-1.5">

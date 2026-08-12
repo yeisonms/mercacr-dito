@@ -201,6 +201,13 @@ export async function importarCreditos(
       }
 
       // Paso B: Insertar Crédito (tipo_venta = 'Credito' por constraint DDL)
+      const isClienteOnly = item.valor_original_credito === 0 && item.saldo_pendiente_actual === 0 && item.valor_cuota === 0;
+      
+      if (isClienteOnly) {
+        exitosos++;
+        continue;
+      }
+
       const numeroCuotas = Math.ceil(item.saldo_pendiente_actual / item.valor_cuota);
       if (numeroCuotas <= 0) {
         throw new Error("El saldo pendiente y valor de cuota deben dar como resultado al menos 1 cuota.");
@@ -257,7 +264,7 @@ export async function importarCreditos(
         .insert({
           cliente_id: clienteId,
           vendedor_id: vendedorId,
-          numero_factura: `MIG-${item.cedula_cliente.trim()}-${Math.floor(100 + Math.random() * 900)}`,
+          numero_factura: `MIG-${item.numero_cartera?.trim() || "NA"}-${item.codigo_ruta.trim().toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
           tipo_venta: tipoVenta,
           valor_contado: valContado,
           valor_credito: originalCredito,
@@ -314,6 +321,7 @@ export async function importarCreditos(
 
       exitosos++;
     } catch (e: any) {
+      console.error(`[MIGRACION ERROR] Fila ${k + 1} (${item.nombres} ${item.apellidos}):`, e);
       fallidos++;
       errores.push(`Fila ${k + 1} (${item.nombres} ${item.apellidos}): ${e.message || e}`);
     }

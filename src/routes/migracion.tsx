@@ -73,9 +73,9 @@ function MigracionCartera() {
 
 
     if (!nombres) errores.push("Nombres está vacío.");
-    if (!apellidos) errores.push("Apellidos está vacío.");
-    if (!telefono) errores.push("Teléfono está vacío.");
-    if (!barrio) errores.push("Barrio está vacío.");
+    // if (!apellidos) errores.push("Apellidos está vacío.");
+    // if (!telefono) errores.push("Teléfono está vacío.");
+    // if (!barrio) errores.push("Barrio está vacío.");
     if (!codigoRuta) errores.push("Código de ruta está vacío.");
 
     const numeroCartera = row["# de cartera"]?.toString().trim() || row.numero_cartera?.toString().trim();
@@ -92,45 +92,71 @@ function MigracionCartera() {
     const morosos = row.morosos?.toString().trim() || row.Morosos?.toString().trim() || "";
     const isMoroso = morosos.toLowerCase().includes("no fiar");
 
-    if (isNaN(valOriginal) || valOriginal <= 0) {
-      errores.push("Valor original debe ser un número mayor a 0.");
-    }
-    if (isNaN(saldoPendiente) || saldoPendiente < 0) {
-      errores.push("Saldo pendiente debe ser igual o mayor a 0.");
-    }
-    if (isNaN(valorCuota) || valorCuota <= 0) {
-      errores.push("Valor de cuota debe ser un número mayor a 0.");
-    }
+    const valOriginalDefinitivo = isNaN(valOriginal) ? 0 : valOriginal;
+    const saldoPendienteDefinitivo = isNaN(saldoPendiente) ? 0 : saldoPendiente;
+    const valorCuotaDefinitivo = isNaN(valorCuota) ? 0 : valorCuota;
+    
+    const isClienteOnly = valOriginalDefinitivo === 0 && saldoPendienteDefinitivo === 0 && valorCuotaDefinitivo === 0;
 
-    if (!isNaN(valOriginal) && !isNaN(saldoPendiente) && saldoPendiente > valOriginal) {
-      errores.push("El saldo pendiente no puede superar el valor original.");
+    if (!isClienteOnly) {
+      if (isNaN(valOriginal) || valOriginal <= 0) {
+        errores.push("Valor original debe ser un número mayor a 0.");
+      }
+      if (isNaN(saldoPendiente) || saldoPendiente < 0) {
+        errores.push("Saldo pendiente debe ser igual o mayor a 0.");
+      }
+      if (isNaN(valorCuota) || valorCuota <= 0) {
+        errores.push("Valor de cuota debe ser un número mayor a 0.");
+      }
+
+      if (!isNaN(valOriginal) && !isNaN(saldoPendiente) && saldoPendiente > valOriginal) {
+        errores.push("El saldo pendiente no puede superar el valor original.");
+      }
     }
 
     const frec = row.frecuencia_pago?.toString().trim();
     let frecuenciaNormalizada: "Semanal" | "Quincenal" | "Mensual" = "Quincenal";
-    if (!frec) {
-      errores.push("Frecuencia de pago está vacía.");
-    } else {
-      const frecLower = frec.toLowerCase();
-      if (frecLower === "semanal") frecuenciaNormalizada = "Semanal";
-      else if (frecLower === "quincenal") frecuenciaNormalizada = "Quincenal";
-      else if (frecLower === "mensual") frecuenciaNormalizada = "Mensual";
-      else {
-        errores.push("Frecuencia inválida (use: Semanal, Quincenal, Mensual).");
+    
+    if (!isClienteOnly) {
+      if (!frec) {
+        errores.push("Frecuencia de pago está vacía.");
+      } else {
+        const frecLower = frec.toLowerCase();
+        if (frecLower === "semanal") frecuenciaNormalizada = "Semanal";
+        else if (frecLower === "quincenal") frecuenciaNormalizada = "Quincenal";
+        else if (frecLower === "mensual") frecuenciaNormalizada = "Mensual";
+        else {
+          errores.push("Frecuencia inválida (use: Semanal, Quincenal, Mensual).");
+        }
       }
     }
 
-    const fechaProximo = row.fecha_proximo_pago?.toString().trim();
-    if (!fechaProximo) {
-      errores.push("Fecha próximo pago está vacía.");
-    } else {
-      const dateReg = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dateReg.test(fechaProximo)) {
-        errores.push("Fecha debe tener formato YYYY-MM-DD.");
+    let fechaProximo = row.fecha_proximo_pago?.toString().trim();
+
+    // Normalizar fecha si viene en formato DD/MM/YYYY o D/M/YYYY
+    if (fechaProximo) {
+      const dateRegSlash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+      const match = fechaProximo.match(dateRegSlash);
+      if (match) {
+        const dia = match[1].padStart(2, '0');
+        const mes = match[2].padStart(2, '0');
+        const anio = match[3];
+        fechaProximo = `${anio}-${mes}-${dia}`;
+      }
+    }
+
+    if (!isClienteOnly) {
+      if (!fechaProximo) {
+        errores.push("Fecha próximo pago está vacía.");
       } else {
-        const parsedDate = Date.parse(fechaProximo);
-        if (isNaN(parsedDate)) {
-          errores.push("Fecha de próximo pago es inválida.");
+        const dateReg = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateReg.test(fechaProximo)) {
+          errores.push("Fecha debe tener formato YYYY-MM-DD o DD/MM/YYYY.");
+        } else {
+          const parsedDate = Date.parse(fechaProximo);
+          if (isNaN(parsedDate)) {
+            errores.push("Fecha de próximo pago es inválida.");
+          }
         }
       }
     }

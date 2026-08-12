@@ -223,10 +223,10 @@ function ClientesPage() {
     if (!q) return clientes;
     return clientes.filter(
       (c) =>
-        c.nombres.toLowerCase().includes(q) ||
-        c.apellidos.toLowerCase().includes(q) ||
-        c.cedula.includes(q) ||
-        c.codigo_consecutivo.toLowerCase().includes(q),
+        (c.nombres || "").toLowerCase().includes(q) ||
+        (c.apellidos || "").toLowerCase().includes(q) ||
+        (c.cedula || "").includes(q) ||
+        (c.codigo_consecutivo || "").toLowerCase().includes(q),
     );
   }, [clientes, busqueda]);
 

@@ -111,41 +111,57 @@ export async function listarRutas(): Promise<Ruta[]> {
 export async function listarClientes(): Promise<Cliente[]> {
   if (!isSupabaseConfigured) return [];
 
-  const { data, error } = await supabase
-    .from("clientes")
-    .select(
-      `
-      id,
-      codigo_consecutivo,
-      secuencia_visita,
-      nombres,
-      apellidos,
-      cedula,
-      telefono_principal,
-      telefono_alterno,
-      direccion,
-      barrio,
-      ciudad,
-      lugar_trabajo,
-      telefono_trabajo,
-      ruta_id,
-      estado,
-      foto_cliente_url,
-      foto_cedula_frente_url,
-      foto_cedula_respaldo_url,
-      latitud,
-      longitud,
-      numero_cartera,
-      bloqueado,
-      motivo_bloqueo,
-      fecha_creacion,
-      ruta:rutas ( nombre_ruta )
-    `,
-    )
-    .order("fecha_creacion", { ascending: false });
+  let allData: any[] = [];
+  let from = 0;
+  const step = 1000;
+  let hasMore = true;
 
-  if (error) throw error;
-  return (data ?? []).map((raw: any) => {
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from("clientes")
+      .select(
+        `
+        id,
+        codigo_consecutivo,
+        secuencia_visita,
+        nombres,
+        apellidos,
+        cedula,
+        telefono_principal,
+        telefono_alterno,
+        direccion,
+        barrio,
+        ciudad,
+        lugar_trabajo,
+        telefono_trabajo,
+        ruta_id,
+        estado,
+        foto_cliente_url,
+        foto_cedula_frente_url,
+        foto_cedula_respaldo_url,
+        latitud,
+        longitud,
+        numero_cartera,
+        bloqueado,
+        motivo_bloqueo,
+        fecha_creacion,
+        ruta:rutas ( nombre_ruta )
+      `
+      )
+      .order("fecha_creacion", { ascending: false })
+      .range(from, from + step - 1);
+
+    if (error) throw error;
+    allData = [...allData, ...(data || [])];
+
+    if (data && data.length < step) {
+      hasMore = false;
+    } else {
+      from += step;
+    }
+  }
+
+  return allData.map((raw: any) => {
     const ruta = Array.isArray(raw.ruta) ? raw.ruta[0] : raw.ruta;
     return { ...raw, ruta } as unknown as Cliente;
   });

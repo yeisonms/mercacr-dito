@@ -84,22 +84,39 @@ export async function buscarClientesParaEstadoCuenta(cobradorId?: string): Promi
     }
   }
 
-  let query = supabase
-    .from("clientes")
-    .select("id, nombres, apellidos, cedula, codigo_consecutivo")
-    .order("nombres");
+  let allData: any[] = [];
+  let from = 0;
+  const step = 1000;
+  let hasMore = true;
 
-  if (cobradorId && rutaIds.length > 0) {
-    query = query.in("ruta_id", rutaIds);
+  while (hasMore) {
+    let query = supabase
+      .from("clientes")
+      .select("id, nombres, apellidos, cedula, codigo_consecutivo")
+      .order("nombres")
+      .range(from, from + step - 1);
+
+    if (cobradorId && rutaIds.length > 0) {
+      query = query.in("ruta_id", rutaIds);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("[estadoCuentaService] Error al buscar clientes:", error);
+      throw error;
+    }
+
+    allData = [...allData, ...(data || [])];
+
+    if (data && data.length < step) {
+      hasMore = false;
+    } else {
+      from += step;
+    }
   }
 
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("[estadoCuentaService] Error al buscar clientes:", error);
-    throw error;
-  }
-  return data ?? [];
+  return allData;
 }
 
 /**

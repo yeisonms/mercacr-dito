@@ -664,11 +664,14 @@ function CobranzaPage() {
     const q = busqueda.trim().toLowerCase();
     if (!q) return localCreditos;
     return localCreditos.filter(
-      (item) =>
-        item.cliente.nombres.toLowerCase().includes(q) ||
-        item.cliente.apellidos.toLowerCase().includes(q) ||
-        item.cliente.cedula.includes(q) ||
-        item.cliente.barrio.toLowerCase().includes(q)
+      (item) => {
+        const fullName = `${item.cliente?.nombres || ""} ${item.cliente?.apellidos || ""}`.toLowerCase();
+        return fullName.includes(q) ||
+               (item.cliente?.cedula || "").includes(q) ||
+               (item.cliente?.barrio || "").toLowerCase().includes(q) ||
+               (item.cliente?.numero_cartera || "").toLowerCase().includes(q) ||
+               (item.cliente?.codigo_consecutivo || "").toLowerCase().includes(q);
+      }
     );
   }, [localCreditos, busqueda]);
 

@@ -6,6 +6,7 @@ export interface ClienteBusqueda {
   apellidos: string;
   cedula: string;
   codigo_consecutivo: string;
+  numero_cartera?: string | null;
 }
 
 export interface CreditoResumen {
@@ -92,7 +93,7 @@ export async function buscarClientesParaEstadoCuenta(cobradorId?: string): Promi
   while (hasMore) {
     let query = supabase
       .from("clientes")
-      .select("id, nombres, apellidos, cedula, codigo_consecutivo")
+      .select("id, nombres, apellidos, cedula, codigo_consecutivo, numero_cartera")
       .order("nombres")
       .range(from, from + step - 1);
 

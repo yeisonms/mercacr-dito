@@ -223,7 +223,7 @@ function EstadoCuentaPage() {
                       <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span>
                         {clienteSeleccionado
-                          ? `[${clienteSeleccionado.codigo_consecutivo}] ${clienteSeleccionado.nombres} ${clienteSeleccionado.apellidos}`
+                          ? `[${clienteSeleccionado.codigo_consecutivo}${clienteSeleccionado.numero_cartera ? ` - ${clienteSeleccionado.numero_cartera}` : ""}] ${clienteSeleccionado.nombres} ${clienteSeleccionado.apellidos}`
                           : loadingClientes
                             ? "Cargando clientes..."
                             : "Seleccionar cliente..."}
@@ -241,7 +241,7 @@ function EstadoCuentaPage() {
                         {clientes.map((c) => (
                           <CommandItem
                             key={c.id}
-                            value={`${c.nombres} ${c.apellidos} ${c.cedula} ${c.codigo_consecutivo}`}
+                            value={`${c.nombres} ${c.apellidos} ${c.cedula} ${c.codigo_consecutivo} ${c.numero_cartera || ""}`}
                             onSelect={() => {
                               setSelectedClienteId(c.id);
                               setOpenCliente(false);
@@ -257,7 +257,7 @@ function EstadoCuentaPage() {
                               )}
                             </div>
                             <span className="text-3xs text-muted-foreground">
-                              Cédula: {c.cedula} | Código: {c.codigo_consecutivo}
+                              Cédula: {c.cedula} | Código: {c.codigo_consecutivo} {c.numero_cartera ? `| # Cartera: ${c.numero_cartera}` : ""}
                             </span>
                           </CommandItem>
                         ))}

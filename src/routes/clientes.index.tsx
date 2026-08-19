@@ -112,7 +112,7 @@ function EstadoBadge({ estado }: { estado: EstadoCliente }) {
 function FilaSkeleton() {
   return (
     <TableRow>
-      {[40, 160, 100, 110, 80, 70, 36].map((w, i) => (
+      {[40, 160, 80, 100, 110, 80, 70, 36].map((w, i) => (
         <TableCell key={i}>
           <Skeleton className={`h-4`} style={{ width: w }} />
         </TableCell>
@@ -226,7 +226,8 @@ function ClientesPage() {
         const fullName = `${c.nombres || ""} ${c.apellidos || ""}`.toLowerCase();
         return fullName.includes(q) ||
                (c.cedula || "").includes(q) ||
-               (c.codigo_consecutivo || "").toLowerCase().includes(q);
+               (c.codigo_consecutivo || "").toLowerCase().includes(q) ||
+               (c.numero_cartera || "").toLowerCase().includes(q);
       }
     );
   }, [clientes, busqueda]);
@@ -348,6 +349,7 @@ function ClientesPage() {
                     <TableRow>
                       <TableHead className="w-[110px]">Código</TableHead>
                       <TableHead>Cliente</TableHead>
+                      <TableHead className="w-[100px]"># Cartera</TableHead>
                       <TableHead className="w-[120px]">Cédula</TableHead>
                       <TableHead className="w-[130px]">Teléfono</TableHead>
                       <TableHead className="w-[110px]">Barrio</TableHead>
@@ -368,7 +370,7 @@ function ClientesPage() {
                     {/* Estado vacío */}
                     {!isLoading && clientesFiltrados.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="p-0">
+                        <TableCell colSpan={8} className="p-0">
                           <EstadoVacio buscando={busqueda.length > 0} />
                         </TableCell>
                       </TableRow>
@@ -402,6 +404,9 @@ function ClientesPage() {
                                 )}
                               </div>
                             </div>
+                          </TableCell>
+                          <TableCell className="text-sm font-medium">
+                            {cliente.numero_cartera || "-"}
                           </TableCell>
                           <TableCell className="font-mono text-sm">
                             {cliente.cedula}

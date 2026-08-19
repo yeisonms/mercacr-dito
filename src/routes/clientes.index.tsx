@@ -222,11 +222,12 @@ function ClientesPage() {
     const q = busqueda.trim().toLowerCase();
     if (!q) return clientes;
     return clientes.filter(
-      (c) =>
-        (c.nombres || "").toLowerCase().includes(q) ||
-        (c.apellidos || "").toLowerCase().includes(q) ||
-        (c.cedula || "").includes(q) ||
-        (c.codigo_consecutivo || "").toLowerCase().includes(q),
+      (c) => {
+        const fullName = `${c.nombres || ""} ${c.apellidos || ""}`.toLowerCase();
+        return fullName.includes(q) ||
+               (c.cedula || "").includes(q) ||
+               (c.codigo_consecutivo || "").toLowerCase().includes(q);
+      }
     );
   }, [clientes, busqueda]);
 

@@ -134,8 +134,12 @@ function RouteGuard({ children }: { children: ReactNode }) {
 
     // Con sesión en login → redirigir al home del rol
     if (session && perfil && isLoginPage) {
+      let homeRoute = "/";
+      if (perfil.rol === "Cobrador") homeRoute = "/cobranza";
+      if (perfil.rol === "Vendedor") homeRoute = "/nueva-venta";
+
       navigate({
-        to: perfil.rol === "Cobrador" ? "/cobranza" : "/",
+        to: homeRoute,
         replace: true,
       });
       return;
@@ -163,6 +167,11 @@ function RouteGuard({ children }: { children: ReactNode }) {
       if (!isAllowed) {
         navigate({ to: "/cobranza", replace: true });
       }
+    }
+
+    // Vendedor intentando acceder al dashboard principal
+    if (session && perfil?.rol === "Vendedor" && pathname === "/") {
+      navigate({ to: "/nueva-venta", replace: true });
     }
   }, [cargando, session, perfil, pathname, navigate]);
 

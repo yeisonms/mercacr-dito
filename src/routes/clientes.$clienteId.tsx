@@ -213,6 +213,8 @@ function ClientePerfilPage() {
           foto_cliente_url: cliente.foto_cliente_url ?? null,
           foto_cedula_frente_url: cliente.foto_cedula_frente_url ?? null,
           foto_cedula_respaldo_url: cliente.foto_cedula_respaldo_url ?? null,
+          foto_casa_1_url: cliente.foto_casa_1_url ?? null,
+          foto_casa_2_url: cliente.foto_casa_2_url ?? null,
         }
       : undefined,
   });

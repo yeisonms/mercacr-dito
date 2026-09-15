@@ -1283,9 +1283,9 @@ function CobranzaPage() {
             <div className="max-h-60 overflow-y-auto space-y-2">
               {clientesLibres
                 .filter(c => 
-                  c.nombres.toLowerCase().includes(quickSearchTerm.toLowerCase()) || 
-                  c.apellidos.toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
-                  c.cedula.includes(quickSearchTerm)
+                  (c.nombres || "").toLowerCase().includes(quickSearchTerm.toLowerCase()) || 
+                  (c.apellidos || "").toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
+                  (c.cedula || "").includes(quickSearchTerm)
                 )
                 .slice(0, 10)
                 .map(c => (
@@ -1301,9 +1301,9 @@ function CobranzaPage() {
                 </div>
               ))}
               {clientesLibres.length > 0 && quickSearchTerm.length > 0 && clientesLibres.filter(c => 
-                  c.nombres.toLowerCase().includes(quickSearchTerm.toLowerCase()) || 
-                  c.apellidos.toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
-                  c.cedula.includes(quickSearchTerm)
+                  (c.nombres || "").toLowerCase().includes(quickSearchTerm.toLowerCase()) || 
+                  (c.apellidos || "").toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
+                  (c.cedula || "").includes(quickSearchTerm)
                 ).length === 0 && (
                 <p className="text-center text-sm text-muted-foreground">No se encontraron clientes.</p>
               )}
@@ -1770,3 +1770,4 @@ function CobranzaPage() {
     </AppShell>
   );
 }
+

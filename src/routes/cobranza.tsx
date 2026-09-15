@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+﻿import { useState, useMemo, useEffect, useRef } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -1296,7 +1296,7 @@ function CobranzaPage() {
                 >
                   <div>
                     <p className="text-sm font-bold">{c.nombres} {c.apellidos}</p>
-                    <p className="text-xs text-muted-foreground">CC: {c.cedula} | Cód: {c.codigo_consecutivo}</p>
+                    <p className="text-xs text-muted-foreground">CC: {c.cedula} | # Cartera: {c.numero_cartera || "-"}</p>
                   </div>
                 </div>
               ))}
@@ -1770,4 +1770,5 @@ function CobranzaPage() {
     </AppShell>
   );
 }
+
 

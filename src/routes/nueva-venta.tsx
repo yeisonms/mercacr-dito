@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { obtenerUsuarios, type UsuarioRow } from "@/services/usuarioService";
@@ -770,7 +770,7 @@ function NuevaVentaPage() {
                                   {cliente.nombres} {cliente.apellidos}
                                 </span>
                                 <span className="text-xs text-muted-foreground">
-                                  Cédula: {cliente.cedula} | Código: {cliente.codigo_consecutivo}
+                                  Cédula: {cliente.cedula} | # Cartera: {cliente.numero_cartera || "-"}
                                 </span>
                               </div>
                               {cliente.estado !== "Activo" && (
@@ -1437,3 +1437,5 @@ function NuevaVentaPage() {
     </AppShell>
   );
 }
+
+

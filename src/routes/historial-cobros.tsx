@@ -3,8 +3,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
-import { Calendar as CalendarIcon, Wallet, Search } from "lucide-react";
+import { Calendar as CalendarIcon, Wallet, Search, FileDown, Loader2 } from "lucide-react";
 import { DateRange } from "react-day-picker";
+import { toast } from "sonner";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,7 @@ import { obtenerUsuarios } from "@/services/usuarioService";
 import { useAuth } from "@/context/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { formatearMoneda } from "@/services/producto.service";
+import { descargarPdfCuadreCaja } from "@/services/cuadrePdfService";
 
 export const Route = createFileRoute("/historial-cobros")({
   head: () => ({ meta: [{ title: "Cuadre de Caja — Mercacrédito" }] }),
@@ -113,6 +115,58 @@ function HistorialCobrosPage() {
     });
   };
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleDescargarPDF = async () => {
+    if (historialFiltrado.length === 0) {
+      toast.error("No hay recaudos para exportar con los filtros seleccionados");
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      toast.loading("Generando reporte PDF...", { id: "descarga-cuadre-pdf" });
+
+      // Formatear texto del rango de fechas
+      let rangoFechasTexto = "Todas las fechas";
+      if (dateRange?.from) {
+        if (dateRange.to) {
+          rangoFechasTexto = `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}`;
+        } else {
+          rangoFechasTexto = format(dateRange.from, "dd/MM/yyyy");
+        }
+      }
+
+      // Formatear texto del cobrador
+      let cobradorTexto = "Todos los cobradores";
+      if (cobradorId !== "all") {
+        const cobradorEncontrado = cobradores.find((c) => c.id === cobradorId);
+        cobradorTexto = cobradorEncontrado?.nombre_completo || perfil?.nombre_completo || "Cobrador seleccionado";
+      } else if (!isUserAdmin && perfil) {
+        cobradorTexto = perfil.nombre_completo || "Cobrador actual";
+      }
+
+      await descargarPdfCuadreCaja({
+        cobros: historialFiltrado,
+        rangoFechasTexto,
+        cobradorTexto,
+        busquedaTexto: searchTerm.trim() || undefined,
+        usuarioGenerador: perfil?.nombre_completo || "Usuario",
+        rolUsuario: perfil?.rol || "",
+        totalEfectivo,
+        totalTransferencia,
+        totalGeneral,
+      });
+
+      toast.success("PDF generado y descargado correctamente", { id: "descarga-cuadre-pdf" });
+    } catch (error) {
+      console.error("Error al generar PDF de cuadre:", error);
+      toast.error("Ocurrió un error al generar el archivo PDF", { id: "descarga-cuadre-pdf" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <AppShell
       title="Cuadre de Caja (Historial)"
@@ -122,9 +176,29 @@ function HistorialCobrosPage() {
         {/* BARRA DE FILTROS */}
         <Card className="border-border/60 shadow-sm">
           <CardHeader className="pb-4">
-            <div className="flex items-center gap-2 text-primary">
-              <Wallet className="h-5 w-5" />
-              <CardTitle className="text-lg">Filtros de Cuadre</CardTitle>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-2 text-primary">
+                <Wallet className="h-5 w-5" />
+                <CardTitle className="text-lg">Filtros de Cuadre</CardTitle>
+              </div>
+              <Button
+                onClick={handleDescargarPDF}
+                disabled={isLoading || historialFiltrado.length === 0 || isExporting}
+                className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm transition-all"
+                size="sm"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Generando PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileDown className="h-4 w-4" />
+                    <span>Descargar PDF ({historialFiltrado.length})</span>
+                  </>
+                )}
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -316,13 +390,25 @@ function HistorialCobrosPage() {
                               </span>
                             </div>
                           </div>
-                          <div className="text-right flex items-center gap-3">
-                            <span className="font-bold uppercase text-xs tracking-wider text-muted-foreground">
-                              Total Recaudado (Visible)
-                            </span>
-                            <span className="font-bold text-xl text-indigo-700 dark:text-indigo-400">
-                              {formatearMoneda(totalGeneral)}
-                            </span>
+                          <div className="text-right flex items-center gap-4">
+                            <div className="text-right flex items-center gap-3">
+                              <span className="font-bold uppercase text-xs tracking-wider text-muted-foreground">
+                                Total Recaudado (Visible)
+                              </span>
+                              <span className="font-bold text-xl text-indigo-700 dark:text-indigo-400">
+                                {formatearMoneda(totalGeneral)}
+                              </span>
+                            </div>
+                            <Button
+                              onClick={handleDescargarPDF}
+                              disabled={isLoading || historialFiltrado.length === 0 || isExporting}
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950 font-medium"
+                            >
+                              <FileDown className="h-4 w-4" />
+                              PDF
+                            </Button>
                           </div>
                         </div>
                       </TableCell>

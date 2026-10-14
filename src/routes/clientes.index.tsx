@@ -11,6 +11,8 @@ import {
   UserX,
   FileSpreadsheet,
   Loader2,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { descargarRespaldoExcel } from "@/services/exportService";
@@ -45,7 +47,11 @@ import {
 } from "@/components/ui/card";
 
 import { useClientes } from "@/hooks/use-clientes";
-import type { Cliente, EstadoCliente } from "@/services/cliente.service";
+import {
+  compararPorNumeroCartera,
+  type Cliente,
+  type EstadoCliente,
+} from "@/services/cliente.service";
 
 // ─── Ruta ─────────────────────────────────────────────────────────────────────
 
@@ -203,6 +209,7 @@ function ClientesPage() {
   const { data: clientes = [], isLoading, isError, refetch } = useClientes();
   const [busqueda, setBusqueda] = useState("");
   const [isExporting, setIsExporting] = useState(false);
+  const [ordenDireccion, setOrdenDireccion] = useState<"asc" | "desc">("asc");
 
   const handleExportarExcel = async () => {
     try {
@@ -217,20 +224,23 @@ function ClientesPage() {
     }
   };
 
-  // Filtrado en tiempo real — nombre, apellidos, cédula o código
+  // Filtrado en tiempo real y ordenamiento alfanumérico por número de cartera
   const clientesFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return clientes;
-    return clientes.filter(
-      (c) => {
-        const fullName = `${c.nombres || ""} ${c.apellidos || ""}`.toLowerCase();
-        return fullName.includes(q) ||
-               (c.cedula || "").includes(q) ||
-               (c.codigo_consecutivo || "").toLowerCase().includes(q) ||
-               (c.numero_cartera || "").toLowerCase().includes(q);
-      }
-    );
-  }, [clientes, busqueda]);
+    const filtrados = !q
+      ? [...clientes]
+      : clientes.filter(
+          (c) => {
+            const fullName = `${c.nombres || ""} ${c.apellidos || ""}`.toLowerCase();
+            return fullName.includes(q) ||
+                   (c.cedula || "").includes(q) ||
+                   (c.codigo_consecutivo || "").toLowerCase().includes(q) ||
+                   (c.numero_cartera || "").toLowerCase().includes(q);
+          }
+        );
+
+    return filtrados.sort((a, b) => compararPorNumeroCartera(a, b, ordenDireccion));
+  }, [clientes, busqueda, ordenDireccion]);
 
   const acciones = (
     <div className="flex items-center gap-2">
@@ -349,7 +359,22 @@ function ClientesPage() {
                     <TableRow>
                       <TableHead className="w-[110px]">Código</TableHead>
                       <TableHead>Cliente</TableHead>
-                      <TableHead className="w-[100px]"># Cartera</TableHead>
+                      <TableHead
+                        className="w-[120px] cursor-pointer select-none hover:text-foreground transition-colors"
+                        onClick={() =>
+                          setOrdenDireccion((prev) => (prev === "asc" ? "desc" : "asc"))
+                        }
+                        title={`Ordenar por cartera (${ordenDireccion === "asc" ? "Ascendente: 1, 2, 3A..." : "Descendente"})`}
+                      >
+                        <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                          <span># Cartera</span>
+                          {ordenDireccion === "asc" ? (
+                            <ArrowUp className="h-3.5 w-3.5 text-primary" />
+                          ) : (
+                            <ArrowDown className="h-3.5 w-3.5 text-primary" />
+                          )}
+                        </div>
+                      </TableHead>
                       <TableHead className="w-[120px]">Cédula</TableHead>
                       <TableHead className="w-[130px]">Teléfono</TableHead>
                       <TableHead className="w-[110px]">Barrio</TableHead>

@@ -9,90 +9,30 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as UsuariosRouteImport } from './routes/usuarios'
-import { Route as RutasRouteImport } from './routes/rutas'
-import { Route as ReportesComisionesRouteImport } from './routes/reportes-comisiones'
-import { Route as ProductosRouteImport } from './routes/productos'
-import { Route as NuevaVentaRouteImport } from './routes/nueva-venta'
-import { Route as MigracionRouteImport } from './routes/migracion'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as HistorialVentasRouteImport } from './routes/historial-ventas'
-import { Route as HistorialCobrosRouteImport } from './routes/historial-cobros'
-import { Route as GestionMoraRouteImport } from './routes/gestion-mora'
-import { Route as EstadoCuentaRouteImport } from './routes/estado-cuenta'
-import { Route as CreditosRouteImport } from './routes/creditos'
-import { Route as ConfiguracionRouteImport } from './routes/configuracion'
-import { Route as CobranzaRouteImport } from './routes/cobranza'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CobranzaRouteImport } from './routes/cobranza'
+import { Route as ConfiguracionRouteImport } from './routes/configuracion'
+import { Route as CreditosRouteImport } from './routes/creditos'
+import { Route as EstadoCuentaRouteImport } from './routes/estado-cuenta'
+import { Route as GestionMoraRouteImport } from './routes/gestion-mora'
+import { Route as HistorialCobrosRouteImport } from './routes/historial-cobros'
+import { Route as HistorialVentasRouteImport } from './routes/historial-ventas'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MigracionRouteImport } from './routes/migracion'
+import { Route as NuevaVentaRouteImport } from './routes/nueva-venta'
+import { Route as ProductosRouteImport } from './routes/productos'
+import { Route as ReportesComisionesRouteImport } from './routes/reportes-comisiones'
+import { Route as RutasRouteImport } from './routes/rutas'
+import { Route as UsuariosRouteImport } from './routes/usuarios'
 import { Route as ClientesIndexRouteImport } from './routes/clientes.index'
-import { Route as ConfiguracionMoraRouteImport } from './routes/configuracion_.mora'
-import { Route as CobranzaAprobacionRouteImport } from './routes/cobranza_.aprobacion'
-import { Route as ClientesNuevoRouteImport } from './routes/clientes.nuevo'
 import { Route as ClientesClienteIdRouteImport } from './routes/clientes.$clienteId'
+import { Route as ClientesNuevoRouteImport } from './routes/clientes.nuevo'
+import { Route as CobranzaAprobacionRouteImport } from './routes/cobranza_.aprobacion'
+import { Route as ConfiguracionMoraRouteImport } from './routes/configuracion_.mora'
 
-const UsuariosRoute = UsuariosRouteImport.update({
-  id: '/usuarios',
-  path: '/usuarios',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RutasRoute = RutasRouteImport.update({
-  id: '/rutas',
-  path: '/rutas',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ReportesComisionesRoute = ReportesComisionesRouteImport.update({
-  id: '/reportes-comisiones',
-  path: '/reportes-comisiones',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProductosRoute = ProductosRouteImport.update({
-  id: '/productos',
-  path: '/productos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NuevaVentaRoute = NuevaVentaRouteImport.update({
-  id: '/nueva-venta',
-  path: '/nueva-venta',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MigracionRoute = MigracionRouteImport.update({
-  id: '/migracion',
-  path: '/migracion',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HistorialVentasRoute = HistorialVentasRouteImport.update({
-  id: '/historial-ventas',
-  path: '/historial-ventas',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HistorialCobrosRoute = HistorialCobrosRouteImport.update({
-  id: '/historial-cobros',
-  path: '/historial-cobros',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GestionMoraRoute = GestionMoraRouteImport.update({
-  id: '/gestion-mora',
-  path: '/gestion-mora',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EstadoCuentaRoute = EstadoCuentaRouteImport.update({
-  id: '/estado-cuenta',
-  path: '/estado-cuenta',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CreditosRoute = CreditosRouteImport.update({
-  id: '/creditos',
-  path: '/creditos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfiguracionRoute = ConfiguracionRouteImport.update({
-  id: '/configuracion',
-  path: '/configuracion',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CobranzaRoute = CobranzaRouteImport.update({
@@ -100,9 +40,69 @@ const CobranzaRoute = CobranzaRouteImport.update({
   path: '/cobranza',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const ConfiguracionRoute = ConfiguracionRouteImport.update({
+  id: '/configuracion',
+  path: '/configuracion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CreditosRoute = CreditosRouteImport.update({
+  id: '/creditos',
+  path: '/creditos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EstadoCuentaRoute = EstadoCuentaRouteImport.update({
+  id: '/estado-cuenta',
+  path: '/estado-cuenta',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GestionMoraRoute = GestionMoraRouteImport.update({
+  id: '/gestion-mora',
+  path: '/gestion-mora',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistorialCobrosRoute = HistorialCobrosRouteImport.update({
+  id: '/historial-cobros',
+  path: '/historial-cobros',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistorialVentasRoute = HistorialVentasRouteImport.update({
+  id: '/historial-ventas',
+  path: '/historial-ventas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MigracionRoute = MigracionRouteImport.update({
+  id: '/migracion',
+  path: '/migracion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NuevaVentaRoute = NuevaVentaRouteImport.update({
+  id: '/nueva-venta',
+  path: '/nueva-venta',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductosRoute = ProductosRouteImport.update({
+  id: '/productos',
+  path: '/productos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportesComisionesRoute = ReportesComisionesRouteImport.update({
+  id: '/reportes-comisiones',
+  path: '/reportes-comisiones',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RutasRoute = RutasRouteImport.update({
+  id: '/rutas',
+  path: '/rutas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsuariosRoute = UsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClientesIndexRoute = ClientesIndexRouteImport.update({
@@ -110,14 +110,9 @@ const ClientesIndexRoute = ClientesIndexRouteImport.update({
   path: '/clientes/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ConfiguracionMoraRoute = ConfiguracionMoraRouteImport.update({
-  id: '/configuracion_/mora',
-  path: '/configuracion/mora',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CobranzaAprobacionRoute = CobranzaAprobacionRouteImport.update({
-  id: '/cobranza_/aprobacion',
-  path: '/cobranza/aprobacion',
+const ClientesClienteIdRoute = ClientesClienteIdRouteImport.update({
+  id: '/clientes/$clienteId',
+  path: '/clientes/$clienteId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClientesNuevoRoute = ClientesNuevoRouteImport.update({
@@ -125,9 +120,14 @@ const ClientesNuevoRoute = ClientesNuevoRouteImport.update({
   path: '/clientes/nuevo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ClientesClienteIdRoute = ClientesClienteIdRouteImport.update({
-  id: '/clientes/$clienteId',
-  path: '/clientes/$clienteId',
+const CobranzaAprobacionRoute = CobranzaAprobacionRouteImport.update({
+  id: '/cobranza_/aprobacion',
+  path: '/cobranza/aprobacion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracionMoraRoute = ConfiguracionMoraRouteImport.update({
+  id: '/configuracion_/mora',
+  path: '/configuracion/mora',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -292,95 +292,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/usuarios': {
-      id: '/usuarios'
-      path: '/usuarios'
-      fullPath: '/usuarios'
-      preLoaderRoute: typeof UsuariosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rutas': {
-      id: '/rutas'
-      path: '/rutas'
-      fullPath: '/rutas'
-      preLoaderRoute: typeof RutasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reportes-comisiones': {
-      id: '/reportes-comisiones'
-      path: '/reportes-comisiones'
-      fullPath: '/reportes-comisiones'
-      preLoaderRoute: typeof ReportesComisionesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/productos': {
-      id: '/productos'
-      path: '/productos'
-      fullPath: '/productos'
-      preLoaderRoute: typeof ProductosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/nueva-venta': {
-      id: '/nueva-venta'
-      path: '/nueva-venta'
-      fullPath: '/nueva-venta'
-      preLoaderRoute: typeof NuevaVentaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/migracion': {
-      id: '/migracion'
-      path: '/migracion'
-      fullPath: '/migracion'
-      preLoaderRoute: typeof MigracionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/historial-ventas': {
-      id: '/historial-ventas'
-      path: '/historial-ventas'
-      fullPath: '/historial-ventas'
-      preLoaderRoute: typeof HistorialVentasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/historial-cobros': {
-      id: '/historial-cobros'
-      path: '/historial-cobros'
-      fullPath: '/historial-cobros'
-      preLoaderRoute: typeof HistorialCobrosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gestion-mora': {
-      id: '/gestion-mora'
-      path: '/gestion-mora'
-      fullPath: '/gestion-mora'
-      preLoaderRoute: typeof GestionMoraRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/estado-cuenta': {
-      id: '/estado-cuenta'
-      path: '/estado-cuenta'
-      fullPath: '/estado-cuenta'
-      preLoaderRoute: typeof EstadoCuentaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/creditos': {
-      id: '/creditos'
-      path: '/creditos'
-      fullPath: '/creditos'
-      preLoaderRoute: typeof CreditosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/configuracion': {
-      id: '/configuracion'
-      path: '/configuracion'
-      fullPath: '/configuracion'
-      preLoaderRoute: typeof ConfiguracionRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cobranza': {
@@ -390,11 +306,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CobranzaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/configuracion': {
+      id: '/configuracion'
+      path: '/configuracion'
+      fullPath: '/configuracion'
+      preLoaderRoute: typeof ConfiguracionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/creditos': {
+      id: '/creditos'
+      path: '/creditos'
+      fullPath: '/creditos'
+      preLoaderRoute: typeof CreditosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/estado-cuenta': {
+      id: '/estado-cuenta'
+      path: '/estado-cuenta'
+      fullPath: '/estado-cuenta'
+      preLoaderRoute: typeof EstadoCuentaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gestion-mora': {
+      id: '/gestion-mora'
+      path: '/gestion-mora'
+      fullPath: '/gestion-mora'
+      preLoaderRoute: typeof GestionMoraRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/historial-cobros': {
+      id: '/historial-cobros'
+      path: '/historial-cobros'
+      fullPath: '/historial-cobros'
+      preLoaderRoute: typeof HistorialCobrosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/historial-ventas': {
+      id: '/historial-ventas'
+      path: '/historial-ventas'
+      fullPath: '/historial-ventas'
+      preLoaderRoute: typeof HistorialVentasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/migracion': {
+      id: '/migracion'
+      path: '/migracion'
+      fullPath: '/migracion'
+      preLoaderRoute: typeof MigracionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nueva-venta': {
+      id: '/nueva-venta'
+      path: '/nueva-venta'
+      fullPath: '/nueva-venta'
+      preLoaderRoute: typeof NuevaVentaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/productos': {
+      id: '/productos'
+      path: '/productos'
+      fullPath: '/productos'
+      preLoaderRoute: typeof ProductosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reportes-comisiones': {
+      id: '/reportes-comisiones'
+      path: '/reportes-comisiones'
+      fullPath: '/reportes-comisiones'
+      preLoaderRoute: typeof ReportesComisionesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rutas': {
+      id: '/rutas'
+      path: '/rutas'
+      fullPath: '/rutas'
+      preLoaderRoute: typeof RutasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/usuarios': {
+      id: '/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof UsuariosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/clientes/': {
@@ -404,18 +404,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClientesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/configuracion_/mora': {
-      id: '/configuracion_/mora'
-      path: '/configuracion/mora'
-      fullPath: '/configuracion/mora'
-      preLoaderRoute: typeof ConfiguracionMoraRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cobranza_/aprobacion': {
-      id: '/cobranza_/aprobacion'
-      path: '/cobranza/aprobacion'
-      fullPath: '/cobranza/aprobacion'
-      preLoaderRoute: typeof CobranzaAprobacionRouteImport
+    '/clientes/$clienteId': {
+      id: '/clientes/$clienteId'
+      path: '/clientes/$clienteId'
+      fullPath: '/clientes/$clienteId'
+      preLoaderRoute: typeof ClientesClienteIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/clientes/nuevo': {
@@ -425,11 +418,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClientesNuevoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/clientes/$clienteId': {
-      id: '/clientes/$clienteId'
-      path: '/clientes/$clienteId'
-      fullPath: '/clientes/$clienteId'
-      preLoaderRoute: typeof ClientesClienteIdRouteImport
+    '/cobranza_/aprobacion': {
+      id: '/cobranza_/aprobacion'
+      path: '/cobranza/aprobacion'
+      fullPath: '/cobranza/aprobacion'
+      preLoaderRoute: typeof CobranzaAprobacionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracion_/mora': {
+      id: '/configuracion_/mora'
+      path: '/configuracion/mora'
+      fullPath: '/configuracion/mora'
+      preLoaderRoute: typeof ConfiguracionMoraRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

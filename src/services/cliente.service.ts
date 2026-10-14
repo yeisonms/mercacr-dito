@@ -99,10 +99,45 @@ export async function listarRutas(): Promise<Ruta[]> {
   return (data ?? []).map((r) => ({ id: r.id, nombre: r.nombre_ruta }));
 }
 
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/**
+ * Compara dos clientes ordenando por `numero_cartera` de forma natural ascendente
+ * (1, 2, 3, 3A, 3B, 3C... 10... 314A... 858A... 1140...).
+ * Los valores vacíos o nulos se envían al final.
+ * Como criterio de desempate se utiliza `codigo_consecutivo` ascendente.
+ */
+export function compararPorNumeroCartera(
+  a: Pick<Cliente, "numero_cartera" | "codigo_consecutivo">,
+  b: Pick<Cliente, "numero_cartera" | "codigo_consecutivo">,
+  direccion: "asc" | "desc" = "asc"
+): number {
+  const valA = (a.numero_cartera || "").trim();
+  const valB = (b.numero_cartera || "").trim();
+
+  const aEmpty = !valA || valA === "-";
+  const bEmpty = !valB || valB === "-";
+
+  if (aEmpty && !bEmpty) return 1;
+  if (!aEmpty && bEmpty) return -1;
+  if (aEmpty && bEmpty) {
+    const codeDiff = collator.compare(a.codigo_consecutivo || "", b.codigo_consecutivo || "");
+    return direccion === "asc" ? codeDiff : -codeDiff;
+  }
+
+  const diff = collator.compare(valA, valB);
+  if (diff !== 0) {
+    return direccion === "asc" ? diff : -diff;
+  }
+
+  const codeDiff = collator.compare(a.codigo_consecutivo || "", b.codigo_consecutivo || "");
+  return direccion === "asc" ? codeDiff : -codeDiff;
+}
+
 // ─── Clientes — Lectura ─────────────────────────────────────────────────────
 
 /**
- * Devuelve todos los clientes ordenados por fecha_creacion DESC.
+ * Devuelve todos los clientes ordenados por numero_cartera ASC de forma natural.
  * Incluye el nombre de la ruta asignada mediante JOIN.
  *
  * @param busqueda  Texto para filtrar en el backend (opcional).
@@ -161,10 +196,12 @@ export async function listarClientes(): Promise<Cliente[]> {
     }
   }
 
-  return allData.map((raw: any) => {
+  const clientesMapeados = allData.map((raw: any) => {
     const ruta = Array.isArray(raw.ruta) ? raw.ruta[0] : raw.ruta;
     return { ...raw, ruta } as unknown as Cliente;
   });
+
+  return clientesMapeados.sort((a, b) => compararPorNumeroCartera(a, b, "asc"));
 }
 
 // ─── Clientes — Escritura ────────────────────────────────────────────────────

@@ -15,7 +15,10 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
-import { descargarRespaldoExcel } from "@/services/exportService";
+import {
+  descargarCarteraActivaExcel,
+  descargarDirectorioCompletoExcel,
+} from "@/services/exportService";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -208,19 +211,33 @@ function AccionesMenu({ cliente }: { cliente: Cliente }) {
 function ClientesPage() {
   const { data: clientes = [], isLoading, isError, refetch } = useClientes();
   const [busqueda, setBusqueda] = useState("");
-  const [isExporting, setIsExporting] = useState(false);
+  const [isExportingCartera, setIsExportingCartera] = useState(false);
+  const [isExportingDirectorio, setIsExportingDirectorio] = useState(false);
   const [ordenDireccion, setOrdenDireccion] = useState<"asc" | "desc">("asc");
 
-  const handleExportarExcel = async () => {
+  const handleExportarCarteraActiva = async () => {
     try {
-      setIsExporting(true);
-      toast.loading("Generando Excel, por favor espera...", { id: "export-excel" });
-      await descargarRespaldoExcel();
-      toast.success("Respaldo descargado correctamente", { id: "export-excel" });
+      setIsExportingCartera(true);
+      toast.loading("Generando Excel de Cartera Activa...", { id: "export-cartera" });
+      await descargarCarteraActivaExcel();
+      toast.success("Cartera Activa descargada correctamente", { id: "export-cartera" });
     } catch (error: any) {
-      toast.error(error.message || "Error al exportar la cartera", { id: "export-excel" });
+      toast.error(error.message || "Error al exportar cartera activa", { id: "export-cartera" });
     } finally {
-      setIsExporting(false);
+      setIsExportingCartera(false);
+    }
+  };
+
+  const handleExportarDirectorioCompleto = async () => {
+    try {
+      setIsExportingDirectorio(true);
+      toast.loading("Generando Excel de Directorio Completo...", { id: "export-directorio" });
+      await descargarDirectorioCompletoExcel();
+      toast.success("Directorio completo descargado correctamente", { id: "export-directorio" });
+    } catch (error: any) {
+      toast.error(error.message || "Error al exportar directorio completo", { id: "export-directorio" });
+    } finally {
+      setIsExportingDirectorio(false);
     }
   };
 
@@ -312,8 +329,8 @@ function ClientesPage() {
                       : `${clientes.length} cliente${clientes.length !== 1 ? "s" : ""} registrado${clientes.length !== 1 ? "s" : ""}`}
                 </CardDescription>
               </div>
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <div className="relative w-full sm:w-72">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto items-stretch sm:items-center">
+                <div className="relative w-full sm:w-64">
                   <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="busqueda-clientes"
@@ -325,13 +342,32 @@ function ClientesPage() {
                   />
                 </div>
                 <Button 
-                  variant="default"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center"
-                  onClick={handleExportarExcel}
-                  disabled={isExporting}
+                  variant="outline"
+                  className="shadow-sm flex items-center justify-center border-primary/20 hover:bg-accent"
+                  onClick={handleExportarDirectorioCompleto}
+                  disabled={isExportingDirectorio || isExportingCartera}
+                  title="Exportar todos los clientes registrados"
                 >
-                  {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
-                  Exportar Respaldo
+                  {isExportingDirectorio ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Users className="mr-2 h-4 w-4 text-primary" />
+                  )}
+                  Exportar Directorio Completo
+                </Button>
+                <Button 
+                  variant="default"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center justify-center"
+                  onClick={handleExportarCarteraActiva}
+                  disabled={isExportingDirectorio || isExportingCartera}
+                  title="Exportar clientes con saldo pendiente de pago"
+                >
+                  {isExportingCartera ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  )}
+                  Exportar Cartera Activa
                 </Button>
               </div>
             </div>

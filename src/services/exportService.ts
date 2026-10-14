@@ -124,11 +124,11 @@ export async function descargarCarteraActivaExcel(): Promise<void> {
 }
 
 /**
- * Exporta el Directorio Completo: todos los clientes registrados en la base de datos (los 2.287).
- * Incluye sus datos demográficos, ruta asignada, estado y saldo pendiente actual si lo tienen.
+ * Exporta la Cartera Inactiva: clientes que NO tienen ningún crédito activo con saldo_pendiente > 0.
+ * (Clientes que ya pagaron, finalizados o sin deuda activa: ~1.727 clientes).
  * Ordenado de forma natural por # Cartera ascendente.
  */
-export async function descargarDirectorioCompletoExcel(): Promise<void> {
+export async function descargarCarteraInactivaExcel(): Promise<void> {
   let allData: any[] = [];
   let from = 0;
   const step = 1000;
@@ -154,13 +154,13 @@ export async function descargarDirectorioCompletoExcel(): Promise<void> {
         estado,
         fecha_creacion,
         ruta:rutas ( nombre_ruta ),
-        creditos ( saldo_pendiente, estado )
+        creditos ( id, saldo_pendiente, estado )
       `)
       .range(from, from + step - 1);
 
     if (error) {
-      console.error('Error al obtener directorio de clientes:', error);
-      throw new Error('No se pudo obtener el directorio completo de clientes');
+      console.error('Error al obtener cartera inactiva:', error);
+      throw new Error('No se pudo obtener la cartera inactiva de clientes');
     }
 
     allData = [...allData, ...(data || [])];
@@ -172,28 +172,26 @@ export async function descargarDirectorioCompletoExcel(): Promise<void> {
     }
   }
 
-  if (!allData || allData.length === 0) {
-    throw new Error('No hay clientes registrados para exportar');
+  // Filtrar exclusivamente los clientes que NO tienen ningún crédito con saldo pendiente > 0
+  const clientesInactivos = allData.filter((cliente: any) => {
+    const creditos = Array.isArray(cliente.creditos) ? cliente.creditos : [];
+    const tieneSaldoPendiente = creditos.some((c: any) => Number(c.saldo_pendiente) > 0);
+    return !tieneSaldoPendiente;
+  });
+
+  if (!clientesInactivos || clientesInactivos.length === 0) {
+    throw new Error('No hay clientes inactivos para exportar');
   }
 
   // Ordenar alfanuméricamente por # Cartera ascendente (igual que la vista)
-  allData.sort((a, b) => compararPorNumeroCartera(a, b, 'asc'));
+  clientesInactivos.sort((a, b) => compararPorNumeroCartera(a, b, 'asc'));
 
   // Transformar al formato Excel
-  const datosExcel = allData.map((cliente: any) => {
+  const datosExcel = clientesInactivos.map((cliente: any) => {
     const ruta = Array.isArray(cliente.ruta) ? cliente.ruta[0] : cliente.ruta;
     const creditos = Array.isArray(cliente.creditos) ? cliente.creditos : [];
-    
-    // Suma de saldo pendiente si tiene créditos activos
-    const saldoTotal = creditos.reduce(
-      (acc: number, c: any) => acc + (Number(c.saldo_pendiente) || 0),
-      0
-    );
 
-    const creditosActivosCount = creditos.filter(
-      (c: any) => Number(c.saldo_pendiente) > 0
-    ).length;
-
+    const totalCreditosHistoricos = creditos.length;
     const fechaRegistro = cliente.fecha_creacion
       ? new Date(cliente.fecha_creacion).toLocaleDateString()
       : 'N/A';
@@ -212,8 +210,7 @@ export async function descargarDirectorioCompletoExcel(): Promise<void> {
       'Lugar de Trabajo': cliente.lugar_trabajo || 'N/A',
       'Teléfono Trabajo': cliente.telefono_trabajo || 'N/A',
       'Estado Cliente': cliente.estado || 'N/A',
-      'Saldo Pendiente Total': saldoTotal,
-      'Créditos Activos': creditosActivosCount,
+      'Créditos Históricos': totalCreditosHistoricos,
       'Fecha Registro': fechaRegistro,
     };
   });
@@ -234,19 +231,19 @@ export async function descargarDirectorioCompletoExcel(): Promise<void> {
     { wch: 24 }, // Lugar de Trabajo
     { wch: 16 }, // Teléfono Trabajo
     { wch: 14 }, // Estado Cliente
-    { wch: 22 }, // Saldo Pendiente Total
-    { wch: 16 }, // Créditos Activos
+    { wch: 20 }, // Créditos Históricos
     { wch: 16 }, // Fecha Registro
   ];
 
   const libro = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(libro, hoja, 'Directorio Clientes');
+  XLSX.utils.book_append_sheet(libro, hoja, 'Cartera Inactiva');
 
   const hoyStr = new Date().toISOString().split('T')[0];
-  const nombreArchivo = `Directorio_Completo_Clientes_${hoyStr}.xlsx`;
+  const nombreArchivo = `Cartera_Inactiva_Mercacredito_${hoyStr}.xlsx`;
 
   XLSX.writeFile(libro, nombreArchivo);
 }
 
 /** Alias para compatibilidad con llamadas anteriores */
+export const descargarDirectorioCompletoExcel = descargarCarteraInactivaExcel;
 export const descargarRespaldoExcel = descargarCarteraActivaExcel;

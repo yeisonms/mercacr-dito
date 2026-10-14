@@ -17,7 +17,7 @@ import {
 import { toast } from "sonner";
 import {
   descargarCarteraActivaExcel,
-  descargarDirectorioCompletoExcel,
+  descargarCarteraInactivaExcel,
 } from "@/services/exportService";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -212,7 +212,7 @@ function ClientesPage() {
   const { data: clientes = [], isLoading, isError, refetch } = useClientes();
   const [busqueda, setBusqueda] = useState("");
   const [isExportingCartera, setIsExportingCartera] = useState(false);
-  const [isExportingDirectorio, setIsExportingDirectorio] = useState(false);
+  const [isExportingInactiva, setIsExportingInactiva] = useState(false);
   const [ordenDireccion, setOrdenDireccion] = useState<"asc" | "desc">("asc");
 
   const handleExportarCarteraActiva = async () => {
@@ -228,16 +228,16 @@ function ClientesPage() {
     }
   };
 
-  const handleExportarDirectorioCompleto = async () => {
+  const handleExportarCarteraInactiva = async () => {
     try {
-      setIsExportingDirectorio(true);
-      toast.loading("Generando Excel de Directorio Completo...", { id: "export-directorio" });
-      await descargarDirectorioCompletoExcel();
-      toast.success("Directorio completo descargado correctamente", { id: "export-directorio" });
+      setIsExportingInactiva(true);
+      toast.loading("Generando Excel de Cartera Inactiva...", { id: "export-inactiva" });
+      await descargarCarteraInactivaExcel();
+      toast.success("Cartera Inactiva descargada correctamente", { id: "export-inactiva" });
     } catch (error: any) {
-      toast.error(error.message || "Error al exportar directorio completo", { id: "export-directorio" });
+      toast.error(error.message || "Error al exportar cartera inactiva", { id: "export-inactiva" });
     } finally {
-      setIsExportingDirectorio(false);
+      setIsExportingInactiva(false);
     }
   };
 
@@ -343,24 +343,24 @@ function ClientesPage() {
                 </div>
                 <Button 
                   variant="outline"
-                  className="shadow-sm flex items-center justify-center border-primary/20 hover:bg-accent"
-                  onClick={handleExportarDirectorioCompleto}
-                  disabled={isExportingDirectorio || isExportingCartera}
-                  title="Exportar todos los clientes registrados"
+                  className="shadow-sm flex items-center justify-center border-slate-300 hover:bg-slate-100 text-slate-700 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  onClick={handleExportarCarteraInactiva}
+                  disabled={isExportingInactiva || isExportingCartera}
+                  title="Exportar clientes sin crédito vigente o con saldo en cero (~1.727 clientes)"
                 >
-                  {isExportingDirectorio ? (
+                  {isExportingInactiva ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <Users className="mr-2 h-4 w-4 text-primary" />
+                    <FileSpreadsheet className="mr-2 h-4 w-4 text-slate-500" />
                   )}
-                  Exportar Directorio Completo
+                  Exportar Cartera Inactiva
                 </Button>
                 <Button 
                   variant="default"
                   className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center justify-center"
                   onClick={handleExportarCarteraActiva}
-                  disabled={isExportingDirectorio || isExportingCartera}
-                  title="Exportar clientes con saldo pendiente de pago"
+                  disabled={isExportingInactiva || isExportingCartera}
+                  title="Exportar clientes con saldo pendiente de pago (566 créditos activos)"
                 >
                   {isExportingCartera ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

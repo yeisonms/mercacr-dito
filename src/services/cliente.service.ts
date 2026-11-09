@@ -420,6 +420,7 @@ export async function obtenerCliente(id: string): Promise<Cliente> {
 export interface ActualizarClienteInput {
   nombres: string;
   apellidos: string;
+  cedula?: string | null;
   telefono_principal: string;
   telefono_alterno?: string | null;
   direccion: string;
@@ -442,8 +443,7 @@ export interface ActualizarClienteInput {
 }
 
 /**
- * Actualiza los campos editables de un cliente.
- * La cédula y el código consecutivo son inmutables.
+ * Actualiza los campos editables de un cliente, incluyendo su documento de cédula.
  */
 export async function actualizarCliente(
   id: string,
@@ -456,18 +456,19 @@ export async function actualizarCliente(
   const { data, error } = await supabase
     .from("clientes")
     .update({
-      nombres: input.nombres,
-      apellidos: input.apellidos,
-      telefono_principal: input.telefono_principal,
-      telefono_alterno: input.telefono_alterno ?? null,
-      direccion: input.direccion,
-      barrio: input.barrio,
-      ciudad: input.ciudad,
-      lugar_trabajo: input.lugar_trabajo ?? null,
-      telefono_trabajo: input.telefono_trabajo ?? null,
+      nombres: input.nombres.trim(),
+      apellidos: input.apellidos.trim(),
+      cedula: input.cedula && input.cedula.trim() !== "" ? input.cedula.trim() : null,
+      telefono_principal: input.telefono_principal.trim(),
+      telefono_alterno: input.telefono_alterno?.trim() || null,
+      direccion: input.direccion.trim() || "Dirección no registrada",
+      barrio: input.barrio.trim() || "Sin barrio",
+      ciudad: input.ciudad.trim() || "Popayán",
+      lugar_trabajo: input.lugar_trabajo?.trim() || null,
+      telefono_trabajo: input.telefono_trabajo?.trim() || null,
       ruta_id: input.ruta_id,
       estado: input.estado,
-      numero_cartera: input.numero_cartera ?? null,
+      numero_cartera: input.numero_cartera?.trim() || null,
       latitud: input.latitud ?? null,
       longitud: input.longitud ?? null,
       foto_cliente_url: input.foto_cliente_url ?? null,
@@ -476,13 +477,19 @@ export async function actualizarCliente(
       foto_casa_1_url: input.foto_casa_1_url ?? null,
       foto_casa_2_url: input.foto_casa_2_url ?? null,
       bloqueado: input.bloqueado ?? false,
-      motivo_bloqueo: input.motivo_bloqueo ?? null,
+      motivo_bloqueo: input.motivo_bloqueo?.trim() || null,
     })
     .eq("id", id)
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error(`El número de cédula ${input.cedula} ya se encuentra registrado con otro cliente.`);
+    }
+    throw error;
+  }
+
   return data;
 }
 

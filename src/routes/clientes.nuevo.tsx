@@ -543,11 +543,11 @@ function NuevoClientePage() {
                 name="cedula"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cédula *</FormLabel>
+                    <FormLabel>Cédula (opcional)</FormLabel>
                     <FormControl>
                       <Input
                         inputMode="numeric"
-                        placeholder="1023456789"
+                        placeholder="Sin cédula (opcional)"
                         disabled={enviando}
                         {...field}
                       />

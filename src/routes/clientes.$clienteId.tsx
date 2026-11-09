@@ -92,7 +92,15 @@ const soloDigitos = (msg: string) =>
 const editSchema = z.object({
   nombres: z.string().trim().min(2, "Mínimo 2 caracteres").max(100),
   apellidos: z.string().trim().min(2, "Mínimo 2 caracteres").max(100),
-  telefono_principal: soloDigitos("El teléfono es requerido").max(20),
+  cedula: z
+    .string()
+    .trim()
+    .max(20, "Máximo 20 caracteres")
+    .regex(/^\d*$/, "Solo se permiten números")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  telefono_principal: z.string().trim().max(20).optional().or(z.literal("")),
   telefono_alterno: z
     .string()
     .trim()
@@ -100,9 +108,9 @@ const editSchema = z.object({
     .regex(/^\d*$/, "Solo números")
     .optional()
     .or(z.literal("")),
-  direccion: z.string().trim().min(3, "La dirección es requerida").max(150),
-  barrio: z.string().trim().min(2, "El barrio es requerido").max(100),
-  ciudad: z.string().trim().min(2, "La ciudad es requerida").max(100),
+  direccion: z.string().trim().max(150).optional().or(z.literal("")),
+  barrio: z.string().trim().max(100).optional().or(z.literal("")),
+  ciudad: z.string().trim().max(100).optional().or(z.literal("")),
   lugar_trabajo: z.string().trim().max(150).optional().or(z.literal("")),
   telefono_trabajo: z
     .string()
@@ -196,6 +204,7 @@ function ClientePerfilPage() {
       ? {
           nombres: cliente.nombres,
           apellidos: cliente.apellidos,
+          cedula: cliente.cedula ?? "",
           telefono_principal: cliente.telefono_principal,
           telefono_alterno: cliente.telefono_alterno ?? "",
           direccion: cliente.direccion,
@@ -459,7 +468,12 @@ function ClientePerfilPage() {
 
       await mutation.mutateAsync({
         ...values,
+        cedula: values.cedula ? values.cedula.trim() : null,
+        telefono_principal: values.telefono_principal || "",
         telefono_alterno: values.telefono_alterno || null,
+        direccion: values.direccion || "Dirección no registrada",
+        barrio: values.barrio || "Sin barrio",
+        ciudad: values.ciudad || "Popayán",
         lugar_trabajo: values.lugar_trabajo || null,
         telefono_trabajo: values.telefono_trabajo || null,
         numero_cartera: values.numero_cartera || null,
@@ -631,10 +645,16 @@ function ClientePerfilPage() {
                   </div>
                 </div>
 
-                {/* Datos inmutables */}
+                {/* Identificación y secuencia */}
                 <div className="flex flex-col items-end gap-1 text-right shrink-0">
                   <p className="text-xs text-muted-foreground">Cédula</p>
-                  <p className="font-mono font-semibold">{cliente.cedula}</p>
+                  <p className="font-mono font-semibold">
+                    {cliente.cedula || (
+                      <span className="text-muted-foreground italic font-normal text-xs">
+                        Sin registrar
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Secuencia de visita
                   </p>
@@ -654,7 +674,7 @@ function ClientePerfilPage() {
                 <div>
                   <CardTitle className="text-sm">Datos personales</CardTitle>
                   <CardDescription>
-                    La cédula no puede modificarse
+                    Información personal y documento de identidad del cliente
                   </CardDescription>
                 </div>
               </div>
@@ -694,13 +714,28 @@ function ClientePerfilPage() {
                   </FormItem>
                 )}
               />
-              {/* Cédula — solo lectura siempre */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-muted-foreground">
-                  Cédula (inmutable)
-                </label>
-                <Input value={cliente.cedula} disabled className="bg-muted/40 font-mono" />
-              </div>
+              {/* Cédula — editable en modo edición */}
+              <FormField
+                control={form.control}
+                name="cedula"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cédula de ciudadanía</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        placeholder="Sin cédula (opcional)"
+                        inputMode="numeric"
+                        disabled={!modoEdicion || mutation.isPending}
+                        className={!modoEdicion ? "bg-muted/40 font-mono" : "font-mono"}
+                        autoComplete="off"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="estado"

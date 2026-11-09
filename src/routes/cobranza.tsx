@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -78,6 +78,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import {
   obtenerCreditosCobro,
@@ -243,6 +250,70 @@ function optimizarRuta(
   return [...rutaOptima, ...sinGps];
 }
 
+// ─── Criterios de Búsqueda de Cobranza ────────────────────────────────────────
+
+type CriterioCobranza =
+  | "todos"
+  | "cartera"
+  | "nombre"
+  | "cedula"
+  | "barrio"
+  | "factura"
+  | "telefono";
+
+const PLACEHOLDERS_COBRANZA: Record<CriterioCobranza, string> = {
+  todos: "Buscar por nombre, cédula, barrio, cartera...",
+  cartera: "Buscar por # de cartera (ej. 15, 858A)...",
+  nombre: "Buscar por nombre o apellido...",
+  cedula: "Buscar por número de cédula...",
+  barrio: "Buscar por barrio...",
+  factura: "Buscar por factura o código...",
+  telefono: "Buscar por teléfono...",
+};
+
+const LABELS_COBRANZA: Record<CriterioCobranza, string> = {
+  todos: "todos los campos",
+  cartera: "# Cartera",
+  nombre: "Cliente",
+  cedula: "Cédula",
+  barrio: "Barrio",
+  factura: "Factura / Código",
+  telefono: "Teléfono",
+};
+
+type CriterioQuickSearch = "todos" | "cartera" | "nombre" | "cedula" | "codigo";
+
+const PLACEHOLDERS_QUICK_SEARCH: Record<CriterioQuickSearch, string> = {
+  todos: "Buscar por nombre, cédula, cartera o código...",
+  cartera: "Buscar por # de cartera (ej. 15, 858A)...",
+  nombre: "Buscar por nombre o apellido...",
+  cedula: "Buscar por número de cédula...",
+  codigo: "Buscar por código (ej. CLI-00123)...",
+};
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function matchCartera(cartera: string | null | undefined, q: string): boolean {
+  const qClean = q.trim().toLowerCase();
+  const carteraStr = (cartera || "").toLowerCase().trim();
+  if (!carteraStr) return false;
+  if (carteraStr === qClean) return true;
+
+  if (/^0+$/.test(qClean)) {
+    return carteraStr === qClean;
+  }
+
+  const esNumeroConSufijo = /^\d+[a-z]?$/i.test(qClean);
+  if (esNumeroConSufijo) {
+    const regex = new RegExp(`^0*${escapeRegex(qClean)}([^0-9]|$)`, "i");
+    return regex.test(carteraStr);
+  }
+
+  return carteraStr.includes(qClean);
+}
+
 // ─── Sub-Componente de Tarjeta Arrastrable ────────────────────────────────────
 
 function SortableCreditoCard({ 
@@ -303,8 +374,18 @@ function SortableCreditoCard({
               <h3 className="text-base font-semibold leading-tight text-foreground truncate">
                 {item.cliente.nombres} {item.cliente.apellidos}
               </h3>
-              <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                CC {item.cliente.cedula} | {item.numero_factura}
+              <p className="text-xs text-muted-foreground font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <span>CC {item.cliente.cedula}</span>
+                <span>|</span>
+                <span>{item.numero_factura}</span>
+                {item.cliente.numero_cartera && (
+                  <>
+                    <span>|</span>
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                      #{item.cliente.numero_cartera}
+                    </span>
+                  </>
+                )}
               </p>
             </div>
             <Badge
@@ -376,6 +457,7 @@ function CobranzaPage() {
   // --- NUEVO: ESTADO PARA PAGO LIBRE ---
   const [openQuickSearch, setOpenQuickSearch] = useState(false);
   const [quickSearchTerm, setQuickSearchTerm] = useState("");
+  const [criterioQuickSearch, setCriterioQuickSearch] = useState<CriterioQuickSearch>("todos");
   const [isModalPagoLibreOpen, setIsModalPagoLibreOpen] = useState(false);
   const [creditoLibre, setCreditoLibre] = useState<CreditoCobro | null>(null);
 
@@ -384,6 +466,35 @@ function CobranzaPage() {
     queryFn: () => buscarClientesParaEstadoCuenta(perfil?.rol === "Cobrador" ? perfil.id : undefined),
     enabled: openQuickSearch,
   });
+
+  const clientesLibresFiltrados = useMemo(() => {
+    const q = quickSearchTerm.trim().toLowerCase();
+    if (!q) return clientesLibres;
+    return clientesLibres.filter((c) => {
+      switch (criterioQuickSearch) {
+        case "cartera":
+          return matchCartera(c.numero_cartera, q);
+        case "nombre": {
+          const full = `${c.nombres || ""} ${c.apellidos || ""}`.toLowerCase();
+          return full.includes(q);
+        }
+        case "cedula":
+          return (c.cedula || "").toLowerCase().includes(q);
+        case "codigo":
+          return (c.codigo_consecutivo || "").toLowerCase().includes(q);
+        case "todos":
+        default: {
+          const full = `${c.nombres || ""} ${c.apellidos || ""}`.toLowerCase();
+          return (
+            full.includes(q) ||
+            (c.cedula || "").includes(q) ||
+            (c.codigo_consecutivo || "").toLowerCase().includes(q) ||
+            matchCartera(c.numero_cartera, q)
+          );
+        }
+      }
+    });
+  }, [clientesLibres, quickSearchTerm, criterioQuickSearch]);
 
   const handleSeleccionarClienteLibre = async (clienteId: string) => {
     setOpenQuickSearch(false);
@@ -479,6 +590,7 @@ function CobranzaPage() {
   };
 
   const [busqueda, setBusqueda] = useState("");
+  const [criterioBusqueda, setCriterioBusqueda] = useState<CriterioCobranza>("todos");
   const [creditoSeleccionado, setCreditoSeleccionado] = useState<CreditoCobro | null>(null);
   const [cuotaSugerida, setCuotaSugerida] = useState<number | null>(null);
   
@@ -659,21 +771,45 @@ function CobranzaPage() {
     },
   });
 
-  // 4. Filtrar clientes localmente por nombre, cédula o barrio
+  // 4. Filtrar clientes localmente según criterio de búsqueda
   const creditosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return localCreditos;
-    return localCreditos.filter(
-      (item) => {
-        const fullName = `${item.cliente?.nombres || ""} ${item.cliente?.apellidos || ""}`.toLowerCase();
-        return fullName.includes(q) ||
-               (item.cliente?.cedula || "").includes(q) ||
-               (item.cliente?.barrio || "").toLowerCase().includes(q) ||
-               (item.cliente?.numero_cartera || "").toLowerCase().includes(q) ||
-               (item.cliente?.codigo_consecutivo || "").toLowerCase().includes(q);
+    return localCreditos.filter((item) => {
+      switch (criterioBusqueda) {
+        case "cartera":
+          return matchCartera(item.cliente?.numero_cartera, q);
+        case "nombre": {
+          const fullName = `${item.cliente?.nombres || ""} ${item.cliente?.apellidos || ""}`.toLowerCase();
+          return fullName.includes(q);
+        }
+        case "cedula":
+          return (item.cliente?.cedula || "").toLowerCase().includes(q);
+        case "barrio":
+          return (item.cliente?.barrio || "").toLowerCase().includes(q);
+        case "factura":
+          return (
+            (item.numero_factura || "").toLowerCase().includes(q) ||
+            (item.cliente?.codigo_consecutivo || "").toLowerCase().includes(q)
+          );
+        case "telefono":
+          return (item.cliente?.telefono_principal || "").includes(q);
+        case "todos":
+        default: {
+          const fullName = `${item.cliente?.nombres || ""} ${item.cliente?.apellidos || ""}`.toLowerCase();
+          return (
+            fullName.includes(q) ||
+            (item.cliente?.cedula || "").includes(q) ||
+            (item.cliente?.barrio || "").toLowerCase().includes(q) ||
+            (item.numero_factura || "").toLowerCase().includes(q) ||
+            (item.cliente?.codigo_consecutivo || "").toLowerCase().includes(q) ||
+            (item.cliente?.telefono_principal || "").includes(q) ||
+            matchCartera(item.cliente?.numero_cartera, q)
+          );
+        }
       }
-    );
-  }, [localCreditos, busqueda]);
+    });
+  }, [localCreditos, busqueda, criterioBusqueda]);
 
   // 5. Manejo del input de archivo / foto
   const handleFotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1071,23 +1207,45 @@ function CobranzaPage() {
       <div className="mx-auto max-w-md space-y-4">
         {/* Barra de Búsqueda Superior y Botón Fuera de Ruta */}
         <div className="flex flex-col gap-2">
-          <div className="relative">
-            <Search className="absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Buscar por nombre, cédula o barrio..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="h-12 pl-10 pr-10 text-base rounded-xl shadow-xs"
-            />
-            {busqueda && (
-              <button
-                onClick={() => setBusqueda("")}
-                className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+          <div className="flex gap-2 items-center">
+            <Select
+              value={criterioBusqueda}
+              onValueChange={(val: CriterioCobranza) => setCriterioBusqueda(val)}
+            >
+              <SelectTrigger className="w-32 sm:w-36 h-12 text-xs font-semibold rounded-xl bg-card border-border shrink-0 shadow-xs">
+                <SelectValue placeholder="Buscar en..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="cartera"># Cartera</SelectItem>
+                <SelectItem value="nombre">Cliente</SelectItem>
+                <SelectItem value="cedula">Cédula</SelectItem>
+                <SelectItem value="barrio">Barrio</SelectItem>
+                <SelectItem value="factura">Factura</SelectItem>
+                <SelectItem value="telefono">Teléfono</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="relative flex-1">
+              <Search className="absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder={PLACEHOLDERS_COBRANZA[criterioBusqueda]}
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="h-12 pl-10 pr-10 text-sm sm:text-base rounded-xl shadow-xs"
+              />
+              {busqueda && (
+                <button
+                  type="button"
+                  onClick={() => setBusqueda("")}
+                  className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted"
+                  title="Limpiar búsqueda"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
           <Button 
             variant="outline" 
@@ -1128,6 +1286,9 @@ function CobranzaPage() {
           <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
             <span>
               Clientes en ruta: <strong>{creditosFiltrados.length}</strong>
+              {busqueda && criterioBusqueda !== "todos" && (
+                <span className="text-primary font-medium"> ({LABELS_COBRANZA[criterioBusqueda]})</span>
+              )}
             </span>
             <span>
               Saldo total pendiente:{" "}
@@ -1274,38 +1435,62 @@ function CobranzaPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <Input 
-              placeholder="Buscar por nombre o cédula..." 
-              value={quickSearchTerm}
-              onChange={(e) => setQuickSearchTerm(e.target.value)}
-              autoFocus
-            />
+            <div className="flex gap-2">
+              <Select
+                value={criterioQuickSearch}
+                onValueChange={(val: CriterioQuickSearch) => setCriterioQuickSearch(val)}
+              >
+                <SelectTrigger className="w-28 sm:w-32 h-10 text-xs font-semibold rounded-lg shrink-0">
+                  <SelectValue placeholder="Buscar en..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="cartera"># Cartera</SelectItem>
+                  <SelectItem value="nombre">Nombre</SelectItem>
+                  <SelectItem value="cedula">Cédula</SelectItem>
+                  <SelectItem value="codigo">Código</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input 
+                  placeholder={PLACEHOLDERS_QUICK_SEARCH[criterioQuickSearch]} 
+                  value={quickSearchTerm}
+                  onChange={(e) => setQuickSearchTerm(e.target.value)}
+                  className="pl-9 pr-8 h-10 rounded-lg text-xs sm:text-sm"
+                  autoFocus
+                />
+                {quickSearchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setQuickSearchTerm("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded-full"
+                    title="Limpiar búsqueda"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="max-h-60 overflow-y-auto space-y-2">
-              {clientesLibres
-                .filter(c => 
-                  (c.nombres || "").toLowerCase().includes(quickSearchTerm.toLowerCase()) || 
-                  (c.apellidos || "").toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
-                  (c.cedula || "").includes(quickSearchTerm)
-                )
-                .slice(0, 10)
-                .map(c => (
+              {clientesLibresFiltrados
+                .slice(0, 15)
+                .map((c) => (
                 <div 
                   key={c.id} 
                   className="flex items-center justify-between p-3 border rounded-xl hover:bg-muted/50 cursor-pointer transition-colors"
                   onClick={() => handleSeleccionarClienteLibre(c.id)}
                 >
-                  <div>
-                    <p className="text-sm font-bold">{c.nombres} {c.apellidos}</p>
-                    <p className="text-xs text-muted-foreground">CC: {c.cedula} | # Cartera: {c.numero_cartera || "-"}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold truncate">{c.nombres} {c.apellidos}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {c.codigo_consecutivo ? `${c.codigo_consecutivo} • ` : ""}CC: {c.cedula || "N/A"} • # Cartera: <span className="font-semibold text-emerald-700 dark:text-emerald-400">#{c.numero_cartera || "-"}</span>
+                    </p>
                   </div>
                 </div>
               ))}
-              {clientesLibres.length > 0 && quickSearchTerm.length > 0 && clientesLibres.filter(c => 
-                  (c.nombres || "").toLowerCase().includes(quickSearchTerm.toLowerCase()) || 
-                  (c.apellidos || "").toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
-                  (c.cedula || "").includes(quickSearchTerm)
-                ).length === 0 && (
-                <p className="text-center text-sm text-muted-foreground">No se encontraron clientes.</p>
+              {clientesLibres.length > 0 && quickSearchTerm.length > 0 && clientesLibresFiltrados.length === 0 && (
+                <p className="text-center text-sm text-muted-foreground py-4">No se encontraron clientes.</p>
               )}
             </div>
           </div>

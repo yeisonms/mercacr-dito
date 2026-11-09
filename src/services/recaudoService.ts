@@ -16,6 +16,8 @@ export interface ClienteInfo {
   latitud?: number | null;
   longitud?: number | null;
   secuencia_visita?: number;
+  numero_cartera?: string | null;
+  codigo_consecutivo?: string | null;
 }
 
 export interface CreditoCobro {
@@ -215,7 +217,9 @@ export async function obtenerCreditosCobro(cobradorId?: string): Promise<Credito
         latitud,
         longitud,
         secuencia_visita,
-        ruta_id
+        ruta_id,
+        numero_cartera,
+        codigo_consecutivo
       )
     `)
     .in("estado", ["Al día", "Próximo a vencer", "En mora"])
@@ -257,6 +261,8 @@ export async function obtenerCreditosCobro(cobradorId?: string): Promise<Credito
               latitud: clienteRaw.latitud ? Number(clienteRaw.latitud) : null,
               longitud: clienteRaw.longitud ? Number(clienteRaw.longitud) : null,
               secuencia_visita: Number(clienteRaw.secuencia_visita || 0),
+              numero_cartera: clienteRaw.numero_cartera ?? null,
+              codigo_consecutivo: clienteRaw.codigo_consecutivo ?? null,
             }
           : {
               id: "desconocido",
@@ -268,6 +274,8 @@ export async function obtenerCreditosCobro(cobradorId?: string): Promise<Credito
               latitud: null,
               longitud: null,
               secuencia_visita: 0,
+              numero_cartera: null,
+              codigo_consecutivo: null,
             },
       };
     })

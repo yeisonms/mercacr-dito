@@ -13,6 +13,7 @@ import {
   Loader2,
   ArrowUp,
   ArrowDown,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -25,6 +26,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -132,7 +140,7 @@ function FilaSkeleton() {
 
 // ─── Estado vacío ─────────────────────────────────────────────────────────────
 
-function EstadoVacio({ buscando }: { buscando: boolean }) {
+function EstadoVacio({ buscando, criterio }: { buscando: boolean; criterio?: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
       <div className="grid h-16 w-16 place-items-center rounded-full bg-muted text-muted-foreground">
@@ -146,7 +154,7 @@ function EstadoVacio({ buscando }: { buscando: boolean }) {
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {buscando
-            ? "Prueba con otro nombre, cédula o código."
+            ? `Prueba con otro término${criterio ? ` o cambia la columna de búsqueda (${criterio}).` : "."}`
             : "Registra el primer cliente para comenzar."}
         </p>
       </div>
@@ -206,11 +214,68 @@ function AccionesMenu({ cliente }: { cliente: Cliente }) {
 }
 
 
+// ─── Criterios de Búsqueda ───────────────────────────────────────────────────
+
+export type CriterioBusqueda =
+  | "todos"
+  | "cartera"
+  | "codigo"
+  | "nombre"
+  | "cedula"
+  | "telefono"
+  | "barrio";
+
+const PLACEHOLDERS_BUSQUEDA: Record<CriterioBusqueda, string> = {
+  todos: "Buscar por nombre, cédula, código, cartera...",
+  cartera: "Buscar por # de cartera (ej. 15, 858A)...",
+  codigo: "Buscar por código (ej. CLI-00015 o 15)...",
+  nombre: "Buscar por nombre o apellido...",
+  cedula: "Buscar por número de cédula...",
+  telefono: "Buscar por número de teléfono...",
+  barrio: "Buscar por barrio...",
+};
+
+const LABELS_CRITERIO: Record<CriterioBusqueda, string> = {
+  todos: "todos los campos",
+  cartera: "# Cartera",
+  codigo: "Código",
+  nombre: "Cliente / Nombre",
+  cedula: "Cédula",
+  telefono: "Teléfono",
+  barrio: "Barrio",
+};
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function matchCartera(cartera: string | null | undefined, q: string): boolean {
+  const qClean = q.trim().toLowerCase();
+  const carteraStr = (cartera || "").toLowerCase().trim();
+  if (!carteraStr) return false;
+  if (carteraStr === qClean) return true;
+
+  // Si busca únicamente ceros ("0", "00", "000")
+  if (/^0+$/.test(qClean)) {
+    return carteraStr === qClean;
+  }
+
+  // Si busca un número con posible letra sufijo (ej. "15", "15a", "858a")
+  const esNumeroConSufijo = /^\d+[a-z]?$/i.test(qClean);
+  if (esNumeroConSufijo) {
+    const regex = new RegExp(`^0*${escapeRegex(qClean)}([^0-9]|$)`, "i");
+    return regex.test(carteraStr);
+  }
+
+  return carteraStr.includes(qClean);
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 function ClientesPage() {
   const { data: clientes = [], isLoading, isError, refetch } = useClientes();
   const [busqueda, setBusqueda] = useState("");
+  const [criterioBusqueda, setCriterioBusqueda] = useState<CriterioBusqueda>("todos");
   const [isExportingCartera, setIsExportingCartera] = useState(false);
   const [isExportingInactiva, setIsExportingInactiva] = useState(false);
   const [ordenDireccion, setOrdenDireccion] = useState<"asc" | "desc">("asc");
@@ -241,23 +306,49 @@ function ClientesPage() {
     }
   };
 
-  // Filtrado en tiempo real y ordenamiento alfanumérico por número de cartera
+  // Filtrado en tiempo real según criterio y ordenamiento alfanumérico por número de cartera
   const clientesFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    const filtrados = !q
-      ? [...clientes]
-      : clientes.filter(
-          (c) => {
-            const fullName = `${c.nombres || ""} ${c.apellidos || ""}`.toLowerCase();
-            return fullName.includes(q) ||
-                   (c.cedula || "").includes(q) ||
-                   (c.codigo_consecutivo || "").toLowerCase().includes(q) ||
-                   (c.numero_cartera || "").toLowerCase().includes(q);
-          }
-        );
+    if (!q) {
+      return [...clientes].sort((a, b) => compararPorNumeroCartera(a, b, ordenDireccion));
+    }
+
+    const filtrados = clientes.filter((c) => {
+      switch (criterioBusqueda) {
+        case "cartera":
+          return matchCartera(c.numero_cartera, q);
+        case "codigo":
+          return (c.codigo_consecutivo || "").toLowerCase().includes(q);
+        case "nombre": {
+          const fullName = `${c.nombres || ""} ${c.apellidos || ""}`.toLowerCase();
+          return fullName.includes(q);
+        }
+        case "cedula":
+          return (c.cedula || "").toLowerCase().includes(q);
+        case "telefono":
+          return (
+            (c.telefono_principal || "").includes(q) ||
+            (c.telefono_alterno || "").includes(q)
+          );
+        case "barrio":
+          return (c.barrio || "").toLowerCase().includes(q);
+        case "todos":
+        default: {
+          const fullName = `${c.nombres || ""} ${c.apellidos || ""}`.toLowerCase();
+          return (
+            fullName.includes(q) ||
+            (c.cedula || "").includes(q) ||
+            (c.codigo_consecutivo || "").toLowerCase().includes(q) ||
+            (c.telefono_principal || "").includes(q) ||
+            (c.barrio || "").toLowerCase().includes(q) ||
+            matchCartera(c.numero_cartera, q)
+          );
+        }
+      }
+    });
 
     return filtrados.sort((a, b) => compararPorNumeroCartera(a, b, ordenDireccion));
-  }, [clientes, busqueda, ordenDireccion]);
+  }, [clientes, busqueda, criterioBusqueda, ordenDireccion]);
 
   const acciones = (
     <div className="flex items-center gap-2">
@@ -325,22 +416,53 @@ function ClientesPage() {
                   {isLoading
                     ? "Cargando…"
                     : busqueda
-                      ? `${clientesFiltrados.length} resultado${clientesFiltrados.length !== 1 ? "s" : ""} de ${clientes.length}`
+                      ? `${clientesFiltrados.length} resultado${clientesFiltrados.length !== 1 ? "s" : ""} de ${clientes.length}${criterioBusqueda !== "todos" ? ` (en ${LABELS_CRITERIO[criterioBusqueda]})` : ""}`
                       : `${clientes.length} cliente${clientes.length !== 1 ? "s" : ""} registrado${clientes.length !== 1 ? "s" : ""}`}
                 </CardDescription>
               </div>
               <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto items-stretch sm:items-center">
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="busqueda-clientes"
-                    placeholder="Buscar por nombre, cédula o código…"
-                    value={busqueda}
-                    onChange={(e) => setBusqueda(e.target.value)}
-                    className="pl-8"
-                    autoComplete="off"
-                  />
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-stretch sm:items-center">
+                  <Select
+                    value={criterioBusqueda}
+                    onValueChange={(val: CriterioBusqueda) => setCriterioBusqueda(val)}
+                  >
+                    <SelectTrigger className="w-full sm:w-44 h-9 text-xs font-medium">
+                      <SelectValue placeholder="Buscar por..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos los campos</SelectItem>
+                      <SelectItem value="cartera"># Cartera</SelectItem>
+                      <SelectItem value="codigo">Código</SelectItem>
+                      <SelectItem value="nombre">Cliente / Nombre</SelectItem>
+                      <SelectItem value="cedula">Cédula</SelectItem>
+                      <SelectItem value="telefono">Teléfono</SelectItem>
+                      <SelectItem value="barrio">Barrio</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="busqueda-clientes"
+                      placeholder={PLACEHOLDERS_BUSQUEDA[criterioBusqueda]}
+                      value={busqueda}
+                      onChange={(e) => setBusqueda(e.target.value)}
+                      className="pl-8 pr-8"
+                      autoComplete="off"
+                    />
+                    {busqueda && (
+                      <button
+                        type="button"
+                        onClick={() => setBusqueda("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 rounded-sm transition-colors"
+                        title="Limpiar búsqueda"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
+
                 <Button 
                   variant="outline"
                   className="shadow-sm flex items-center justify-center border-slate-300 hover:bg-slate-100 text-slate-700 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -432,7 +554,14 @@ function ClientesPage() {
                     {!isLoading && clientesFiltrados.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={8} className="p-0">
-                          <EstadoVacio buscando={busqueda.length > 0} />
+                          <EstadoVacio
+                            buscando={busqueda.length > 0}
+                            criterio={
+                              criterioBusqueda !== "todos"
+                                ? LABELS_CRITERIO[criterioBusqueda]
+                                : undefined
+                            }
+                          />
                         </TableCell>
                       </TableRow>
                     )}

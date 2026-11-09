@@ -673,19 +673,8 @@ export async function aprobarRecaudo(
     throw new Error(`Error al aprobar el recaudo: ${errorRecaudoUpdate.message}`);
   }
 
-  // Paso C: Descontar el saldo en creditos. Si nuevo saldo es 0, finalizar crédito.
-  const { error: errorCreditoUpdate } = await supabase
-    .from("creditos")
-    .update({
-      saldo_pendiente: nuevoSaldo,
-      ...(nuevoSaldoContado !== null ? { saldo_contado: nuevoSaldoContado } : {}),
-      ...(nuevoSaldo <= 0 ? { estado: "Finalizado" } : {}),
-    })
-    .eq("id", creditoId);
-
-  if (errorCreditoUpdate) {
-    throw new Error(`Error al actualizar el saldo del crédito: ${errorCreditoUpdate.message}`);
-  }
+  // Paso C: Sincronizar saldos en crédito y redistribuir pagos en amortización (cuotas)
+  await sincronizarCreditoYCuotas(creditoId);
 
   // --- ACTUALIZACIÓN INTELIGENTE DE RUTA ---
   // Si hoy el cliente tenía ruta y no estaba visitado, lo marcamos automáticamente
@@ -785,4 +774,315 @@ export async function actualizarSecuenciaRuta(
   if (error) {
     throw new Error(`Error al actualizar secuencias: ${error.error?.message}`);
   }
+}
+
+// ─── Sincronización y Corrección Financiera de Recaudos ──────────────────────
+
+/**
+ * Recalcula y redistribuye los pagos de un crédito en su amortización (cuotas),
+ * actualizando el saldo_pendiente y saldo_contado con total consistencia.
+ */
+export async function sincronizarCreditoYCuotas(creditoId: string): Promise<{
+  nuevoSaldoPendiente: number;
+  nuevoSaldoContado: number | null;
+}> {
+  if (!isSupabaseConfigured) {
+    return { nuevoSaldoPendiente: 0, nuevoSaldoContado: null };
+  }
+
+  // 1. Obtener información del crédito
+  const { data: credito, error: credError } = await supabase
+    .from("creditos")
+    .select("id, valor_credito, valor_contado, cuota_inicial, tipo_venta, penalidad_aplicada, estado")
+    .eq("id", creditoId)
+    .single();
+
+  if (credError || !credito) {
+    throw new Error(`No se encontró el crédito para sincronizar: ${credError?.message || "Sin datos"}`);
+  }
+
+  // 2. Obtener todos los recaudos aprobados de este crédito
+  const { data: recaudosAprobados, error: recError } = await supabase
+    .from("recaudos")
+    .select("valor_recibido")
+    .eq("credito_id", creditoId)
+    .eq("estado", "Aprobado");
+
+  if (recError) {
+    throw new Error(`Error consultando recaudos aprobados: ${recError.message}`);
+  }
+
+  const totalRecaudado = (recaudosAprobados || []).reduce(
+    (sum, r) => sum + (Number(r.valor_recibido) || 0),
+    0
+  );
+
+  // 3. Calcular saldos del crédito
+  const cuotaInicial = Number(credito.cuota_inicial) || 0;
+  const valorCredito = Number(credito.valor_credito) || 0;
+  const valorContado = Number(credito.valor_contado) || 0;
+
+  let nuevoSaldoPendiente = Math.max(0, valorCredito - cuotaInicial - totalRecaudado);
+  let nuevoSaldoContado: number | null = null;
+
+  if (credito.tipo_venta === "Credicontado" && !credito.penalidad_aplicada) {
+    nuevoSaldoContado = Math.max(0, valorContado - cuotaInicial - totalRecaudado);
+    // Si cumple credicontado y saldo contado llegó a 0, se perdona el resto (pronto pago)
+    if (nuevoSaldoContado <= 0) {
+      nuevoSaldoPendiente = 0;
+    }
+  } else if (credito.tipo_venta === "Credicontado" && credito.penalidad_aplicada) {
+    nuevoSaldoContado = 0;
+  }
+
+  // Determinar nuevo estado del crédito
+  let nuevoEstado = credito.estado;
+  if (nuevoSaldoPendiente <= 0) {
+    nuevoEstado = "Finalizado";
+  } else if (credito.estado === "Finalizado" && nuevoSaldoPendiente > 0) {
+    nuevoEstado = "Al día";
+  }
+
+  // Actualizar el crédito
+  const { error: updateCredError } = await supabase
+    .from("creditos")
+    .update({
+      saldo_pendiente: nuevoSaldoPendiente,
+      ...(nuevoSaldoContado !== null ? { saldo_contado: nuevoSaldoContado } : {}),
+      estado: nuevoEstado,
+    })
+    .eq("id", creditoId);
+
+  if (updateCredError) {
+    throw new Error(`Error al actualizar saldos del crédito: ${updateCredError.message}`);
+  }
+
+  // 4. Redistribuir pagos en las cuotas (Algoritmo FIFO)
+  const { data: cuotas, error: cuotasError } = await supabase
+    .from("cuotas")
+    .select("id, numero_cuota, valor_cuota, valor_pagado, saldo_cuota, estado")
+    .eq("credito_id", creditoId)
+    .order("numero_cuota", { ascending: true });
+
+  if (!cuotasError && cuotas && cuotas.length > 0) {
+    let bolsa = totalRecaudado;
+
+    for (const cuota of cuotas) {
+      const valorCuota = Number(cuota.valor_cuota);
+      let nvoPagado = 0;
+      let nvoSaldo = valorCuota;
+      let nvoEstado: "Pendiente" | "Parcial" | "Pagada" = "Pendiente";
+
+      if (bolsa >= valorCuota) {
+        nvoPagado = valorCuota;
+        nvoSaldo = 0;
+        nvoEstado = "Pagada";
+        bolsa -= valorCuota;
+      } else if (bolsa > 0) {
+        nvoPagado = bolsa;
+        nvoSaldo = valorCuota - bolsa;
+        nvoEstado = "Parcial";
+        bolsa = 0;
+      } else {
+        nvoPagado = 0;
+        nvoSaldo = valorCuota;
+        nvoEstado = "Pendiente";
+      }
+
+      if (
+        nvoPagado !== Number(cuota.valor_pagado) ||
+        nvoSaldo !== Number(cuota.saldo_cuota) ||
+        nvoEstado !== cuota.estado
+      ) {
+        await supabase
+          .from("cuotas")
+          .update({
+            valor_pagado: nvoPagado,
+            saldo_cuota: nvoSaldo,
+            estado: nvoEstado,
+          })
+          .eq("id", cuota.id);
+      }
+    }
+  }
+
+  return { nuevoSaldoPendiente, nuevoSaldoContado };
+}
+
+export interface CorregirRecaudoInput {
+  recaudoId: string;
+  nuevoValor: number;
+  motivo: string;
+  usuarioId?: string;
+  usuarioNombre?: string;
+}
+
+/**
+ * Corrige el valor monetario de un recaudo registrado y recalcula todo el impacto financiero.
+ */
+export async function corregirRecaudo(input: CorregirRecaudoInput): Promise<{
+  nuevoSaldoPendiente: number;
+  nuevoSaldoContado: number | null;
+}> {
+  if (!isSupabaseConfigured) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return { nuevoSaldoPendiente: 100000, nuevoSaldoContado: null };
+  }
+
+  if (input.nuevoValor <= 0) {
+    throw new Error("El nuevo valor del recaudo debe ser mayor a 0");
+  }
+
+  if (!input.motivo || input.motivo.trim().length < 5) {
+    throw new Error("Debes ingresar un motivo detallado de la corrección (mínimo 5 caracteres)");
+  }
+
+  // 1. Obtener el recaudo actual
+  const { data: recaudo, error: errorRec } = await supabase
+    .from("recaudos")
+    .select("id, credito_id, valor_recibido, observaciones, estado")
+    .eq("id", input.recaudoId)
+    .single();
+
+  if (errorRec || !recaudo) {
+    throw new Error(`No se encontró el recaudo a corregir: ${errorRec?.message || "Sin datos"}`);
+  }
+
+  const valorAnterior = Number(recaudo.valor_recibido);
+  const nuevoValor = Number(input.nuevoValor);
+
+  // 2. Actualizar el recaudo
+  const fechaHoyStr = new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" });
+  const notaAuditoria = `\n[CORRECCIÓN ${fechaHoyStr} por ${input.usuarioNombre || "Administrador"}]: Ajustado de $${valorAnterior.toLocaleString("es-CO")} a $${nuevoValor.toLocaleString("es-CO")}. Motivo: ${input.motivo.trim()}`;
+  const observacionesActualizadas = `${recaudo.observaciones ? recaudo.observaciones : ""}${notaAuditoria}`.trim();
+
+  const { error: updateRecError } = await supabase
+    .from("recaudos")
+    .update({
+      valor_recibido: nuevoValor,
+      observaciones: observacionesActualizadas,
+      fecha_revision: new Date().toISOString(),
+      ...(input.usuarioId ? { revisado_por: input.usuarioId } : {}),
+    })
+    .eq("id", input.recaudoId);
+
+  if (updateRecError) {
+    throw new Error(`Error al actualizar el recaudo: ${updateRecError.message}`);
+  }
+
+  // 3. Sincronizar saldos de crédito y tabla de amortización
+  const { nuevoSaldoPendiente, nuevoSaldoContado } = await sincronizarCreditoYCuotas(recaudo.credito_id);
+
+  // 4. Registrar en logs de auditoría
+  try {
+    await supabase.from("logs_auditoria").insert({
+      usuario_id: input.usuarioId || null,
+      accion: "CORRECCION_RECAUDO",
+      tabla_afectada: "recaudos",
+      registro_id: input.recaudoId,
+      valores_anteriores: {
+        valor_recibido: valorAnterior,
+        estado: recaudo.estado,
+      },
+      valores_nuevos: {
+        valor_recibido: nuevoValor,
+        motivo: input.motivo.trim(),
+        nuevo_saldo_pendiente: nuevoSaldoPendiente,
+        nuevo_saldo_contado: nuevoSaldoContado,
+        usuario_nombre: input.usuarioNombre || "Administrador",
+      },
+    });
+  } catch (auditErr) {
+    console.warn("No se pudo registrar log de auditoría:", auditErr);
+  }
+
+  return { nuevoSaldoPendiente, nuevoSaldoContado };
+}
+
+export interface AnularRecaudoInput {
+  recaudoId: string;
+  motivo: string;
+  usuarioId?: string;
+  usuarioNombre?: string;
+}
+
+/**
+ * Anula un recaudo marcándolo como 'Rechazado' y revirtiendo su valor en el crédito y cuotas.
+ */
+export async function anularRecaudo(input: AnularRecaudoInput): Promise<{
+  nuevoSaldoPendiente: number;
+  nuevoSaldoContado: number | null;
+}> {
+  if (!isSupabaseConfigured) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return { nuevoSaldoPendiente: 100000, nuevoSaldoContado: null };
+  }
+
+  if (!input.motivo || input.motivo.trim().length < 5) {
+    throw new Error("Debes ingresar un motivo detallado de la anulación (mínimo 5 caracteres)");
+  }
+
+  // 1. Obtener el recaudo actual
+  const { data: recaudo, error: errorRec } = await supabase
+    .from("recaudos")
+    .select("id, credito_id, valor_recibido, observaciones, estado")
+    .eq("id", input.recaudoId)
+    .single();
+
+  if (errorRec || !recaudo) {
+    throw new Error(`No se encontró el recaudo a anular: ${errorRec?.message || "Sin datos"}`);
+  }
+
+  if (recaudo.estado === "Rechazado") {
+    throw new Error("Este recaudo ya se encuentra anulado o rechazado.");
+  }
+
+  const valorAnterior = Number(recaudo.valor_recibido);
+
+  // 2. Marcar recaudo como Rechazado
+  const fechaHoyStr = new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" });
+  const notaAuditoria = `\n[ANULACIÓN ${fechaHoyStr} por ${input.usuarioNombre || "Administrador"}]: Recaudo ANULADO (era de $${valorAnterior.toLocaleString("es-CO")}). Motivo: ${input.motivo.trim()}`;
+  const observacionesActualizadas = `${recaudo.observaciones ? recaudo.observaciones : ""}${notaAuditoria}`.trim();
+
+  const { error: updateRecError } = await supabase
+    .from("recaudos")
+    .update({
+      estado: "Rechazado",
+      observaciones: observacionesActualizadas,
+      fecha_revision: new Date().toISOString(),
+      ...(input.usuarioId ? { revisado_por: input.usuarioId } : {}),
+    })
+    .eq("id", input.recaudoId);
+
+  if (updateRecError) {
+    throw new Error(`Error al anular el recaudo: ${updateRecError.message}`);
+  }
+
+  // 3. Sincronizar saldos de crédito y cuotas
+  const { nuevoSaldoPendiente, nuevoSaldoContado } = await sincronizarCreditoYCuotas(recaudo.credito_id);
+
+  // 4. Registrar en logs de auditoría
+  try {
+    await supabase.from("logs_auditoria").insert({
+      usuario_id: input.usuarioId || null,
+      accion: "ANULACION_RECAUDO",
+      tabla_afectada: "recaudos",
+      registro_id: input.recaudoId,
+      valores_anteriores: {
+        valor_recibido: valorAnterior,
+        estado: recaudo.estado,
+      },
+      valores_nuevos: {
+        estado: "Rechazado",
+        motivo: input.motivo.trim(),
+        nuevo_saldo_pendiente: nuevoSaldoPendiente,
+        nuevo_saldo_contado: nuevoSaldoContado,
+        usuario_nombre: input.usuarioNombre || "Administrador",
+      },
+    });
+  } catch (auditErr) {
+    console.warn("No se pudo registrar log de auditoría:", auditErr);
+  }
+
+  return { nuevoSaldoPendiente, nuevoSaldoContado };
 }

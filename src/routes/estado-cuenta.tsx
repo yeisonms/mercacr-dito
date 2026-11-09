@@ -17,6 +17,10 @@ import {
   Loader2,
   CalendarClock,
   AlertTriangle,
+  Pencil,
+  Trash2,
+  Receipt,
+  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +36,14 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -64,6 +76,12 @@ import {
 } from "@/services/estadoCuentaService";
 import { formatearMoneda } from "@/services/producto.service";
 import { ModalPago } from "@/components/pago/ModalPago";
+import {
+  ComprobanteReciboModal,
+  type ReciboData,
+} from "@/components/pago/ComprobanteReciboModal";
+import { ModalCorregirRecaudo } from "@/components/pago/ModalCorregirRecaudo";
+import { ModalAnularRecaudo } from "@/components/pago/ModalAnularRecaudo";
 import { Textarea } from "@/components/ui/textarea";
 import { anularVentaYDevolver } from "@/services/ventaService";
 
@@ -194,6 +212,77 @@ function EstadoCuentaPage() {
 
   // Cliente seleccionado actual en el combo
   const clienteSeleccionado = clientes.find(c => c.id === selectedClienteId);
+
+  // Estados para corrección, anulación y visualización de recibos
+  const [reciboParaVer, setReciboParaVer] = useState<ReciboData | null>(null);
+  const [isModalReciboOpen, setIsModalReciboOpen] = useState(false);
+
+  const [recaudoACorregir, setRecaudoACorregir] = useState<any | null>(null);
+  const [isModalCorregirOpen, setIsModalCorregirOpen] = useState(false);
+
+  const [recaudoAAnular, setRecaudoAAnular] = useState<any | null>(null);
+  const [isModalAnularOpen, setIsModalAnularOpen] = useState(false);
+
+  const handleVerRecibo = (r: any) => {
+    if (!estadoCuenta?.cliente || !estadoCuenta?.credito) return;
+    const recibo: ReciboData = {
+      fecha: formatearFechaHora(r.fecha),
+      clienteNombre: `${estadoCuenta.cliente.nombres} ${estadoCuenta.cliente.apellidos}`,
+      abono: r.valorRecibido,
+      totalCredito: estadoCuenta.credito.valorCredito,
+      saldoPendiente: estadoCuenta.credito.saldoPendiente,
+      telefono: estadoCuenta.cliente.telefono,
+      tipoCredito: estadoCuenta.credito.tipoVenta,
+      totalCredicontado: estadoCuenta.credito.valorContado,
+      saldoCredicontado: estadoCuenta.credito.saldoContado,
+      penalidadAplicada: estadoCuenta.credito.penalidadAplicada,
+      fechaLimitePago: estadoCuenta.credito.fechaLimiteCredicontado,
+      numeroFactura: estadoCuenta.credito.numeroFactura,
+      cobradorNombre: r.cobrador,
+      esCorregido: (r.observaciones || "").includes("[CORRECCIÓN"),
+    };
+    setReciboParaVer(recibo);
+    setIsModalReciboOpen(true);
+  };
+
+  const handleSuccessCorreccion = (res: {
+    recaudoId: string;
+    nuevoValor: number;
+    nuevoSaldoPendiente: number;
+    nuevoSaldoContado: number | null;
+  }) => {
+    queryClient.invalidateQueries({ queryKey: ["estado-cuenta", selectedClienteId] });
+    queryClient.invalidateQueries({ queryKey: ["creditosCobro"] });
+    queryClient.invalidateQueries({ queryKey: ["kpis-dashboard"] });
+    queryClient.invalidateQueries({ queryKey: ["reporte-comisiones"] });
+
+    if (estadoCuenta?.cliente && estadoCuenta?.credito) {
+      const reciboActualizado: ReciboData = {
+        fecha: new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" }),
+        clienteNombre: `${estadoCuenta.cliente.nombres} ${estadoCuenta.cliente.apellidos}`,
+        abono: res.nuevoValor,
+        totalCredito: estadoCuenta.credito.valorCredito,
+        saldoPendiente: res.nuevoSaldoPendiente,
+        telefono: estadoCuenta.cliente.telefono,
+        tipoCredito: estadoCuenta.credito.tipoVenta,
+        totalCredicontado: estadoCuenta.credito.valorContado,
+        saldoCredicontado: res.nuevoSaldoContado,
+        penalidadAplicada: estadoCuenta.credito.penalidadAplicada,
+        fechaLimitePago: estadoCuenta.credito.fechaLimiteCredicontado,
+        numeroFactura: estadoCuenta.credito.numeroFactura,
+        esCorregido: true,
+      };
+      setReciboParaVer(reciboActualizado);
+      setIsModalReciboOpen(true);
+    }
+  };
+
+  const handleSuccessAnulacion = () => {
+    queryClient.invalidateQueries({ queryKey: ["estado-cuenta", selectedClienteId] });
+    queryClient.invalidateQueries({ queryKey: ["creditosCobro"] });
+    queryClient.invalidateQueries({ queryKey: ["kpis-dashboard"] });
+    queryClient.invalidateQueries({ queryKey: ["reporte-comisiones"] });
+  };
 
   return (
     <AppShell
@@ -623,12 +712,13 @@ function EstadoCuentaPage() {
                               <TableHead>Cobrador</TableHead>
                               <TableHead>Observaciones</TableHead>
                               <TableHead className="text-center">Estado</TableHead>
+                              <TableHead className="text-right pr-4">Acciones</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {estadoCuenta.recaudos.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={5} className="text-center py-10 text-xs text-muted-foreground italic">
+                                <TableCell colSpan={6} className="text-center py-10 text-xs text-muted-foreground italic">
                                   Aún no se registran recaudos para este crédito.
                                 </TableCell>
                               </TableRow>
@@ -638,13 +728,13 @@ function EstadoCuentaPage() {
                                   <TableCell className="py-3 text-xs font-semibold text-foreground whitespace-nowrap">
                                     {formatearFechaHora(recaudo.fecha)}
                                   </TableCell>
-                                  <TableCell className="text-right py-3 text-xs text-primary font-bold">
+                                  <TableCell className="text-right py-3 text-xs text-primary font-bold whitespace-nowrap">
                                     {formatearMoneda(recaudo.valorRecibido)}
                                   </TableCell>
                                   <TableCell className="py-3 text-xs font-medium text-foreground whitespace-nowrap">
                                     {recaudo.cobrador}
                                   </TableCell>
-                                  <TableCell className="py-3 text-xs text-muted-foreground max-w-xs truncate">
+                                  <TableCell className="py-3 text-xs text-muted-foreground max-w-xs truncate" title={recaudo.observaciones || ""}>
                                     {recaudo.observaciones || "-"}
                                   </TableCell>
                                   <TableCell className="text-center py-3">
@@ -660,6 +750,67 @@ function EstadoCuentaPage() {
                                     >
                                       {recaudo.estado}
                                     </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right py-3 pr-4 whitespace-nowrap">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {/* Botón Ver y reenviar recibo */}
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 px-2.5 text-xs gap-1.5 text-muted-foreground hover:text-foreground font-medium"
+                                        onClick={() => handleVerRecibo(recaudo)}
+                                        title="Ver, descargar o enviar recibo por WhatsApp"
+                                      >
+                                        <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                                        <span>Recibo</span>
+                                      </Button>
+
+                                      {/* Acciones exclusivas para Administrador */}
+                                      {perfil?.rol === "Administrador" && (
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                                              title="Opciones de administración"
+                                            >
+                                              <MoreVertical className="h-4 w-4" />
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end" className="w-44">
+                                            <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-muted-foreground">
+                                              Gestión Admin
+                                            </DropdownMenuLabel>
+                                            <DropdownMenuItem
+                                              className="text-xs cursor-pointer gap-2"
+                                              onClick={() => {
+                                                setRecaudoACorregir(recaudo);
+                                                setIsModalCorregirOpen(true);
+                                              }}
+                                            >
+                                              <Pencil className="h-3.5 w-3.5 text-amber-600" />
+                                              Corregir Valor
+                                            </DropdownMenuItem>
+                                            {recaudo.estado !== "Rechazado" && (
+                                              <>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                  className="text-xs cursor-pointer gap-2 text-destructive focus:text-destructive"
+                                                  onClick={() => {
+                                                    setRecaudoAAnular(recaudo);
+                                                    setIsModalAnularOpen(true);
+                                                  }}
+                                                >
+                                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                                  Anular Pago
+                                                </DropdownMenuItem>
+                                              </>
+                                            )}
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      )}
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               ))
@@ -893,6 +1044,48 @@ function EstadoCuentaPage() {
               longitud: null, 
             }
           }}
+        />
+      )}
+
+      {/* Modal para Visualizar, Descargar y Compartir Recibos */}
+      <ComprobanteReciboModal
+        isOpen={isModalReciboOpen}
+        onClose={() => setIsModalReciboOpen(false)}
+        reciboData={reciboParaVer}
+      />
+
+      {/* Modal para Corregir Valor de Recaudo (Admin) */}
+      {estadoCuenta?.credito && estadoCuenta?.cliente && (
+        <ModalCorregirRecaudo
+          isOpen={isModalCorregirOpen}
+          onClose={() => setIsModalCorregirOpen(false)}
+          recaudo={recaudoACorregir}
+          credito={{
+            id: estadoCuenta.credito.id,
+            numeroFactura: estadoCuenta.credito.numeroFactura,
+            saldoPendiente: estadoCuenta.credito.saldoPendiente,
+            saldoContado: estadoCuenta.credito.saldoContado,
+            tipoVenta: estadoCuenta.credito.tipoVenta,
+          }}
+          clienteNombre={`${estadoCuenta.cliente.nombres} ${estadoCuenta.cliente.apellidos}`}
+          onSuccess={handleSuccessCorreccion}
+        />
+      )}
+
+      {/* Modal para Anular Recaudo (Admin) */}
+      {estadoCuenta?.credito && estadoCuenta?.cliente && (
+        <ModalAnularRecaudo
+          isOpen={isModalAnularOpen}
+          onClose={() => setIsModalAnularOpen(false)}
+          recaudo={recaudoAAnular}
+          credito={{
+            id: estadoCuenta.credito.id,
+            numeroFactura: estadoCuenta.credito.numeroFactura,
+            saldoPendiente: estadoCuenta.credito.saldoPendiente,
+            saldoContado: estadoCuenta.credito.saldoContado,
+          }}
+          clienteNombre={`${estadoCuenta.cliente.nombres} ${estadoCuenta.cliente.apellidos}`}
+          onSuccess={handleSuccessAnulacion}
         />
       )}
     </AppShell>

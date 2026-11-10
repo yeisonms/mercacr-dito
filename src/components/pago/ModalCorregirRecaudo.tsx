@@ -165,7 +165,7 @@ export function ModalCorregirRecaudo({
               id="nuevoValor"
               type="number"
               min="1"
-              step="1000"
+              step="any"
               value={nuevoValorStr}
               onChange={(e) => setNuevoValorStr(e.target.value)}
               placeholder="Ej. 20000"

@@ -1,12 +1,12 @@
 -- ====================================================================================
 -- SCRIPT DE INICIALIZACIÓN COMPLETA PARA BASE DE DATOS DE PRUEBAS / STAGING
--- Mercacrédito ERP
+-- Mercacrédito ERP (Proyecto: arlrofsypjgbplettmwp)
 -- ====================================================================================
 
--- 1. Habilitar extensión UUID
+-- 1. Habilitar extensión UUID y criptográfica
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 2. Limpieza previa por si se corre varias veces
+-- 2. Limpieza previa de tablas públicas
 DROP TABLE IF EXISTS logs_auditoria CASCADE;
 DROP TABLE IF EXISTS historial_alertas CASCADE;
 DROP TABLE IF EXISTS configuracion_negocio CASCADE;
@@ -251,7 +251,7 @@ CREATE POLICY "anon_all_historial_alertas" ON historial_alertas FOR ALL TO publi
 CREATE POLICY "anon_all_logs_auditoria" ON logs_auditoria FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- ====================================================================================
--- DATOS SEMILLA BÁSICOS (ROLES, CONFIGURACIÓN Y USUARIOS)
+-- DATOS SEMILLA BÁSICOS (ROLES Y CONFIGURACIÓN)
 -- ====================================================================================
 
 INSERT INTO roles (id, nombre_rol, descripcion) VALUES 
@@ -265,7 +265,70 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO configuracion_negocio (porcentaje_mora_mes_3, dias_gracia_mora, plantilla_recordatorio_antici, plantilla_mora_critica)
 VALUES (5.00, 2, 'Hola, recuerda que mañana vence tu cuota con Mercacrédito.', 'Aviso urgente: Tu crédito presenta un atraso superior a 30 días.');
 
--- Usuario Administrador de Prueba
+-- ====================================================================================
+-- USUARIOS DE AUTENTICACIÓN (LOGIN DIRECTO)
+-- Email: admin@mercacredito.com | Contraseña: Admin123*
+-- ====================================================================================
+
+INSERT INTO auth.users (
+    instance_id,
+    id,
+    aud,
+    role,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    recovery_sent_at,
+    last_sign_in_at,
+    raw_app_meta_data,
+    raw_user_meta_data,
+    created_at,
+    updated_at,
+    confirmation_token,
+    email_change,
+    email_change_token_new,
+    recovery_token
+) VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    '52709375-28fd-4129-af98-8bc7e0536025',
+    'authenticated',
+    'authenticated',
+    'admin@mercacredito.com',
+    crypt('Admin123*', gen_salt('bf')),
+    NOW(),
+    NOW(),
+    NOW(),
+    '{"provider":"email","providers":["email"]}',
+    '{"nombre_completo":"Jeffer Toro (Admin Pruebas)"}',
+    NOW(),
+    NOW(),
+    '',
+    '',
+    '',
+    ''
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO auth.identities (
+    id,
+    user_id,
+    provider_id,
+    identity_data,
+    provider,
+    last_sign_in_at,
+    created_at,
+    updated_at
+) VALUES (
+    '52709375-28fd-4129-af98-8bc7e0536025',
+    '52709375-28fd-4129-af98-8bc7e0536025',
+    'admin@mercacredito.com',
+    json_build_object('sub', '52709375-28fd-4129-af98-8bc7e0536025', 'email', 'admin@mercacredito.com'),
+    'email',
+    NOW(),
+    NOW(),
+    NOW()
+) ON CONFLICT (provider_id, provider) DO NOTHING;
+
+-- Usuario en tabla pública vinculado al Auth
 INSERT INTO usuarios (id, rol_id, nombre_completo, email, estado, porcentaje_ventas, porcentaje_cobranza)
 VALUES 
 ('52709375-28fd-4129-af98-8bc7e0536025', 1, 'Jeffer Toro (Admin Pruebas)', 'admin@mercacredito.com', 'Activo', 5.0, 5.0),
@@ -312,4 +375,3 @@ ON CONFLICT (id) DO NOTHING;
 CREATE POLICY "storage_anon_all_doc" ON storage.objects FOR ALL TO public USING (bucket_id = 'documentos_clientes') WITH CHECK (bucket_id = 'documentos_clientes');
 CREATE POLICY "storage_anon_all_rec" ON storage.objects FOR ALL TO public USING (bucket_id = 'recaudos') WITH CHECK (bucket_id = 'recaudos');
 CREATE POLICY "storage_anon_all_com" ON storage.objects FOR ALL TO public USING (bucket_id = 'comprobantes') WITH CHECK (bucket_id = 'comprobantes');
-

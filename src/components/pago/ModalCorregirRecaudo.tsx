@@ -187,9 +187,8 @@ export function ModalCorregirRecaudo({
                 <div className="flex justify-between items-center">
                   <span>Diferencia en Caja:</span>
                   <span
-                    className={`font-bold ${
-                      delta > 0 ? "text-emerald-600" : "text-rose-600"
-                    }`}
+                    className={`font-bold ${delta > 0 ? "text-emerald-600" : "text-rose-600"
+                      }`}
                   >
                     {delta > 0 ? "+" : ""}${delta.toLocaleString("es-CO")}
                   </span>

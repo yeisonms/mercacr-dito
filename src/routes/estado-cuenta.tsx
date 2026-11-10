@@ -376,10 +376,10 @@ function EstadoCuentaPage() {
         {selectedClienteId && estadoCuenta && !loadingEstado && (
           <div className="space-y-6">
             {/* ENCABEZADO Y RESUMEN FINANCIERO */}
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-12">
               {/* Card 1: Datos Básicos del Cliente */}
               {estadoCuenta.cliente && (
-                <Card className="md:col-span-2 border-border/60 shadow-sm hover:shadow-md transition-all">
+                <Card className="md:col-span-7 border-border/60 shadow-sm hover:shadow-md transition-all">
                   <CardHeader className="pb-3 flex flex-row items-start justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -437,49 +437,37 @@ function EstadoCuentaPage() {
               )}
 
               {/* Card 2: Mini Resumen del Crédito */}
-              <Card className="border-border/60 shadow-sm hover:shadow-md transition-all bg-muted/10">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Banknote className="h-4 w-4 text-primary shrink-0" />
-                      <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                        Crédito Actual
-                      </CardTitle>
-                    </div>
-                    {estadoCuenta?.credito && estadoCuenta.credito.estado !== "Finalizado" && estadoCuenta.credito.estado !== "Cancelado" && estadoCuenta.credito.estado !== "Devuelto" && (
-                      <div className="flex gap-2">
-                        {(perfil?.rol === "Administrador" || perfil?.rol === "Gerencia") && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => {
-                              setItemADevolver(null);
-                              setModalDevolucionOpen(true);
-                            }}
-                            className="h-8 text-xs font-bold px-3 gap-1.5 shadow-sm"
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            Anular / Devolver
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          onClick={() => setIsModalPagoOpen(true)}
-                          className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 gap-1.5 shadow-sm"
-                        >
-                          <Banknote className="h-3.5 w-3.5" />
-                          Registrar Abono Libre
-                        </Button>
-                      </div>
-                    )}
+              <Card className="md:col-span-5 border-border/60 shadow-sm hover:shadow-md transition-all bg-muted/10 flex flex-col justify-between">
+                <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2 border-b border-border/30">
+                  <div className="flex items-center gap-2">
+                    <Banknote className="h-4 w-4 text-primary shrink-0" />
+                    <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                      Crédito Actual
+                    </CardTitle>
                   </div>
+                  {estadoCuenta?.credito && (
+                    <Badge
+                      variant="outline"
+                      className={
+                        estadoCuenta.credito.estado === "Al día" || estadoCuenta.credito.estado === "Activo"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-semibold"
+                          : estadoCuenta.credito.estado === "Moroso" || estadoCuenta.credito.estado === "En Mora"
+                            ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20 font-semibold"
+                            : estadoCuenta.credito.estado === "Devuelto"
+                              ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20 font-semibold"
+                              : "bg-muted text-muted-foreground"
+                      }
+                    >
+                      {estadoCuenta.credito.estado}
+                    </Badge>
+                  )}
                 </CardHeader>
-                <CardContent className="space-y-3.5 pt-1.5">
+                <CardContent className="space-y-3.5 pt-4">
                   {estadoCuenta.credito ? (
                     <>
                       {estadoCuenta.credito.estado === "Devuelto" && (
                         <div className="bg-red-100 text-red-800 border border-red-500 rounded-lg p-3 text-sm font-bold text-center uppercase tracking-wide shadow-sm flex items-center justify-center gap-2">
-                          <AlertTriangle className="h-5 w-5" />
+                          <AlertTriangle className="h-5 w-5 shrink-0" />
                           <span>VENTA ANULADA POR DEVOLUCIÓN: {estadoCuenta.credito.motivoDevolucion || 'Sin motivo'}</span>
                         </div>
                       )}
@@ -562,7 +550,7 @@ function EstadoCuentaPage() {
                       </div>
 
                       {estadoCuenta.credito.tipoVenta === "Credicontado" && !estadoCuenta.credito.penalidadAplicada && (
-                        <div className="pt-3 mt-2 border-t border-border/50">
+                        <div className="pt-2">
                           <Button 
                             variant="destructive" 
                             size="sm" 
@@ -572,6 +560,33 @@ function EstadoCuentaPage() {
                             <AlertTriangle className="h-4 w-4 mr-1.5" />
                             Aplicar Penalidad (Incumplimiento)
                           </Button>
+                        </div>
+                      )}
+
+                      {estadoCuenta.credito.estado !== "Finalizado" && estadoCuenta.credito.estado !== "Cancelado" && estadoCuenta.credito.estado !== "Devuelto" && (
+                        <div className="pt-3 border-t border-border/50 flex flex-col sm:flex-row gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => setIsModalPagoOpen(true)}
+                            className="h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 gap-1.5 shadow-sm flex-1"
+                          >
+                            <Banknote className="h-4 w-4 shrink-0" />
+                            <span>Registrar Abono Libre</span>
+                          </Button>
+                          {(perfil?.rol === "Administrador" || perfil?.rol === "Gerencia") && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => {
+                                setItemADevolver(null);
+                                setModalDevolucionOpen(true);
+                              }}
+                              className="h-9 text-xs font-bold px-3 gap-1.5 shadow-sm flex-1"
+                            >
+                              <RotateCcw className="h-4 w-4 shrink-0" />
+                              <span>Anular / Devolver</span>
+                            </Button>
+                          )}
                         </div>
                       )}
                     </>

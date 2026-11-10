@@ -50,3 +50,4 @@ WHERE observaciones ILIKE '%Abono Inicial%'
 -- 5. Crear índices para optimizar las consultas de Cuadre de Caja y Comisiones
 CREATE INDEX IF NOT EXISTS idx_recaudos_origen_pago ON recaudos(origen_pago);
 CREATE INDEX IF NOT EXISTS idx_recaudos_cobrador_fecha ON recaudos(cobrador_id, fecha_recaudo, estado);
+

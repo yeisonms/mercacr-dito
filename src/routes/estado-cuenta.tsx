@@ -23,6 +23,7 @@ import {
   MoreVertical,
   ShoppingBag,
   Package,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -75,6 +76,7 @@ import {
   buscarClientesParaEstadoCuenta,
   obtenerEstadoCuenta,
   aplicarPenalidadCredicontado,
+  type ProductoVendidoDetalle,
 } from "@/services/estadoCuentaService";
 import { formatearMoneda } from "@/services/producto.service";
 import { ModalPago } from "@/components/pago/ModalPago";
@@ -84,8 +86,8 @@ import {
 } from "@/components/pago/ComprobanteReciboModal";
 import { ModalCorregirRecaudo } from "@/components/pago/ModalCorregirRecaudo";
 import { ModalAnularRecaudo } from "@/components/pago/ModalAnularRecaudo";
+import { ModalDevolucionProducto } from "@/components/pago/ModalDevolucionProducto";
 import { Textarea } from "@/components/ui/textarea";
-import { anularVentaYDevolver } from "@/services/ventaService";
 
 export const Route = createFileRoute("/estado-cuenta")({
   head: () => ({
@@ -127,36 +129,11 @@ function EstadoCuentaPage() {
   const [dialogPenalidadOpen, setDialogPenalidadOpen] = useState(false);
   const [creditoAPenalizar, setCreditoAPenalizar] = useState<string | null>(null);
 
-  const [dialogDevolucionOpen, setDialogDevolucionOpen] = useState(false);
-  const [motivoDevolucion, setMotivoDevolucion] = useState("");
+  // Estados para Devolución al Almacén
+  const [modalDevolucionOpen, setModalDevolucionOpen] = useState(false);
+  const [itemADevolver, setItemADevolver] = useState<ProductoVendidoDetalle | null>(null);
 
   const queryClient = useQueryClient();
-
-  const mutationDevolucion = useMutation({
-    mutationFn: async (creditoId: string) => {
-      if (!motivoDevolucion.trim()) throw new Error("Debe ingresar un motivo");
-      await anularVentaYDevolver(creditoId, motivoDevolucion);
-    },
-    onSuccess: () => {
-      toast.success("Venta anulada correctamente", {
-        description: "El crédito y sus pagos han sido revertidos. El stock ha sido devuelto.",
-      });
-      setDialogDevolucionOpen(false);
-      setMotivoDevolucion("");
-      queryClient.invalidateQueries({ queryKey: ["estado-cuenta", selectedClienteId] });
-      queryClient.invalidateQueries({ queryKey: ["creditosCobro"] }); 
-      queryClient.invalidateQueries({ queryKey: ["kpis-dashboard"] });
-    },
-    onError: (err: any) => {
-      toast.error("Error al anular la venta", {
-        description: err.message,
-      });
-    },
-  });
-
-  const handleAnularVenta = (creditoId: string) => {
-    mutationDevolucion.mutate(creditoId);
-  };
 
   const mutationPenalidad = useMutation({
     mutationFn: aplicarPenalidadCredicontado,
@@ -475,10 +452,13 @@ function EstadoCuentaPage() {
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => setDialogDevolucionOpen(true)}
+                            onClick={() => {
+                              setItemADevolver(null);
+                              setModalDevolucionOpen(true);
+                            }}
                             className="h-8 text-xs font-bold px-3 gap-1.5 shadow-sm"
                           >
-                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <RotateCcw className="h-3.5 w-3.5" />
                             Anular / Devolver
                           </Button>
                         )}
@@ -892,6 +872,7 @@ function EstadoCuentaPage() {
                                 <TableHead className="text-right">Precio Unitario</TableHead>
                                 <TableHead className="text-right">Subtotal</TableHead>
                                 <TableHead className="text-center">Crédito</TableHead>
+                                <TableHead className="text-right pr-4">Acción</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -949,6 +930,22 @@ function EstadoCuentaPage() {
                                     >
                                       {item.creditoId === estadoCuenta.credito.id ? "Crédito Actual" : item.estadoCredito}
                                     </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right pr-4 whitespace-nowrap">
+                                    {(perfil?.rol === "Administrador" || perfil?.rol === "Gerencia") && estadoCuenta.credito.estado !== "Devuelto" && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          setItemADevolver(item);
+                                          setModalDevolucionOpen(true);
+                                        }}
+                                        className="h-7 text-[11px] font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1"
+                                      >
+                                        <RotateCcw className="h-3 w-3" />
+                                        Devolver
+                                      </Button>
+                                    )}
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -1107,53 +1104,26 @@ function EstadoCuentaPage() {
         </DialogContent>
       </Dialog>
 
-        <Dialog open={dialogDevolucionOpen} onOpenChange={setDialogDevolucionOpen}>
-          <DialogContent className="max-w-md rounded-2xl p-6">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-rose-600">
-                <AlertTriangle className="h-5 w-5" />
-                Procesar Devolución / Anular Venta
-              </DialogTitle>
-              <DialogDescription className="pt-2">
-                ¿Estás seguro de que deseas anular esta venta? Esta acción no se puede deshacer. Se regresará el producto al inventario y se revertirán los cobros.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="mt-2 space-y-3">
-              <label className="text-sm font-medium text-foreground">Motivo de la devolución (Obligatorio)</label>
-              <Textarea
-                placeholder="Escribe el motivo detallado de la anulación..."
-                className="w-full min-h-[100px] resize-none"
-                value={motivoDevolucion}
-                onChange={(e) => setMotivoDevolucion(e.target.value)}
-              />
-            </div>
-            <DialogFooter className="mt-4 sm:justify-between gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setDialogDevolucionOpen(false)}
-                disabled={mutationDevolucion.isPending}
-                className="flex-1 rounded-xl"
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => estadoCuenta?.credito?.id && handleAnularVenta(estadoCuenta.credito.id)}
-                disabled={mutationDevolucion.isPending || !motivoDevolucion.trim()}
-                className="flex-1 rounded-xl bg-rose-600 hover:bg-rose-700"
-              >
-                {mutationDevolucion.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Anulando...
-                  </>
-                ) : (
-                  "Sí, anular venta"
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* MODAL DE DEVOLUCIÓN DE PRODUCTO O ANULACIÓN */}
+        {estadoCuenta?.credito && estadoCuenta?.cliente && (
+          <ModalDevolucionProducto
+            isOpen={modalDevolucionOpen}
+            onClose={() => {
+              setModalDevolucionOpen(false);
+              setItemADevolver(null);
+            }}
+            creditoId={itemADevolver?.creditoId || estadoCuenta.credito.id}
+            clienteId={estadoCuenta.cliente.id}
+            clienteNombre={`${estadoCuenta.cliente.nombres} ${estadoCuenta.cliente.apellidos}`}
+            usuarioId={perfil?.id || ""}
+            itemProducto={itemADevolver}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ["estado-cuenta", selectedClienteId] });
+              queryClient.invalidateQueries({ queryKey: ["creditosCobro"] });
+              queryClient.invalidateQueries({ queryKey: ["kpis-dashboard"] });
+            }}
+          />
+        )}
 
         {estadoCuenta?.credito && estadoCuenta?.cliente && (
         <ModalPago 

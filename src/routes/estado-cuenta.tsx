@@ -21,6 +21,8 @@ import {
   Trash2,
   Receipt,
   MoreVertical,
+  ShoppingBag,
+  Package,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -602,21 +604,29 @@ function EstadoCuentaPage() {
               </Card>
             </div>
 
-            {/* PANEL DE TABS PARA AMORTIZACIONES E RECAUDOS */}
+            {/* PANEL DE TABS PARA AMORTIZACIONES, RECAUDOS Y PRODUCTOS */}
             {estadoCuenta.credito && (
               <Tabs defaultValue="cuotas" className="w-full">
-                <TabsList className="grid grid-cols-3 max-w-2xl h-10 border border-border bg-muted/40 p-1">
-                  <TabsTrigger value="cuotas" className="text-xs flex items-center gap-1.5 py-1.5">
+                <TabsList className="grid grid-cols-4 max-w-3xl h-10 border border-border bg-muted/40 p-1">
+                  <TabsTrigger value="cuotas" className="text-xs flex items-center justify-center gap-1.5 py-1.5">
                     <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
                     <span className="hidden sm:inline">Plan de Pagos</span>
+                    <span className="sm:hidden">Plan</span>
                   </TabsTrigger>
-                  <TabsTrigger value="recaudos" className="text-xs flex items-center gap-1.5 py-1.5">
+                  <TabsTrigger value="recaudos" className="text-xs flex items-center justify-center gap-1.5 py-1.5">
                     <History className="h-3.5 w-3.5 shrink-0" />
                     <span className="hidden sm:inline">Historial Recaudos</span>
+                    <span className="sm:hidden">Recaudos</span>
                   </TabsTrigger>
-                  <TabsTrigger value="gestiones" className="text-xs flex items-center gap-1.5 py-1.5">
+                  <TabsTrigger value="productos" className="text-xs flex items-center justify-center gap-1.5 py-1.5">
+                    <ShoppingBag className="h-3.5 w-3.5 shrink-0" />
+                    <span className="hidden sm:inline">Artículos Llevados</span>
+                    <span className="sm:hidden">Artículos</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="gestiones" className="text-xs flex items-center justify-center gap-1.5 py-1.5">
                     <Clock className="h-3.5 w-3.5 shrink-0" />
                     <span className="hidden sm:inline">Historial Gestiones</span>
+                    <span className="sm:hidden">Gestiones</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -822,7 +832,135 @@ function EstadoCuentaPage() {
                   </Card>
                 </TabsContent>
 
-                {/* CONTENIDO PESTAÑA 3: HISTORIAL DE GESTIONES */}
+                {/* CONTENIDO PESTAÑA 3: HISTORIAL DE ARTÍCULOS Y VENTAS */}
+                <TabsContent value="productos" className="mt-4">
+                  <Card className="border-border/60 shadow-sm">
+                    <CardHeader className="pb-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                            <ShoppingBag className="w-4 h-4 text-primary" />
+                            Historial de Artículos y Ventas
+                          </CardTitle>
+                          <CardDescription>
+                            Detalle de productos adquiridos por el cliente, cantidades y precios que justifican el saldo de la deuda.
+                          </CardDescription>
+                        </div>
+                        {estadoCuenta.productosLlevados && estadoCuenta.productosLlevados.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs py-1">
+                              {estadoCuenta.productosLlevados.reduce((acc, item) => acc + item.cantidad, 0)} artículos en total
+                            </Badge>
+                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-xs py-1 font-bold">
+                              Total Facturado: {formatearMoneda(estadoCuenta.productosLlevados.reduce((acc, item) => acc + item.subtotal, 0))}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0 sm:p-6 sm:pt-0">
+                      {(!estadoCuenta.productosLlevados || estadoCuenta.productosLlevados.length === 0) ? (
+                        <div className="p-8 text-center border-t sm:border border-dashed border-border/60 sm:rounded-xl bg-muted/10 mx-0 sm:mx-0">
+                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 mb-3">
+                            <Package className="h-6 w-6" />
+                          </div>
+                          <h4 className="text-sm font-semibold text-foreground">Sin desglose de artículos individuales</h4>
+                          <p className="mt-1 text-xs text-muted-foreground max-w-lg mx-auto">
+                            Este crédito proviene de la migración inicial de cartera o fue creado como un saldo global de deuda anterior sin inventario ítem por ítem.
+                          </p>
+                          <div className="mt-4 inline-flex flex-wrap items-center justify-center gap-3 rounded-lg border border-border/60 bg-muted/40 px-4 py-2 text-xs">
+                            <span className="text-muted-foreground">Valor del Crédito Inicial:</span>
+                            <span className="font-bold text-foreground">{formatearMoneda(estadoCuenta.credito.valorCredito)}</span>
+                            <span className="text-muted-foreground">|</span>
+                            <span className="text-muted-foreground">Saldo Pendiente Actual:</span>
+                            <span className="font-bold text-primary">{formatearMoneda(estadoCuenta.credito.saldoPendiente)}</span>
+                          </div>
+                          <p className="mt-3 text-[11px] text-muted-foreground italic">
+                            Las nuevas ventas o refinanciaciones registrarán automáticamente cada producto llevado con su fecha y precio.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader className="bg-muted/40">
+                              <TableRow>
+                                <TableHead>Fecha Venta</TableHead>
+                                <TableHead>Factura</TableHead>
+                                <TableHead>Código</TableHead>
+                                <TableHead>Producto</TableHead>
+                                <TableHead className="text-center">Cant.</TableHead>
+                                <TableHead className="text-right">Precio Unitario</TableHead>
+                                <TableHead className="text-right">Subtotal</TableHead>
+                                <TableHead className="text-center">Crédito</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {estadoCuenta.productosLlevados.map((item) => (
+                                <TableRow key={item.id} className="hover:bg-muted/20">
+                                  <TableCell className="text-xs font-medium whitespace-nowrap">
+                                    {item.fechaVenta ? (
+                                      <span className="flex items-center gap-1.5">
+                                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                                        {(() => {
+                                          try {
+                                            return format(new Date(item.fechaVenta), "dd/MM/yyyy", { locale: es });
+                                          } catch {
+                                            return item.fechaVenta.split("T")[0];
+                                          }
+                                        })()}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground italic">Sin fecha</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-xs font-semibold whitespace-nowrap">
+                                    <span className="rounded bg-muted px-2 py-0.5 font-mono text-[11px] border border-border/50">
+                                      {item.numeroFactura}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">
+                                    {item.productoCodigo}
+                                  </TableCell>
+                                  <TableCell className="text-xs font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                      <span className="font-semibold text-foreground">{item.productoNombre}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-center font-bold">
+                                    <Badge variant="secondary" className="px-2 py-0.5 text-xs font-bold">
+                                      {item.cantidad}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-right whitespace-nowrap text-muted-foreground">
+                                    {formatearMoneda(item.precioAplicado)}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-right font-bold whitespace-nowrap text-foreground">
+                                    {formatearMoneda(item.subtotal)}
+                                  </TableCell>
+                                  <TableCell className="text-center whitespace-nowrap">
+                                    <Badge
+                                      variant="outline"
+                                      className={
+                                        item.creditoId === estadoCuenta.credito.id
+                                          ? "bg-primary/10 text-primary border-primary/20 text-[10px]"
+                                          : "bg-muted text-muted-foreground border-border text-[10px]"
+                                      }
+                                    >
+                                      {item.creditoId === estadoCuenta.credito.id ? "Crédito Actual" : item.estadoCredito}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* CONTENIDO PESTAÑA 4: HISTORIAL DE GESTIONES */}
                 <TabsContent value="gestiones" className="mt-4">
                   <Card className="border-border/60 shadow-sm">
                     <CardHeader className="pb-3">

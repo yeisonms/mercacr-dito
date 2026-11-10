@@ -47,6 +47,21 @@ export interface RecaudoDetalle {
   estado: "Pendiente" | "Aprobado" | "Rechazado";
 }
 
+export interface ProductoVendidoDetalle {
+  id: string;
+  creditoId: string;
+  numeroFactura: string;
+  fechaVenta: string;
+  tipoVenta: string;
+  estadoCredito: string;
+  productoId: string;
+  productoNombre: string;
+  productoCodigo: string;
+  cantidad: number;
+  precioAplicado: number;
+  subtotal: number;
+}
+
 export interface EstadoCuentaResponse {
   cliente: {
     id: string;
@@ -63,6 +78,7 @@ export interface EstadoCuentaResponse {
   credito: CreditoResumen | null;
   cuotas: CuotaDetalle[];
   recaudos: RecaudoDetalle[];
+  productosLlevados: ProductoVendidoDetalle[];
 }
 
 /**
@@ -130,7 +146,7 @@ export async function buscarClientesParaEstadoCuenta(cobradorId?: string): Promi
  */
 export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuentaResponse> {
   if (!isSupabaseConfigured) {
-    return { cliente: null, credito: null, cuotas: [], recaudos: [] };
+    return { cliente: null, credito: null, cuotas: [], recaudos: [], productosLlevados: [] };
   }
 
   try {
@@ -147,7 +163,7 @@ export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuen
       console.error("[estadoCuentaService] Error cargando cliente:", clientError);
       throw clientError;
     }
-    if (!clientData) return { cliente: null, credito: null, cuotas: [], recaudos: [] };
+    if (!clientData) return { cliente: null, credito: null, cuotas: [], recaudos: [], productosLlevados: [] };
 
     // 2. Obtener todos los créditos del cliente (más recientes primero)
     const { data: creditoActual, error: errorCredito } = await supabase
@@ -178,6 +194,7 @@ export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuen
         credito: null,
         cuotas: [],
         recaudos: [],
+        productosLlevados: [],
       };
     }
 
@@ -252,6 +269,61 @@ export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuen
       estado: r.estado as RecaudoDetalle["estado"],
     }));
 
+    // 3d. Artículos / Productos llevados por el cliente (de todos sus créditos)
+    const todosCreditoIds = (creditoActual || []).map((c: any) => c.id);
+    const creditosMap = new Map((creditoActual || []).map((c: any) => [c.id, c]));
+
+    let productosLlevados: ProductoVendidoDetalle[] = [];
+
+    if (todosCreditoIds.length > 0) {
+      const { data: detallesData, error: detallesError } = await supabase
+        .from("detalles_venta")
+        .select(`
+          id,
+          credito_id,
+          producto_id,
+          cantidad,
+          precio_aplicado,
+          subtotal,
+          productos (
+            id,
+            nombre,
+            codigo_producto
+          )
+        `)
+        .in("credito_id", todosCreditoIds);
+
+      if (detallesError) {
+        console.error("[estadoCuentaService] Error cargando detalles_venta:", detallesError);
+      } else if (detallesData) {
+        productosLlevados = detallesData.map((d: any) => {
+          const cred = creditosMap.get(d.credito_id);
+          const prod = Array.isArray(d.productos) ? d.productos[0] : d.productos;
+          return {
+            id: d.id,
+            creditoId: d.credito_id,
+            numeroFactura: cred?.numero_factura || "S/F",
+            fechaVenta: cred?.fecha_venta || "",
+            tipoVenta: cred?.tipo_venta || "Crédito",
+            estadoCredito: cred?.estado || "Activo",
+            productoId: d.producto_id,
+            productoNombre: prod?.nombre || "Producto sin registrar",
+            productoCodigo: prod?.codigo_producto || "—",
+            cantidad: Number(d.cantidad) || 0,
+            precioAplicado: Number(d.precio_aplicado) || 0,
+            subtotal: Number(d.subtotal) || 0,
+          };
+        });
+
+        // Ordenar por fecha de venta de más reciente a más antigua
+        productosLlevados.sort((a, b) => {
+          const timeA = a.fechaVenta ? new Date(a.fechaVenta).getTime() : 0;
+          const timeB = b.fechaVenta ? new Date(b.fechaVenta).getTime() : 0;
+          return timeB - timeA;
+        });
+      }
+    }
+
     return {
       cliente: mapCliente(clientData),
       credito: {
@@ -282,6 +354,7 @@ export async function obtenerEstadoCuenta(clienteId: string): Promise<EstadoCuen
       },
       cuotas: cuotasMapped,
       recaudos: recaudosMapped,
+      productosLlevados: productosLlevados,
     };
   } catch (error) {
     console.error("[estadoCuentaService] Error general:", error);

@@ -54,6 +54,7 @@ const recaudoSchema = z.object({
     .number({ invalid_type_error: "El valor recibido debe ser un número" })
     .min(1, "El valor recibido debe ser mayor a 0"),
   metodo_pago: z.enum(["Efectivo", "Transferencia"]),
+  origen_pago: z.enum(["Ruta", "Almacen"]).default("Almacen"),
   observaciones: z.string().optional(),
 });
 
@@ -64,9 +65,10 @@ interface ModalPagoProps {
   onClose: () => void;
   creditoSeleccionado: CreditoCobro | null;
   onSuccess?: () => void;
+  origenDefault?: "Ruta" | "Almacen";
 }
 
-export function ModalPago({ isOpen, onClose, creditoSeleccionado, onSuccess }: ModalPagoProps) {
+export function ModalPago({ isOpen, onClose, creditoSeleccionado, onSuccess, origenDefault = "Almacen" }: ModalPagoProps) {
   const queryClient = useQueryClient();
   const { perfil } = useAuth();
   
@@ -82,6 +84,7 @@ export function ModalPago({ isOpen, onClose, creditoSeleccionado, onSuccess }: M
     defaultValues: {
       valor_recibido: undefined,
       metodo_pago: "Efectivo",
+      origen_pago: origenDefault,
       observaciones: "",
     },
   });
@@ -113,6 +116,7 @@ export function ModalPago({ isOpen, onClose, creditoSeleccionado, onSuccess }: M
             reset({
               valor_recibido: valor,
               metodo_pago: "Efectivo",
+              origen_pago: origenDefault,
               observaciones: "",
             });
             return;
@@ -125,6 +129,7 @@ export function ModalPago({ isOpen, onClose, creditoSeleccionado, onSuccess }: M
         reset({
           valor_recibido: undefined,
           metodo_pago: "Efectivo",
+          origen_pago: origenDefault,
           observaciones: "",
         });
       };
@@ -196,6 +201,7 @@ export function ModalPago({ isOpen, onClose, creditoSeleccionado, onSuccess }: M
       creditoId: creditoSeleccionado.id,
       valorRecibido: values.valor_recibido,
       metodoPago: values.metodo_pago,
+      origenPago: values.origen_pago,
       fotoDinero: fotoSoporte,
       observaciones: values.observaciones,
       usuarioId: perfil?.id,
@@ -340,6 +346,30 @@ export function ModalPago({ isOpen, onClose, creditoSeleccionado, onSuccess }: M
                         </div>
                       </div>
                     )}
+
+                    {/* Lugar de Recepción del Dinero (Almacén vs Ruta) */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-foreground block">Lugar de Recepción del Dinero</label>
+                        <span className="text-[10px] text-muted-foreground font-medium">Define arqueo diario</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="flex flex-col items-center justify-center gap-1 border rounded-xl p-2.5 cursor-pointer hover:bg-muted/50 has-[:checked]:bg-blue-500/10 has-[:checked]:border-blue-500 transition-colors text-center">
+                          <div className="flex items-center gap-1.5">
+                            <input type="radio" value="Almacen" className="accent-blue-600 w-4 h-4" {...register("origen_pago")} />
+                            <span className="text-xs font-bold text-blue-700 dark:text-blue-400">En Almacén / Caja</span>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground leading-tight">Queda en caja central</span>
+                        </label>
+                        <label className="flex flex-col items-center justify-center gap-1 border rounded-xl p-2.5 cursor-pointer hover:bg-muted/50 has-[:checked]:bg-emerald-500/10 has-[:checked]:border-emerald-500 transition-colors text-center">
+                          <div className="flex items-center gap-1.5">
+                            <input type="radio" value="Ruta" className="accent-emerald-600 w-4 h-4" {...register("origen_pago")} />
+                            <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">En Ruta / Terreno</span>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground leading-tight">A entregar por cobrador</span>
+                        </label>
+                      </div>
+                    </div>
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-foreground block">Método de Pago</label>

@@ -41,6 +41,7 @@ export interface RegistrarRecaudoInput {
   fotoDinero?: File | null;
   observaciones?: string;
   usuarioId?: string;
+  origenPago?: "Ruta" | "Almacen" | "CuotaInicial";
 }
 
 export interface RecaudoPendiente {
@@ -403,6 +404,8 @@ export async function registrarRecaudo(input: RegistrarRecaudoInput): Promise<st
     fotoUrl = await subirFotoSoporte(input.creditoId, input.fotoDinero);
   }
 
+  const origenPago = input.origenPago || "Ruta";
+
   const { data, error } = await supabase
     .from("recaudos")
     .insert({
@@ -413,6 +416,7 @@ export async function registrarRecaudo(input: RegistrarRecaudoInput): Promise<st
       soporte_foto_dinero_url: fotoUrl,
       observaciones: input.observaciones || null,
       estado: "Pendiente",
+      origen_pago: origenPago,
     })
     .select("id")
     .single();

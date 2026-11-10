@@ -328,7 +328,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
     }
   }
 
-  // Paso E: Registrar la cuota inicial como un recaudo aprobado para que figure en la caja diaria e historial
+  // Paso E: Registrar la cuota inicial como un recaudo aprobado de tipo CuotaInicial
   if (input.tipoVenta !== "Contado" && input.cuotaInicial > 0) {
     const { error: errorRecaudo } = await supabase
       .from("recaudos")
@@ -339,6 +339,7 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
         metodo_pago: input.metodoPago || "Efectivo",
         estado: "Aprobado",
         observaciones: "Abono Inicial (Pago Automático al crear la venta)",
+        origen_pago: "CuotaInicial",
         fecha_revision: new Date().toISOString()
       });
 

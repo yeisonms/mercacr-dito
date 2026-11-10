@@ -159,9 +159,10 @@ CREATE TABLE recaudos (
     soporte_foto_dinero_url VARCHAR(255),
     soporte_comprobante_url VARCHAR(255),
     observaciones TEXT,
-    estado VARCHAR(20) DEFAULT 'Pendiente' CHECK (estado IN ('Pendiente', 'Aprobado', 'Rechazado')),
+    estado VARCHAR(20) DEFAULT 'Pendiente' CHECK (estado IN ('Pendiente', 'Aprobado', 'Rechazado', 'Devuelto')),
     fecha_revision TIMESTAMPTZ,
-    metodo_pago VARCHAR(30) DEFAULT 'Efectivo'
+    metodo_pago VARCHAR(30) DEFAULT 'Efectivo',
+    origen_pago VARCHAR(30) DEFAULT 'Ruta' CHECK (origen_pago IN ('Ruta', 'Almacen', 'CuotaInicial'))
 );
 
 CREATE TABLE registro_visitas (

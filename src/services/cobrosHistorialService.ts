@@ -6,6 +6,7 @@ export interface CobroHistorialRow {
   valorRecibido: number;
   metodoPago: "Efectivo" | "Transferencia";
   estado: string;
+  origenPago: "Ruta" | "Almacen" | "CuotaInicial";
   cobradorNombre: string;
   clienteNombres: string;
   clienteApellidos: string;
@@ -17,12 +18,13 @@ export interface ObtenerHistorialCobrosParams {
   fechaInicio: Date;
   fechaFin: Date;
   cobradorId?: string | null;
+  origenPago?: string | null;
 }
 
 export async function obtenerHistorialCobros(
   params: ObtenerHistorialCobrosParams
 ): Promise<CobroHistorialRow[]> {
-  const { fechaInicio, fechaFin, cobradorId } = params;
+  const { fechaInicio, fechaFin, cobradorId, origenPago } = params;
 
   // Ajustar la fecha inicio al comienzo del día y la fecha fin al final del día
   const start = new Date(fechaInicio);
@@ -39,6 +41,7 @@ export async function obtenerHistorialCobros(
         valorRecibido: 150000,
         metodoPago: "Efectivo",
         estado: "Aprobado",
+        origenPago: "Ruta",
         cobradorNombre: "Juan Pérez",
         clienteNombres: "Carlos Andrés",
         clienteApellidos: "Gómez Montoya",
@@ -56,6 +59,8 @@ export async function obtenerHistorialCobros(
       fecha_recaudo,
       metodo_pago,
       estado,
+      origen_pago,
+      observaciones,
       cobrador:usuarios!recaudos_cobrador_id_fkey(nombre_completo),
       credito:creditos(
         numero_factura,
@@ -71,6 +76,10 @@ export async function obtenerHistorialCobros(
     query = query.eq("cobrador_id", cobradorId);
   }
 
+  if (origenPago && origenPago !== "all") {
+    query = query.eq("origen_pago", origenPago);
+  }
+
   const { data, error } = await query;
 
   if (error) {
@@ -84,12 +93,27 @@ export async function obtenerHistorialCobros(
     // Si la DB no tiene "metodo_pago", lo inferimos por defecto
     const metodoPago = row.metodo_pago || "Efectivo";
 
+    // Si origen_pago aún no existe en el registro, inferir si era cuota inicial por observaciones
+    let origen: "Ruta" | "Almacen" | "CuotaInicial" = row.origen_pago;
+    if (!origen) {
+      if (
+        row.observaciones &&
+        (row.observaciones.toLowerCase().includes("abono inicial") ||
+         row.observaciones.toLowerCase().includes("pago automático al crear la venta"))
+      ) {
+        origen = "CuotaInicial";
+      } else {
+        origen = "Ruta";
+      }
+    }
+
     return {
       id: row.id,
       fechaRecaudo: row.fecha_recaudo,
       valorRecibido: Number(row.valor_recibido),
       metodoPago: metodoPago,
       estado: row.estado,
+      origenPago: origen,
       cobradorNombre: row.cobrador?.nombre_completo || "Desconocido",
       clienteNombres: row.credito?.cliente?.nombres || "Desconocido",
       clienteApellidos: row.credito?.cliente?.apellidos || "",

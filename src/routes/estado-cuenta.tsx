@@ -1117,6 +1117,9 @@ function EstadoCuentaPage() {
             clienteNombre={`${estadoCuenta.cliente.nombres} ${estadoCuenta.cliente.apellidos}`}
             usuarioId={perfil?.id || ""}
             itemProducto={itemADevolver}
+            productosEnCredito={(estadoCuenta?.productosLlevados || []).filter(
+              (p) => p.creditoId === (itemADevolver?.creditoId || estadoCuenta.credito.id)
+            )}
             onSuccess={() => {
               queryClient.invalidateQueries({ queryKey: ["estado-cuenta", selectedClienteId] });
               queryClient.invalidateQueries({ queryKey: ["creditosCobro"] });

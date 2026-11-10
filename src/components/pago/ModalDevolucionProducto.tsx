@@ -2,7 +2,7 @@
  * ModalDevolucionProducto.tsx
  * Modal interactivo para procesar la devolución de mercancía al almacén,
  * ajuste de inventario, recálculo de cuotas y redirección de cuotas iniciales
- * o abonos previos hacia otros créditos o devolución en efectivo.
+ * o abonos previos hacia otros créditos, hacia la misma compra o devolución en efectivo.
  */
 
 import { useState, useEffect, useMemo } from "react";
@@ -16,6 +16,7 @@ import {
   ArrowRight,
   Loader2,
   CheckCircle2,
+  ShoppingBag,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -57,6 +58,7 @@ interface ModalDevolucionProductoProps {
   clienteNombre: string;
   usuarioId: string;
   itemProducto?: ProductoVendidoDetalle | null;
+  productosEnCredito?: ProductoVendidoDetalle[];
   onSuccess: () => void;
 }
 
@@ -68,17 +70,31 @@ export function ModalDevolucionProducto({
   clienteNombre,
   usuarioId,
   itemProducto,
+  productosEnCredito = [],
   onSuccess,
 }: ModalDevolucionProductoProps) {
   const [motivo, setMotivo] = useState("");
   const [estadoFisico, setEstadoFisico] = useState<"Bueno" | "Garantia_Proveedor">("Bueno");
   const [destinoDinero, setDestinoDinero] = useState<
-    "Abono_Otro_Credito" | "Devolucion_Efectivo" | "Saldo_Favor" | "Conservado_En_Compra"
-  >("Abono_Otro_Credito");
+    "Conservado_En_Compra" | "Abono_Otro_Credito" | "Devolucion_Efectivo" | "Saldo_Favor"
+  >("Conservado_En_Compra");
   const [creditoDestinoId, setCreditoDestinoId] = useState<string>("");
 
   // Cantidad a devolver (para productos individuales)
   const [cantidadDevolver, setCantidadDevolver] = useState<number>(itemProducto?.cantidad || 1);
+
+  // Otros productos que el cliente conserva en este mismo crédito
+  const otrosProductosEnEsteCredito = useMemo(() => {
+    if (!itemProducto || !productosEnCredito) return [];
+    return productosEnCredito.filter((p) => p.id !== itemProducto.id);
+  }, [itemProducto, productosEnCredito]);
+
+  const tieneOtrosProductos = otrosProductosEnEsteCredito.length > 0;
+
+  // Valor total de los otros productos que el cliente se queda
+  const valorProductosRestantes = useMemo(() => {
+    return otrosProductosEnEsteCredito.reduce((acc, p) => acc + p.subtotal, 0);
+  }, [otrosProductosEnEsteCredito]);
 
   useEffect(() => {
     if (itemProducto) {
@@ -105,7 +121,7 @@ export function ModalDevolucionProducto({
     enabled: isOpen && !!creditoId,
   });
 
-  // 2. Cargar otros créditos del cliente a los que se les podría abonar
+  // 2. Cargar otras facturas/créditos del cliente a los que se les podría abonar
   const {
     data: otrosCreditos = [],
     isLoading: loadingOtrosCreditos,
@@ -115,15 +131,18 @@ export function ModalDevolucionProducto({
     enabled: isOpen && !!clienteId && !!creditoId,
   });
 
-  // Seleccionar automáticamente el primer crédito disponible si hay
+  // Configurar automáticamente el destino recomendado del dinero
   useEffect(() => {
-    if (otrosCreditos.length > 0 && !creditoDestinoId) {
+    if (tieneOtrosProductos) {
+      // Si el cliente tiene otros productos en esta compra, lo natural es abonar al saldo restante
+      setDestinoDinero("Conservado_En_Compra");
+    } else if (otrosCreditos.length > 0) {
       setCreditoDestinoId(otrosCreditos[0].id);
       setDestinoDinero("Abono_Otro_Credito");
-    } else if (otrosCreditos.length === 0) {
+    } else {
       setDestinoDinero("Devolucion_Efectivo");
     }
-  }, [otrosCreditos, creditoDestinoId]);
+  }, [tieneOtrosProductos, otrosCreditos]);
 
   const esDevolucionTotal = !itemProducto;
   const precioUnitario = itemProducto?.precioAplicado || 0;
@@ -133,14 +152,14 @@ export function ModalDevolucionProducto({
 
   const totalPagado = resumenPagos?.totalPagado || 0;
 
-  // Monto reconocido al cliente: el 100% de lo pagado (limitado al valor de la mercancía devuelta si es parcial)
+  // Monto reconocido al cliente: el 100% de lo pagado
   const montoReconocido = useMemo(() => {
     if (totalPagado <= 0) return 0;
     if (esDevolucionTotal) return totalPagado;
     return Math.min(totalPagado, subtotalMercancia);
   }, [totalPagado, esDevolucionTotal, subtotalMercancia]);
 
-  // Crédito destino seleccionado
+  // Crédito destino seleccionado (en caso de elegir otra factura)
   const creditoDestinoSeleccionado = otrosCreditos.find((c) => c.id === creditoDestinoId);
 
   // Mutación de ejecución
@@ -148,7 +167,7 @@ export function ModalDevolucionProducto({
     mutationFn: async () => {
       if (!motivo.trim()) throw new Error("Debe ingresar un motivo para la devolución.");
       if (montoReconocido > 0 && destinoDinero === "Abono_Otro_Credito" && !creditoDestinoId) {
-        throw new Error("Debe seleccionar el crédito al que se aplicará el abono.");
+        throw new Error("Debe seleccionar la otra factura a la que se aplicará el abono.");
       }
 
       await procesarDevolucionProducto({
@@ -171,7 +190,7 @@ export function ModalDevolucionProducto({
     },
     onSuccess: () => {
       toast.success("Devolución procesada correctamente", {
-        description: `El producto ha sido reingresado a bodega y los saldos fueron recalculados.`,
+        description: `El producto ha sido reingresado a bodega y los saldos fueron recalculados con éxito.`,
       });
       onSuccess();
       onClose();
@@ -272,7 +291,57 @@ export function ModalDevolucionProducto({
                     onValueChange={(val: any) => setDestinoDinero(val)}
                     className="space-y-2"
                   >
-                    {/* OPCIÓN 1: ABONAR A OTRO CRÉDITO */}
+                    {/* OPCIÓN 1: ABONAR A LOS PRODUCTOS QUE CONSERVA EN ESTA MISMA COMPRA (SI TIENE MÁS PRODUCTOS) */}
+                    {tieneOtrosProductos && (
+                      <div
+                        className={`flex items-start space-x-2.5 rounded-lg border p-3 transition-colors cursor-pointer ${
+                          destinoDinero === "Conservado_En_Compra"
+                            ? "border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/20"
+                            : "border-border/60 hover:bg-muted/30"
+                        }`}
+                        onClick={() => setDestinoDinero("Conservado_En_Compra")}
+                      >
+                        <RadioGroupItem value="Conservado_En_Compra" id="opt-conservado" className="mt-1 text-emerald-600" />
+                        <div className="flex-1 text-xs">
+                          <div className="flex items-center gap-2">
+                            <label htmlFor="opt-conservado" className="font-bold text-foreground cursor-pointer">
+                              Abonar a la mercancía que conserva en esta compra
+                            </label>
+                            <Badge className="bg-emerald-600 text-white text-[10px] px-1.5 py-0 h-4">
+                              Recomendado
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            El cliente conserva:{" "}
+                            <strong className="text-foreground">
+                              {otrosProductosEnEsteCredito.map((p) => p.productoNombre).join(", ")}
+                            </strong>
+                            . Los {formatearMoneda(montoReconocido)} pagados se mantienen como abono a su deuda restante.
+                          </p>
+
+                          {destinoDinero === "Conservado_En_Compra" && (
+                            <div className="mt-2.5 rounded-md border border-emerald-500/20 bg-background/80 p-2.5 space-y-1 text-[11px]">
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>Valor mercancía que conserva:</span>
+                                <span className="font-semibold text-foreground">{formatearMoneda(valorProductosRestantes)}</span>
+                              </div>
+                              <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                                <span>Abono reconocido (cuota inicial / abonos):</span>
+                                <span className="font-bold">-{formatearMoneda(montoReconocido)}</span>
+                              </div>
+                              <div className="flex justify-between border-t border-border/50 pt-1 font-bold text-foreground">
+                                <span>Nuevo saldo pendiente a pagar:</span>
+                                <span className="text-emerald-600 dark:text-emerald-400">
+                                  {formatearMoneda(Math.max(0, valorProductosRestantes - montoReconocido))}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* OPCIÓN 2: ABONAR A OTRA FACTURA DIFERENTE DEL CLIENTE */}
                     <div
                       className={`flex items-start space-x-2.5 rounded-lg border p-2.5 transition-colors cursor-pointer ${
                         destinoDinero === "Abono_Otro_Credito"
@@ -284,21 +353,21 @@ export function ModalDevolucionProducto({
                       <RadioGroupItem value="Abono_Otro_Credito" id="opt-abono" className="mt-1" />
                       <div className="flex-1 text-xs">
                         <label htmlFor="opt-abono" className="font-semibold text-foreground cursor-pointer">
-                          Abonar a otro crédito del cliente
+                          Abonar a otra factura del cliente (Crédito diferente)
                         </label>
                         <p className="text-[11px] text-muted-foreground">
-                          Traslada este dinero como un abono a otra factura pendiente del mismo cliente.
+                          Traslada este dinero como un abono a otra factura independiente del mismo cliente.
                         </p>
 
                         {destinoDinero === "Abono_Otro_Credito" && (
                           <div className="mt-2.5">
                             {loadingOtrosCreditos ? (
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Buscando créditos...
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Buscando otras facturas...
                               </div>
                             ) : otrosCreditos.length === 0 ? (
                               <p className="text-xs text-amber-700 dark:text-amber-400 italic">
-                                Este cliente no tiene otros créditos activos con saldo pendiente. Selecciona devolución en efectivo.
+                                El cliente no tiene otras facturas distintas con saldo pendiente.
                               </p>
                             ) : (
                               <div className="space-y-1.5">
@@ -338,7 +407,7 @@ export function ModalDevolucionProducto({
                       </div>
                     </div>
 
-                    {/* OPCIÓN 2: DEVOLUCIÓN EN EFECTIVO */}
+                    {/* OPCIÓN 3: DEVOLUCIÓN EN EFECTIVO */}
                     <div
                       className={`flex items-start space-x-2.5 rounded-lg border p-2.5 transition-colors cursor-pointer ${
                         destinoDinero === "Devolucion_Efectivo"
@@ -358,7 +427,7 @@ export function ModalDevolucionProducto({
                       </div>
                     </div>
 
-                    {/* OPCIÓN 3: SALDO A FAVOR / CAMBIO DE PRODUCTO */}
+                    {/* OPCIÓN 4: SALDO A FAVOR / CAMBIO DE PRODUCTO */}
                     <div
                       className={`flex items-start space-x-2.5 rounded-lg border p-2.5 transition-colors cursor-pointer ${
                         destinoDinero === "Saldo_Favor"
@@ -409,7 +478,7 @@ export function ModalDevolucionProducto({
                   Motivo de la devolución <span className="text-destructive">*</span>
                 </Label>
                 <Textarea
-                  placeholder="Escribe el motivo detallado (ej. cliente desistió de la compra, cambio de mercancía, garantía)..."
+                  placeholder="Escribe el motivo detallado (ej. cliente desistió de la almohada, cambio de mercancía, garantía)..."
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
                   className="mt-1 text-xs min-h-[75px] resize-none"

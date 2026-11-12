@@ -1042,20 +1042,20 @@ export function ModalImprimirEtiquetas({
               )}
             </div>
 
-            <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 text-xs text-blue-700 dark:text-blue-400 space-y-1.5">
+            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 text-xs text-emerald-800 dark:text-emerald-300 space-y-1.5">
               <div className="flex items-center gap-1.5 font-bold text-foreground">
-                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                <span>Recomendaciones para tu NEW PRINT TT462B+ / 4BARCODE:</span>
+                <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>Configuración de Impresión Recomendada (Adobe Reader / PDF):</span>
               </div>
               <ul className="space-y-1 text-[11px] text-muted-foreground list-disc list-inside leading-relaxed pl-1">
                 <li>
-                  <strong>Márgenes en Chrome:</strong> En la ventana de impresión, abre <em>"Más ajustes"</em> y cambia Márgenes a <strong>"Ninguno"</strong> para que el texto aproveche todo el ancho de la etiqueta sin desplazarse.
+                  <strong>Tamaño y escala:</strong> Seleccionar <strong>"Tamaño real"</strong> (o 100%) para que no se deformen las medidas de 32×25 mm.
                 </li>
                 <li>
-                  <strong>Tamaño de papel:</strong> Selecciona el tamaño de rollo configurado en Windows (por ejemplo <strong>102 mm × 25 mm</strong>).
+                  <strong>Orientación:</strong> Seleccionar <strong>"Automática vertical/horizontal"</strong> (o Horizontal). Adobe detecta los 102 mm de ancho y orienta el papel automáticamente.
                 </li>
                 <li>
-                  <strong>Alternativa PDF:</strong> También puedes pulsar <strong>"Abrir PDF"</strong> para imprimir desde el visor nativo con máxima precisión vectorial.
+                  <strong>Origen del papel:</strong> Si aparece la casilla <em>"Elegir origen del papel por tamaño de página PDF"</em>, déjala marcada.
                 </li>
               </ul>
             </div>
@@ -1071,31 +1071,31 @@ export function ModalImprimirEtiquetas({
             <Button
               type="button"
               variant="outline"
-              onClick={descargarPDF}
+              onClick={imprimirNativo}
               disabled={totalEtiquetasReales === 0}
-              className="text-xs gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 font-semibold"
+              className="text-xs gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 font-semibold"
             >
-              <FileDown className="h-4 w-4" />
-              Descargar PDF
+              <Printer className="h-4 w-4" />
+              Imprimir Directo
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={abrirPDF}
               disabled={totalEtiquetasReales === 0}
-              className="text-xs gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 font-semibold"
+              className="text-xs gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 font-semibold"
             >
               <ExternalLink className="h-4 w-4" />
-              Abrir PDF
+              Abrir Visor PDF
             </Button>
             <Button
               type="button"
-              onClick={imprimirNativo}
+              onClick={descargarPDF}
               disabled={totalEtiquetasReales === 0}
               className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
             >
-              <Printer className="h-4 w-4" />
-              Imprimir Ahora ({totalEtiquetasReales})
+              <FileDown className="h-4 w-4" />
+              Descargar PDF ({totalEtiquetasReales} etiquetas)
             </Button>
           </div>
         </DialogFooter>

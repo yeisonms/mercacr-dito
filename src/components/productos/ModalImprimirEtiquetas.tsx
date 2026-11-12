@@ -10,6 +10,7 @@ import {
   Info,
   Check,
   RotateCcw,
+  ExternalLink,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
@@ -165,11 +166,11 @@ export function ModalImprimirEtiquetas({
     return items.reduce((acc, curr) => acc + curr.cantidad, 0);
   }, [items]);
 
-  // Generar y descargar PDF calibrado (102mm ancho x 25mm alto por fila)
-  const generarPDF = () => {
+  // Construir PDF calibrado en memoria (102mm ancho x 25mm alto por fila)
+  const construirDocPDF = (): jsPDF | null => {
     if (totalEtiquetasReales === 0) {
       toast.error("Selecciona al menos un producto para imprimir");
-      return;
+      return null;
     }
 
     try {
@@ -191,7 +192,7 @@ export function ModalImprimirEtiquetas({
         }
 
         fila.forEach((producto, colIdx) => {
-          if (!producto) return; // Etiqueta en blanco
+          if (!producto) return; // Etiqueta en blanco (vacía)
 
           const x = margenIzquierdo + colIdx * (anchoEtiqueta + gapHorizontal);
           const centroX = x + anchoEtiqueta / 2;
@@ -201,81 +202,348 @@ export function ModalImprimirEtiquetas({
           // 1. Nombre de la empresa (opcional)
           if (mostrarNombreNegocio) {
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(5);
-            doc.setTextColor(80, 80, 80);
+            doc.setFontSize(5.5);
+            doc.setTextColor(60, 60, 60);
             doc.text("MERCACRÉDITO", centroX, currentY, { align: "center" });
-            currentY += 2.5;
+            currentY += 2.6;
           }
 
           // 2. Nombre del producto (dividido en líneas si es largo)
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(6.5);
+          doc.setFontSize(6.8);
           doc.setTextColor(0, 0, 0);
 
-          const nombreLineas = doc.splitTextToSize(producto.nombre.toUpperCase(), anchoEtiqueta - 3);
+          const nombreLineas = doc.splitTextToSize(producto.nombre.toUpperCase(), anchoEtiqueta - 2.5);
           const lineasAMostrar = nombreLineas.slice(0, 2);
           doc.text(lineasAMostrar, centroX, currentY, { align: "center" });
           currentY += lineasAMostrar.length * 2.8 + 1;
 
           // 3. Precios según estilo seleccionado
           if (estiloPrecio === "solo_contado") {
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(5);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(4.8);
+            doc.setTextColor(70, 70, 70);
             doc.text("PRECIO CONTADO", centroX, currentY, { align: "center" });
             currentY += 3.2;
 
             doc.setFont("helvetica", "bold");
             doc.setFontSize(11);
+            doc.setTextColor(0, 0, 0);
             doc.text(formatearMoneda(producto.precio_contado), centroX, currentY, { align: "center" });
             currentY += 4;
           } else if (estiloPrecio === "solo_credito") {
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(5);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(4.8);
+            doc.setTextColor(70, 70, 70);
             doc.text("PRECIO CRÉDITO", centroX, currentY, { align: "center" });
             currentY += 3.2;
 
             doc.setFont("helvetica", "bold");
             doc.setFontSize(11);
+            doc.setTextColor(0, 0, 0);
             doc.text(formatearMoneda(producto.precio_credito), centroX, currentY, { align: "center" });
             currentY += 4;
           } else {
             // Ambos precios (Contado y Crédito)
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(7.5);
-            doc.text(`CONT: ${formatearMoneda(producto.precio_contado)}`, centroX, currentY, { align: "center" });
-            currentY += 3.2;
+            doc.setDrawColor(0, 0, 0);
+            doc.setLineWidth(0.2);
+            doc.line(x + 2, currentY - 0.5, x + anchoEtiqueta - 2, currentY - 0.5);
 
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(7.5);
-            doc.text(`CRED: ${formatearMoneda(producto.precio_credito)}`, centroX, currentY, { align: "center" });
-            currentY += 3.2;
+            doc.setFontSize(7.2);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`CONT: ${formatearMoneda(producto.precio_contado)}`, centroX, currentY + 2.2, { align: "center" });
+            currentY += 3.4;
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7.2);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`CRED: ${formatearMoneda(producto.precio_credito)}`, centroX, currentY + 2.2, { align: "center" });
+            currentY += 3.5;
           }
 
           // 4. Código del producto (opcional)
           if (mostrarCodigo && producto.codigo_producto) {
             doc.setFont("courier", "bold");
             doc.setFontSize(6.5);
-            doc.setTextColor(60, 60, 60);
-            doc.text(`COD: ${producto.codigo_producto}`, centroX, currentY, { align: "center" });
+            doc.setTextColor(0, 0, 0);
+            doc.text(`COD: ${producto.codigo_producto}`, centroX, currentY + 1.2, { align: "center" });
           }
         });
       });
 
-      doc.save(`Etiquetas_Mercacredito_${new Date().toISOString().split("T")[0]}.pdf`);
-      toast.success("PDF de etiquetas generado correctamente");
+      return doc;
     } catch (err: any) {
-      console.error("Error al generar PDF de etiquetas:", err);
+      console.error("Error al construir PDF de etiquetas:", err);
       toast.error("Ocurrió un error al generar las etiquetas");
+      return null;
     }
   };
 
-  // Impresión directa del navegador
+  // Descargar archivo .pdf
+  const descargarPDF = () => {
+    const doc = construirDocPDF();
+    if (!doc) return;
+    doc.save(`Etiquetas_Mercacredito_${new Date().toISOString().split("T")[0]}.pdf`);
+    toast.success("PDF de etiquetas descargado");
+  };
+
+  // Abrir PDF en nueva pestaña para imprimir desde visor nativo
+  const abrirPDF = () => {
+    const doc = construirDocPDF();
+    if (!doc) return;
+    const blobUrl = doc.output("bloburl");
+    window.open(blobUrl, "_blank");
+    toast.info("PDF abierto en pestaña nueva. Puedes imprimir directamente con Ctrl+P");
+  };
+
+  // Generar HTML puro para la ventana de impresión en iframe aislado
+  const generarHTMLImpresion = (): string => {
+    const filasHTML = celdasParaImpresion.filas
+      .map((fila) => {
+        const celdasHTML = fila
+          .map((producto) => {
+            if (!producto) {
+              return `<div class="celda-etiqueta celda-vacia"></div>`;
+            }
+
+            const negocioHTML = mostrarNombreNegocio
+              ? `<div class="marca-negocio">MERCACRÉDITO</div>`
+              : "";
+
+            const nombreHTML = `<div class="nombre-producto">${producto.nombre.toUpperCase()}</div>`;
+
+            let preciosHTML = "";
+            if (estiloPrecio === "solo_contado") {
+              preciosHTML = `
+                <div class="bloque-precio-unico">
+                  <span class="precio-tipo-tag">CONTADO</span>
+                  <span class="precio-valor-grande">${formatearMoneda(producto.precio_contado)}</span>
+                </div>
+              `;
+            } else if (estiloPrecio === "solo_credito") {
+              preciosHTML = `
+                <div class="bloque-precio-unico">
+                  <span class="precio-tipo-tag">CRÉDITO</span>
+                  <span class="precio-valor-grande">${formatearMoneda(producto.precio_credito)}</span>
+                </div>
+              `;
+            } else {
+              preciosHTML = `
+                <div class="bloque-precios-ambos">
+                  <div class="fila-precio-ambos">
+                    <span class="precio-label">CONT:</span>
+                    <span>${formatearMoneda(producto.precio_contado)}</span>
+                  </div>
+                  <div class="fila-precio-ambos">
+                    <span class="precio-label">CRED:</span>
+                    <span>${formatearMoneda(producto.precio_credito)}</span>
+                  </div>
+                </div>
+              `;
+            }
+
+            const codigoHTML =
+              mostrarCodigo && producto.codigo_producto
+                ? `<div class="codigo-producto">COD: ${producto.codigo_producto}</div>`
+                : "";
+
+            return `
+              <div class="celda-etiqueta">
+                ${negocioHTML}
+                ${nombreHTML}
+                ${preciosHTML}
+                ${codigoHTML}
+              </div>
+            `;
+          })
+          .join("");
+
+        return `<div class="fila-etiquetas">${celdasHTML}</div>`;
+      })
+      .join("");
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Etiquetas Mercacrédito</title>
+  <style>
+    @page {
+      size: 102mm 25mm;
+      margin: 0mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 102mm;
+      background: #ffffff;
+      color: #000000;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .fila-etiquetas {
+      width: 102mm;
+      height: 25mm;
+      max-height: 25mm;
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      page-break-after: always;
+      break-after: page;
+      padding: 0 1.2mm;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .celda-etiqueta {
+      width: 31.8mm;
+      height: 23.2mm;
+      max-height: 23.2mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      text-align: center;
+      padding: 0.8mm 1mm;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .celda-vacia {
+      visibility: hidden;
+    }
+    .marca-negocio {
+      font-size: 5pt;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      color: #222222;
+      text-transform: uppercase;
+      line-height: 1;
+    }
+    .nombre-producto {
+      font-size: 6.8pt;
+      font-weight: 900;
+      line-height: 1.1;
+      color: #000000;
+      text-transform: uppercase;
+      max-height: 6.2mm;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      word-break: break-word;
+    }
+    .bloque-precios-ambos {
+      width: 100%;
+      border-top: 0.5px solid #000000;
+      padding-top: 0.5mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3mm;
+    }
+    .fila-precio-ambos {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      width: 100%;
+      font-size: 6.8pt;
+      font-weight: 900;
+      color: #000000;
+      line-height: 1;
+    }
+    .fila-precio-ambos .precio-label {
+      font-size: 5.5pt;
+      font-weight: 800;
+      color: #222222;
+    }
+    .bloque-precio-unico {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      line-height: 1;
+    }
+    .bloque-precio-unico .precio-tipo-tag {
+      font-size: 4.8pt;
+      font-weight: 800;
+      color: #333333;
+      text-transform: uppercase;
+      margin-bottom: 0.3mm;
+    }
+    .bloque-precio-unico .precio-valor-grande {
+      font-size: 11pt;
+      font-weight: 900;
+      color: #000000;
+      letter-spacing: -0.2px;
+    }
+    .codigo-producto {
+      font-size: 5.8pt;
+      font-family: "Courier New", Courier, monospace;
+      font-weight: 900;
+      color: #111111;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body>
+  ${filasHTML}
+</body>
+</html>`;
+  };
+
+  // Impresión directa del navegador a través de un iframe aislado (100% visible, sin interferencia de estilos)
   const imprimirNativo = () => {
     if (totalEtiquetasReales === 0) {
       toast.error("Selecciona al menos un producto para imprimir");
       return;
     }
-    window.print();
+
+    try {
+      const htmlContent = generarHTMLImpresion();
+
+      let iframe = document.getElementById("etiquetas-print-frame") as HTMLIFrameElement;
+      if (!iframe) {
+        iframe = document.createElement("iframe");
+        iframe.id = "etiquetas-print-frame";
+        iframe.style.position = "fixed";
+        iframe.style.right = "0";
+        iframe.style.bottom = "0";
+        iframe.style.width = "0";
+        iframe.style.height = "0";
+        iframe.style.border = "0";
+        iframe.style.visibility = "hidden";
+        document.body.appendChild(iframe);
+      }
+
+      const doc = iframe.contentWindow?.document;
+      if (!doc) {
+        toast.error("No se pudo iniciar el proceso de impresión");
+        return;
+      }
+
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          console.error("Error al disparar print en iframe:", e);
+          toast.error("Error al abrir la ventana de impresión");
+        }
+      }, 250);
+    } catch (err) {
+      console.error("Error en imprimirNativo:", err);
+      toast.error("Error al preparar la impresión");
+    }
   };
 
   return (
@@ -594,16 +862,22 @@ export function ModalImprimirEtiquetas({
               )}
             </div>
 
-            <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-2.5 text-xs text-blue-700 dark:text-blue-400 flex items-start gap-2">
-              <Info className="h-4 w-4 shrink-0 mt-0.5" />
-              <div className="space-y-1 text-[11px] leading-relaxed">
-                <p>
-                  <strong>Consejo para la NEW PRINT TT462B+:</strong> En las preferencias de
-                  impresión de Windows, configura el tamaño de papel como{" "}
-                  <strong>102 mm × 25 mm</strong> (o 3 columnas de 32×25 mm). El sensor de brecha
-                  (GAP) detectará cada fila con precisión milimétrica.
-                </p>
+            <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 text-xs text-blue-700 dark:text-blue-400 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-foreground">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                <span>Recomendaciones para tu NEW PRINT TT462B+ / 4BARCODE:</span>
               </div>
+              <ul className="space-y-1 text-[11px] text-muted-foreground list-disc list-inside leading-relaxed pl-1">
+                <li>
+                  <strong>Márgenes en Chrome:</strong> En la ventana de impresión, abre <em>"Más ajustes"</em> y cambia Márgenes a <strong>"Ninguno"</strong> para que el texto aproveche todo el ancho de la etiqueta sin desplazarse.
+                </li>
+                <li>
+                  <strong>Tamaño de papel:</strong> Selecciona el tamaño de rollo configurado en Windows (por ejemplo <strong>102 mm × 25 mm</strong>).
+                </li>
+                <li>
+                  <strong>Alternativa PDF:</strong> También puedes pulsar <strong>"Abrir PDF"</strong> para imprimir desde el visor nativo con máxima precisión vectorial.
+                </li>
+              </ul>
             </div>
           </div>
         </div>
@@ -613,16 +887,26 @@ export function ModalImprimirEtiquetas({
             Cerrar
           </Button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               variant="outline"
-              onClick={generarPDF}
+              onClick={descargarPDF}
               disabled={totalEtiquetasReales === 0}
               className="text-xs gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 font-semibold"
             >
               <FileDown className="h-4 w-4" />
-              Descargar PDF Térmico
+              Descargar PDF
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={abrirPDF}
+              disabled={totalEtiquetasReales === 0}
+              className="text-xs gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 font-semibold"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Abrir PDF
             </Button>
             <Button
               type="button"
@@ -636,109 +920,6 @@ export function ModalImprimirEtiquetas({
           </div>
         </DialogFooter>
       </DialogContent>
-
-      {/* ESTILOS DE IMPRESIÓN DIRECTA NATIVA (@media print) */}
-      <style>{`
-        @media print {
-          @page {
-            size: 102mm 25mm;
-            margin: 0;
-          }
-          body * {
-            visibility: hidden;
-          }
-          #print-area-etiquetas, #print-area-etiquetas * {
-            visibility: visible;
-          }
-          #print-area-etiquetas {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 102mm;
-            margin: 0;
-            padding: 0;
-          }
-          .pagina-fila-etiquetas {
-            width: 102mm;
-            height: 25mm;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            page-break-after: always;
-            box-sizing: border-box;
-            padding: 0 1mm;
-          }
-          .etiqueta-celda-print {
-            width: 32mm;
-            height: 24mm;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            text-align: center;
-            padding: 1.5mm;
-            color: #000;
-          }
-        }
-      `}</style>
-
-      {/* ELEMENTO OCULTO PARA IMPRESIÓN NATIVA */}
-      <div id="print-area-etiquetas" className="hidden">
-        {celdasParaImpresion.filas.map((fila, fIdx) => (
-          <div key={fIdx} className="pagina-fila-etiquetas">
-            {fila.map((producto, cIdx) => {
-              if (!producto) {
-                return <div key={cIdx} className="etiqueta-celda-print" />;
-              }
-
-              return (
-                <div key={cIdx} className="etiqueta-celda-print">
-                  {mostrarNombreNegocio && (
-                    <div style={{ fontSize: "5pt", fontWeight: "bold", color: "#555" }}>
-                      MERCACRÉDITO
-                    </div>
-                  )}
-
-                  <div
-                    style={{
-                      fontSize: "6.5pt",
-                      fontWeight: "bold",
-                      lineHeight: "1.1",
-                      maxHeight: "6mm",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {producto.nombre.toUpperCase()}
-                  </div>
-
-                  {estiloPrecio === "solo_contado" && (
-                    <div style={{ fontSize: "10pt", fontWeight: "bold" }}>
-                      {formatearMoneda(producto.precio_contado)}
-                    </div>
-                  )}
-                  {estiloPrecio === "solo_credito" && (
-                    <div style={{ fontSize: "10pt", fontWeight: "bold" }}>
-                      {formatearMoneda(producto.precio_credito)}
-                    </div>
-                  )}
-                  {estiloPrecio === "ambos" && (
-                    <div style={{ fontSize: "6.5pt", fontWeight: "bold", lineHeight: "1.15" }}>
-                      <div>CONT: {formatearMoneda(producto.precio_contado)}</div>
-                      <div>CRED: {formatearMoneda(producto.precio_credito)}</div>
-                    </div>
-                  )}
-
-                  {mostrarCodigo && (
-                    <div style={{ fontSize: "5.5pt", fontFamily: "monospace", fontWeight: "bold" }}>
-                      COD: {producto.codigo_producto}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
     </Dialog>
   );
 }

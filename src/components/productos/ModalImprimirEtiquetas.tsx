@@ -742,3 +742,4 @@ export function ModalImprimirEtiquetas({
     </Dialog>
   );
 }
+

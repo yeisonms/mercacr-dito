@@ -11,6 +11,9 @@ import {
   Check,
   RotateCcw,
   ExternalLink,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
@@ -73,6 +76,38 @@ export function ModalImprimirEtiquetas({
   const [mostrarNombreNegocio, setMostrarNombreNegocio] = useState<boolean>(true);
   const [mostrarCodigo, setMostrarCodigo] = useState<boolean>(true);
   const [columnaInicial, setColumnaInicial] = useState<number>(1); // 1, 2 o 3
+
+  // Calibración milimétrica (recuerda ajustes del usuario en localStorage)
+  const [offsetY, setOffsetY] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    const saved = localStorage.getItem("mercacredito_etiquetas_offsetY");
+    return saved !== null ? parseFloat(saved) : 0; // mm (+ = baja, - = sube)
+  });
+
+  const [offsetX, setOffsetX] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    const saved = localStorage.getItem("mercacredito_etiquetas_offsetX");
+    return saved !== null ? parseFloat(saved) : 0; // mm (+ = derecha, - = izquierda)
+  });
+
+  const [gapColumnas, setGapColumnas] = useState<number>(() => {
+    if (typeof window === "undefined") return 2.5;
+    const saved = localStorage.getItem("mercacredito_etiquetas_gap");
+    return saved !== null ? parseFloat(saved) : 2.5; // mm (estándar SAT 3COL)
+  });
+
+  const [mostrarAjustesAvanzados, setMostrarAjustesAvanzados] = useState<boolean>(false);
+
+  const guardarCalibracion = (y: number, x: number, gap: number) => {
+    setOffsetY(y);
+    setOffsetX(x);
+    setGapColumnas(gap);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("mercacredito_etiquetas_offsetY", y.toString());
+      localStorage.setItem("mercacredito_etiquetas_offsetX", x.toString());
+      localStorage.setItem("mercacredito_etiquetas_gap", gap.toString());
+    }
+  };
 
   // Sincronizar cuando cambie el producto seleccionado al abrir
   const [ultimoProductoId, setUltimoProductoId] = useState<string | undefined>(
@@ -182,9 +217,8 @@ export function ModalImprimirEtiquetas({
       });
 
       const anchoEtiqueta = 32; // mm
-      const altoEtiqueta = 25; // mm
-      const gapHorizontal = 2; // mm
-      const margenIzquierdo = 1; // mm
+      const margenIzquierdo = Math.max(0, 2.2 + offsetX); // mm (calibrado para SAT 3COL)
+      const gapHorizontal = Math.max(1, gapColumnas); // mm (por defecto 2.5 mm)
 
       celdasParaImpresion.filas.forEach((fila, filaIdx) => {
         if (filaIdx > 0) {
@@ -197,76 +231,77 @@ export function ModalImprimirEtiquetas({
           const x = margenIzquierdo + colIdx * (anchoEtiqueta + gapHorizontal);
           const centroX = x + anchoEtiqueta / 2;
 
-          let currentY = 3.5;
+          // Punto de inicio vertical compacto (permite que todo el contenido entre con margen de sobra)
+          let currentY = Math.max(1.0, 2.0 + offsetY);
 
           // 1. Nombre de la empresa (opcional)
           if (mostrarNombreNegocio) {
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(5.5);
-            doc.setTextColor(60, 60, 60);
+            doc.setFontSize(4.8);
+            doc.setTextColor(70, 70, 70);
             doc.text("MERCACRÉDITO", centroX, currentY, { align: "center" });
-            currentY += 2.6;
+            currentY += 2.2;
           }
 
-          // 2. Nombre del producto (dividido en líneas si es largo)
+          // 2. Nombre del producto (dividido en máximo 2 líneas compactas)
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(6.8);
+          doc.setFontSize(6.2);
           doc.setTextColor(0, 0, 0);
 
-          const nombreLineas = doc.splitTextToSize(producto.nombre.toUpperCase(), anchoEtiqueta - 2.5);
+          const nombreLineas = doc.splitTextToSize(producto.nombre.toUpperCase(), anchoEtiqueta - 3);
           const lineasAMostrar = nombreLineas.slice(0, 2);
           doc.text(lineasAMostrar, centroX, currentY, { align: "center" });
-          currentY += lineasAMostrar.length * 2.8 + 1;
+          currentY += lineasAMostrar.length * 2.4 + 0.6;
 
           // 3. Precios según estilo seleccionado
           if (estiloPrecio === "solo_contado") {
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(4.8);
-            doc.setTextColor(70, 70, 70);
+            doc.setFontSize(4.5);
+            doc.setTextColor(80, 80, 80);
             doc.text("PRECIO CONTADO", centroX, currentY, { align: "center" });
-            currentY += 3.2;
+            currentY += 2.6;
 
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(11);
+            doc.setFontSize(10.5);
             doc.setTextColor(0, 0, 0);
             doc.text(formatearMoneda(producto.precio_contado), centroX, currentY, { align: "center" });
-            currentY += 4;
+            currentY += 3.2;
           } else if (estiloPrecio === "solo_credito") {
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(4.8);
-            doc.setTextColor(70, 70, 70);
+            doc.setFontSize(4.5);
+            doc.setTextColor(80, 80, 80);
             doc.text("PRECIO CRÉDITO", centroX, currentY, { align: "center" });
-            currentY += 3.2;
+            currentY += 2.6;
 
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(11);
+            doc.setFontSize(10.5);
             doc.setTextColor(0, 0, 0);
             doc.text(formatearMoneda(producto.precio_credito), centroX, currentY, { align: "center" });
-            currentY += 4;
+            currentY += 3.2;
           } else {
             // Ambos precios (Contado y Crédito)
-            doc.setDrawColor(0, 0, 0);
-            doc.setLineWidth(0.2);
-            doc.line(x + 2, currentY - 0.5, x + anchoEtiqueta - 2, currentY - 0.5);
+            doc.setDrawColor(180, 180, 180);
+            doc.setLineWidth(0.15);
+            doc.line(x + 2, currentY - 0.3, x + anchoEtiqueta - 2, currentY - 0.3);
 
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(7.2);
+            doc.setFontSize(6.6);
             doc.setTextColor(0, 0, 0);
-            doc.text(`CONT: ${formatearMoneda(producto.precio_contado)}`, centroX, currentY + 2.2, { align: "center" });
-            currentY += 3.4;
+            doc.text(`CONT: ${formatearMoneda(producto.precio_contado)}`, centroX, currentY + 1.8, { align: "center" });
+            currentY += 2.6;
 
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(7.2);
+            doc.setFontSize(6.6);
             doc.setTextColor(0, 0, 0);
-            doc.text(`CRED: ${formatearMoneda(producto.precio_credito)}`, centroX, currentY + 2.2, { align: "center" });
-            currentY += 3.5;
+            doc.text(`CRED: ${formatearMoneda(producto.precio_credito)}`, centroX, currentY + 1.8, { align: "center" });
+            currentY += 2.6;
           }
 
           // 4. Código del producto (opcional)
           if (mostrarCodigo && producto.codigo_producto) {
             doc.setFont("courier", "bold");
-            doc.setFontSize(6.5);
-            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(5.8);
+            doc.setTextColor(30, 30, 30);
             doc.text(`COD: ${producto.codigo_producto}`, centroX, currentY + 1.2, { align: "center" });
           }
         });
@@ -299,6 +334,10 @@ export function ModalImprimirEtiquetas({
 
   // Generar HTML puro para la ventana de impresión en iframe aislado
   const generarHTMLImpresion = (): string => {
+    const margenIzqTotal = Math.max(0, 2.2 + offsetX);
+    const gapCol = Math.max(1, gapColumnas);
+    const paddingTop = Math.max(0.5, 1.2 + offsetY);
+
     const filasHTML = celdasParaImpresion.filas
       .map((fila) => {
         const celdasHTML = fila
@@ -394,24 +433,27 @@ export function ModalImprimirEtiquetas({
       max-height: 25mm;
       display: flex;
       flex-direction: row;
-      justify-content: space-between;
       align-items: center;
       page-break-after: always;
       break-after: page;
-      padding: 0 1.2mm;
+      padding-left: ${margenIzqTotal.toFixed(1)}mm;
+      gap: ${gapCol.toFixed(1)}mm;
       overflow: hidden;
       box-sizing: border-box;
     }
     .celda-etiqueta {
-      width: 31.8mm;
-      height: 23.2mm;
-      max-height: 23.2mm;
+      width: 32mm;
+      height: 24mm;
+      max-height: 24mm;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      justify-content: flex-start;
       align-items: center;
       text-align: center;
-      padding: 0.8mm 1mm;
+      padding-top: ${paddingTop.toFixed(1)}mm;
+      padding-bottom: 0.5mm;
+      padding-left: 1mm;
+      padding-right: 1mm;
       overflow: hidden;
       box-sizing: border-box;
     }
@@ -419,48 +461,51 @@ export function ModalImprimirEtiquetas({
       visibility: hidden;
     }
     .marca-negocio {
-      font-size: 5pt;
+      font-size: 4.8pt;
       font-weight: 900;
       letter-spacing: 0.5px;
-      color: #222222;
+      color: #333333;
       text-transform: uppercase;
       line-height: 1;
+      margin-bottom: 0.6mm;
     }
     .nombre-producto {
-      font-size: 6.8pt;
+      font-size: 6.2pt;
       font-weight: 900;
       line-height: 1.1;
       color: #000000;
       text-transform: uppercase;
-      max-height: 6.2mm;
+      max-height: 5.6mm;
       overflow: hidden;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       word-break: break-word;
+      margin-bottom: 0.6mm;
     }
     .bloque-precios-ambos {
       width: 100%;
-      border-top: 0.5px solid #000000;
+      border-top: 0.5px solid #666;
       padding-top: 0.5mm;
       display: flex;
       flex-direction: column;
-      gap: 0.3mm;
+      gap: 0.2mm;
+      margin-bottom: 0.6mm;
     }
     .fila-precio-ambos {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
       width: 100%;
-      font-size: 6.8pt;
+      font-size: 6.5pt;
       font-weight: 900;
       color: #000000;
       line-height: 1;
     }
     .fila-precio-ambos .precio-label {
-      font-size: 5.5pt;
+      font-size: 5.2pt;
       font-weight: 800;
-      color: #222222;
+      color: #333333;
     }
     .bloque-precio-unico {
       width: 100%;
@@ -468,25 +513,26 @@ export function ModalImprimirEtiquetas({
       flex-direction: column;
       align-items: center;
       line-height: 1;
+      margin-bottom: 0.6mm;
     }
     .bloque-precio-unico .precio-tipo-tag {
-      font-size: 4.8pt;
+      font-size: 4.5pt;
       font-weight: 800;
-      color: #333333;
+      color: #444444;
       text-transform: uppercase;
-      margin-bottom: 0.3mm;
+      margin-bottom: 0.2mm;
     }
     .bloque-precio-unico .precio-valor-grande {
-      font-size: 11pt;
+      font-size: 10.5pt;
       font-weight: 900;
       color: #000000;
       letter-spacing: -0.2px;
     }
     .codigo-producto {
-      font-size: 5.8pt;
+      font-size: 5.5pt;
       font-family: "Courier New", Courier, monospace;
       font-weight: 900;
-      color: #111111;
+      color: #222222;
       line-height: 1;
     }
   </style>
@@ -748,6 +794,97 @@ export function ModalImprimirEtiquetas({
                     onCheckedChange={setMostrarCodigo}
                   />
                 </div>
+              </div>
+
+              {/* Calibración Fina de la Impresora */}
+              <div className="pt-2 border-t border-border/50 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setMostrarAjustesAvanzados(!mostrarAjustesAvanzados)}
+                  className="flex items-center justify-between w-full text-[11px] font-semibold text-primary hover:underline py-1"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    Calibración y Márgenes Físicos
+                  </span>
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    {mostrarAjustesAvanzados ? (
+                      <>
+                        Ocultar <ChevronUp className="h-3 w-3" />
+                      </>
+                    ) : (
+                      <>
+                        Ajustar milímetros <ChevronDown className="h-3 w-3" />
+                      </>
+                    )}
+                  </span>
+                </button>
+
+                {mostrarAjustesAvanzados && (
+                  <div className="bg-muted/40 p-2.5 rounded-lg border border-border/60 space-y-2.5">
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      Ajusta si la impresión sale desplazada o recortada respecto a tus etiquetas adhesivas:
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-[10px] font-bold text-foreground block mb-0.5">
+                          Vertical (Y)
+                        </Label>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            step="0.5"
+                            value={offsetY}
+                            onChange={(e) =>
+                              guardarCalibracion(parseFloat(e.target.value) || 0, offsetX, gapColumnas)
+                            }
+                            className="h-7 text-xs text-center p-1 bg-background"
+                          />
+                          <span className="text-[10px] text-muted-foreground">mm</span>
+                        </div>
+                        <span className="text-[9px] text-muted-foreground">(- sube, + baja)</span>
+                      </div>
+
+                      <div>
+                        <Label className="text-[10px] font-bold text-foreground block mb-0.5">
+                          Horizontal (X)
+                        </Label>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            step="0.5"
+                            value={offsetX}
+                            onChange={(e) =>
+                              guardarCalibracion(offsetY, parseFloat(e.target.value) || 0, gapColumnas)
+                            }
+                            className="h-7 text-xs text-center p-1 bg-background"
+                          />
+                          <span className="text-[10px] text-muted-foreground">mm</span>
+                        </div>
+                        <span className="text-[9px] text-muted-foreground">(- izq, + der)</span>
+                      </div>
+
+                      <div>
+                        <Label className="text-[10px] font-bold text-foreground block mb-0.5">
+                          Gap Columnas
+                        </Label>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            step="0.2"
+                            value={gapColumnas}
+                            onChange={(e) =>
+                              guardarCalibracion(offsetY, offsetX, parseFloat(e.target.value) || 2.5)
+                            }
+                            className="h-7 text-xs text-center p-1 bg-background"
+                          />
+                          <span className="text-[10px] text-muted-foreground">mm</span>
+                        </div>
+                        <span className="text-[9px] text-muted-foreground">(SAT: 2.5)</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -1045,14 +1045,14 @@ export function ModalImprimirEtiquetas({
             <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 text-xs text-emerald-800 dark:text-emerald-300 space-y-1.5">
               <div className="flex items-center gap-1.5 font-bold text-foreground">
                 <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span>Configuración de Impresión Recomendada (Adobe Reader / PDF):</span>
+                <span>Configuración en Adobe Acrobat Reader (Impresión Perfecta):</span>
               </div>
               <ul className="space-y-1 text-[11px] text-muted-foreground list-disc list-inside leading-relaxed pl-1">
                 <li>
-                  <strong>Tamaño y escala:</strong> Seleccionar <strong>"Tamaño real"</strong> (o 100%) para que no se deformen las medidas de 32×25 mm.
+                  <strong>Orientación:</strong> Selecciona <strong>"Vertical"</strong> (o "Automática vertical/horizontal"). ⚠️ <em>Nunca selecciones "Horizontal" manual, ya que el archivo ya es horizontal y Adobe lo giraría de cabeza.</em>
                 </li>
                 <li>
-                  <strong>Orientación:</strong> Seleccionar <strong>"Automática vertical/horizontal"</strong> (o Horizontal). Adobe detecta los 102 mm de ancho y orienta el papel automáticamente.
+                  <strong>Tamaño y escala:</strong> Selecciona <strong>"Tamaño real"</strong> (100%).
                 </li>
                 <li>
                   <strong>Origen del papel:</strong> Si aparece la casilla <em>"Elegir origen del papel por tamaño de página PDF"</em>, déjala marcada.
@@ -1071,16 +1071,6 @@ export function ModalImprimirEtiquetas({
             <Button
               type="button"
               variant="outline"
-              onClick={imprimirNativo}
-              disabled={totalEtiquetasReales === 0}
-              className="text-xs gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 font-semibold"
-            >
-              <Printer className="h-4 w-4" />
-              Imprimir Directo
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
               onClick={abrirPDF}
               disabled={totalEtiquetasReales === 0}
               className="text-xs gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 font-semibold"
@@ -1095,7 +1085,7 @@ export function ModalImprimirEtiquetas({
               className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
             >
               <FileDown className="h-4 w-4" />
-              Descargar PDF ({totalEtiquetasReales} etiquetas)
+              Descargar PDF Térmico ({totalEtiquetasReales} etiquetas)
             </Button>
           </div>
         </DialogFooter>

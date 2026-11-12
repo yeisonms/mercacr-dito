@@ -323,13 +323,48 @@ export function ModalImprimirEtiquetas({
     toast.success("PDF de etiquetas descargado");
   };
 
-  // Abrir PDF en nueva pestaña para imprimir desde visor nativo
+  // Abrir PDF en nueva pestaña mediante embed para evitar bloqueo de navegación blob en Chromium
   const abrirPDF = () => {
     const doc = construirDocPDF();
     if (!doc) return;
-    const blobUrl = doc.output("bloburl");
-    window.open(blobUrl, "_blank");
-    toast.info("PDF abierto en pestaña nueva. Puedes imprimir directamente con Ctrl+P");
+    const blob = doc.output("blob");
+    const blobUrl = URL.createObjectURL(blob);
+
+    const win = window.open("", "_blank");
+    if (!win) {
+      doc.save(`Etiquetas_Mercacredito_${new Date().toISOString().split("T")[0]}.pdf`);
+      toast.info("Ventana emergente bloqueada; se descargó el PDF directamente");
+      return;
+    }
+
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Etiquetas Mercacrédito - PDF</title>
+          <style>
+            html, body {
+              margin: 0;
+              padding: 0;
+              width: 100%;
+              height: 100%;
+              overflow: hidden;
+              background-color: #2b2b2b;
+            }
+            embed {
+              width: 100%;
+              height: 100%;
+              border: none;
+            }
+          </style>
+        </head>
+        <body>
+          <embed src="${blobUrl}" type="application/pdf" />
+        </body>
+      </html>
+    `);
+    win.document.close();
+    toast.success("PDF abierto en visor. Puedes imprimir con el icono de la impresora o Ctrl+P");
   };
 
   // Generar HTML puro para la ventana de impresión en iframe aislado
@@ -543,7 +578,7 @@ export function ModalImprimirEtiquetas({
 </html>`;
   };
 
-  // Impresión directa del navegador a través de un iframe aislado (100% visible, sin interferencia de estilos)
+  // Impresión directa del navegador a través de un iframe aislado (100% visible para Chromium, pero off-screen)
   const imprimirNativo = () => {
     if (totalEtiquetasReales === 0) {
       toast.error("Selecciona al menos un producto para imprimir");
@@ -553,19 +588,22 @@ export function ModalImprimirEtiquetas({
     try {
       const htmlContent = generarHTMLImpresion();
 
-      let iframe = document.getElementById("etiquetas-print-frame") as HTMLIFrameElement;
-      if (!iframe) {
-        iframe = document.createElement("iframe");
-        iframe.id = "etiquetas-print-frame";
-        iframe.style.position = "fixed";
-        iframe.style.right = "0";
-        iframe.style.bottom = "0";
-        iframe.style.width = "0";
-        iframe.style.height = "0";
-        iframe.style.border = "0";
-        iframe.style.visibility = "hidden";
-        document.body.appendChild(iframe);
+      // Limpiar iframe previo si existía
+      const framePrevio = document.getElementById("etiquetas-print-frame");
+      if (framePrevio) {
+        framePrevio.remove();
       }
+
+      const iframe = document.createElement("iframe");
+      iframe.id = "etiquetas-print-frame";
+      iframe.style.position = "fixed";
+      iframe.style.top = "0";
+      iframe.style.left = "-10000px"; // Fuera del viewport pero totalmente renderizado por Chromium
+      iframe.style.width = "102mm";
+      iframe.style.height = "25mm";
+      iframe.style.border = "none";
+      iframe.style.zIndex = "-9999";
+      document.body.appendChild(iframe);
 
       const doc = iframe.contentWindow?.document;
       if (!doc) {
@@ -585,7 +623,7 @@ export function ModalImprimirEtiquetas({
           console.error("Error al disparar print en iframe:", e);
           toast.error("Error al abrir la ventana de impresión");
         }
-      }, 250);
+      }, 350);
     } catch (err) {
       console.error("Error en imprimirNativo:", err);
       toast.error("Error al preparar la impresión");
@@ -912,6 +950,11 @@ export function ModalImprimirEtiquetas({
                 </div>
               ) : (
                 <div className="space-y-2.5 w-full max-w-[480px]">
+                  <div className="grid grid-cols-3 gap-2 text-center text-[10px] text-muted-foreground font-mono">
+                    <span>Col 1 (Izquierda)</span>
+                    <span>Col 2 (Centro)</span>
+                    <span>Col 3 (Derecha)</span>
+                  </div>
                   {celdasParaImpresion.filas.map((fila, filaIdx) => (
                     <div
                       key={filaIdx}

@@ -22,6 +22,7 @@ import {
 
 import { AppShell } from "@/components/layout/AppShell";
 import { ImportarProductosDialog } from "@/components/productos/ImportarProductosDialog";
+import { ModalImprimirEtiquetas } from "@/components/productos/ModalImprimirEtiquetas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -175,6 +176,13 @@ function ProductosPage() {
   const [dialogAbierto, setDialogAbierto] = useState(false);
   const [importarAbierto, setImportarAbierto] = useState(false);
   const [productoEditando, setProductoEditando] = useState<Producto | null>(null);
+  const [etiquetasModalAbierto, setEtiquetasModalAbierto] = useState(false);
+  const [productoParaEtiquetas, setProductoParaEtiquetas] = useState<Producto | null>(null);
+
+  const abrirEtiquetas = (producto?: Producto) => {
+    setProductoParaEtiquetas(producto || null);
+    setEtiquetasModalAbierto(true);
+  };
 
   // Filtrado en tiempo real
   const productosFiltrados = useMemo(() => {
@@ -224,6 +232,15 @@ function ProductosPage() {
         aria-label="Recargar catálogo"
       >
         <RefreshCw className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => abrirEtiquetas()}
+        className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 dark:border-indigo-800 dark:text-indigo-400 font-semibold"
+      >
+        <Tag className="mr-2 h-4 w-4" />
+        Imprimir Etiquetas
       </Button>
       <Button variant="secondary" size="sm" onClick={() => setImportarAbierto(true)}>
         <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" />
@@ -344,6 +361,7 @@ function ProductosPage() {
                           producto={producto}
                           onEditar={() => abrirEditar(producto)}
                           onEliminar={() => handleEliminar(producto)}
+                          onImprimirEtiqueta={() => abrirEtiquetas(producto)}
                         />
                       ))}
                   </TableBody>
@@ -369,6 +387,16 @@ function ProductosPage() {
         onOpenChange={setImportarAbierto} 
         onSuccess={() => refetch()} 
       />
+
+      <ModalImprimirEtiquetas
+        isOpen={etiquetasModalAbierto}
+        onClose={() => {
+          setEtiquetasModalAbierto(false);
+          setProductoParaEtiquetas(null);
+        }}
+        productosDisponibles={productos}
+        productoSeleccionado={productoParaEtiquetas}
+      />
     </AppShell>
   );
 }
@@ -379,10 +407,12 @@ function FilaProducto({
   producto,
   onEditar,
   onEliminar,
+  onImprimirEtiqueta,
 }: {
   producto: Producto;
   onEditar: () => void;
   onEliminar: () => void;
+  onImprimirEtiqueta: () => void;
 }) {
   const sinStock = producto.stock_disponible === 0;
   const cfg = ESTADO_CONFIG[producto.estado] ?? ESTADO_CONFIG.Descontinuado;
@@ -449,6 +479,16 @@ function FilaProducto({
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950"
+            onClick={onImprimirEtiqueta}
+            title={`Imprimir etiquetas de ${producto.nombre}`}
+            aria-label={`Imprimir etiquetas de ${producto.nombre}`}
+          >
+            <Tag className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"

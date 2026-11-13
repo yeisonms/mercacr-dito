@@ -1047,15 +1047,21 @@ export function ModalImprimirEtiquetas({
                 <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>Configuración en Adobe Acrobat Reader (Impresión Perfecta):</span>
               </div>
-              <ul className="space-y-1 text-[11px] text-muted-foreground list-disc list-inside leading-relaxed pl-1">
+              <ul className="space-y-1.5 text-[11px] text-muted-foreground list-disc list-inside leading-relaxed pl-1">
                 <li>
-                  <strong>Orientación:</strong> Selecciona <strong>"Vertical"</strong> (o "Automática vertical/horizontal"). ⚠️ <em>Nunca selecciones "Horizontal" manual, ya que el archivo ya es horizontal y Adobe lo giraría de cabeza.</em>
+                  <strong>Tamaño de papel (Crucial):</strong> En la ventana de imprimir de Adobe, pulsa <strong>"Propiedades"</strong> (al lado de tu 4BARCODE) y asegúrate de que el tamaño de papel sea <strong>102 mm × 25 mm</strong> (no 63.5 mm). Si no existe, créalo con ancho 102 mm y alto 25 mm.
+                </li>
+                <li>
+                  <strong>Origen del papel:</strong> Marca la casilla <strong>"Seleccionar origen de papel según tamaño de página PDF"</strong>.
+                </li>
+                <li>
+                  <strong>Orientación:</strong> Mantén <strong>"Vertical"</strong> (o "Automática"). ⚠️ <em>No marques "Horizontal" manual.</em>
                 </li>
                 <li>
                   <strong>Tamaño y escala:</strong> Selecciona <strong>"Tamaño real"</strong> (100%).
                 </li>
                 <li>
-                  <strong>Origen del papel:</strong> Si aparece la casilla <em>"Elegir origen del papel por tamaño de página PDF"</em>, déjala marcada.
+                  <strong>Alineación del corte:</strong> Si la impresora quedó desfasada, pulsa el botón físico <strong>FEED</strong> una sola vez para que se ajuste exactamente a la separación entre etiquetas.
                 </li>
               </ul>
             </div>

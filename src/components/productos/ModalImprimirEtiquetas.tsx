@@ -91,9 +91,9 @@ export function ModalImprimirEtiquetas({
   });
 
   const [gapColumnas, setGapColumnas] = useState<number>(() => {
-    if (typeof window === "undefined") return 2.5;
+    if (typeof window === "undefined") return 2.0;
     const saved = localStorage.getItem("mercacredito_etiquetas_gap");
-    return saved !== null ? parseFloat(saved) : 2.5; // mm (estándar SAT 3COL)
+    return saved !== null ? parseFloat(saved) : 2.0; // mm (estándar SAT 3COL)
   });
 
   const [mostrarAjustesAvanzados, setMostrarAjustesAvanzados] = useState<boolean>(false);
@@ -217,8 +217,8 @@ export function ModalImprimirEtiquetas({
       });
 
       const anchoEtiqueta = 32; // mm
-      const margenIzquierdo = Math.max(0, 3.8 + offsetX); // mm (desplazado a la derecha para centrar en SAT 3COL)
-      const gapHorizontal = Math.max(1, gapColumnas); // mm (por defecto 2.5 mm)
+      const margenIzquierdo = Math.max(0, 2.0 + offsetX); // mm (calibrado: 2.0mm despega del borde y centra exactamente en SAT 3COL)
+      const gapHorizontal = Math.max(1, gapColumnas); // mm (2.0 mm estándar entre columnas)
 
       celdasParaImpresion.filas.forEach((fila, filaIdx) => {
         if (filaIdx > 0) {
@@ -231,78 +231,99 @@ export function ModalImprimirEtiquetas({
           const x = margenIzquierdo + colIdx * (anchoEtiqueta + gapHorizontal);
           const centroX = x + anchoEtiqueta / 2;
 
-          // Punto de inicio vertical centrado (despega del borde superior y centra en los 25 mm)
-          let currentY = Math.max(1.0, 3.4 + offsetY);
-
-          // 1. Nombre de la empresa (opcional)
+          // 1. Nombre de la empresa (opcional, en la parte superior)
           if (mostrarNombreNegocio) {
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(5.5);
-            doc.setTextColor(70, 70, 70);
-            doc.text("MERCACRÉDITO", centroX, currentY, { align: "center" });
-            currentY += 2.6;
+            doc.setFontSize(5.0);
+            doc.setTextColor(80, 80, 80);
+            doc.text("MERCACRÉDITO", centroX, 3.4 + offsetY, { align: "center" });
           }
 
-          // 2. Nombre del producto (más legible y con buen tamaño)
+          // 2. Nombre del producto con Auto-Escalado y partición a 2 líneas seguras
+          const nombreLimpio = producto.nombre.trim().toUpperCase();
+          const anchoMaximoTexto = 26.0; // mm (deja 3.0 mm de margen libre a cada lado del sticker)
+
+          // Tamaño de fuente inteligente según la longitud del nombre
+          let fontSizeNombre = 6.4;
+          if (nombreLimpio.length <= 14) {
+            fontSizeNombre = 7.0;
+          } else if (nombreLimpio.length > 32) {
+            fontSizeNombre = 5.4;
+          }
+
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(7.2);
+          doc.setFontSize(fontSizeNombre);
           doc.setTextColor(0, 0, 0);
 
-          const nombreLineas = doc.splitTextToSize(producto.nombre.toUpperCase(), anchoEtiqueta - 2.5);
-          const lineasAMostrar = nombreLineas.slice(0, 2);
-          doc.text(lineasAMostrar, centroX, currentY, { align: "center" });
-          currentY += lineasAMostrar.length * 2.8 + 0.8;
+          // Partir en líneas respetando el ancho máximo de 26 mm
+          let lineas = doc.splitTextToSize(nombreLimpio, anchoMaximoTexto);
 
-          // 3. Precios según estilo seleccionado
+          // Máximo 2 líneas para NUNCA invadir ni tapar los precios
+          if (lineas.length > 2) {
+            let linea2 = lineas[1];
+            if (linea2.length > 18) {
+              linea2 = linea2.substring(0, 16).trim() + "...";
+            } else {
+              linea2 = linea2.trim() + "...";
+            }
+            lineas = [lineas[0], linea2];
+          }
+
+          // Posicionamiento vertical del nombre (equilibrado entre negocio y precios)
+          const startYNombre = mostrarNombreNegocio
+            ? (lineas.length === 1 ? 7.2 : 5.8)
+            : (lineas.length === 1 ? 5.8 : 4.6);
+          const lineHeightNombre = fontSizeNombre >= 6.5 ? 2.9 : 2.5;
+
+          lineas.forEach((lin: string, idx: number) => {
+            doc.text(lin, centroX, startYNombre + offsetY + idx * lineHeightNombre, { align: "center" });
+          });
+
+          // 3. Precios con POSICIONES ANCLADAS (Garantía absoluta de que nunca se mueven ni se cortan)
+          const ySeparador = 12.8 + offsetY;
+          const yContado = 15.6 + offsetY;
+          const yCredito = 18.6 + offsetY;
+
           if (estiloPrecio === "solo_contado") {
             doc.setFont("helvetica", "bold");
             doc.setFontSize(5.5);
             doc.setTextColor(80, 80, 80);
-            doc.text("PRECIO CONTADO", centroX, currentY, { align: "center" });
-            currentY += 3.0;
+            doc.text("PRECIO CONTADO", centroX, 13.5 + offsetY, { align: "center" });
 
             doc.setFont("helvetica", "bold");
             doc.setFontSize(12.0);
             doc.setTextColor(0, 0, 0);
-            doc.text(formatearMoneda(producto.precio_contado), centroX, currentY, { align: "center" });
-            currentY += 3.8;
+            doc.text(formatearMoneda(producto.precio_contado), centroX, 17.6 + offsetY, { align: "center" });
           } else if (estiloPrecio === "solo_credito") {
             doc.setFont("helvetica", "bold");
             doc.setFontSize(5.5);
             doc.setTextColor(80, 80, 80);
-            doc.text("PRECIO CRÉDITO", centroX, currentY, { align: "center" });
-            currentY += 3.0;
+            doc.text("PRECIO CRÉDITO", centroX, 13.5 + offsetY, { align: "center" });
 
             doc.setFont("helvetica", "bold");
             doc.setFontSize(12.0);
             doc.setTextColor(0, 0, 0);
-            doc.text(formatearMoneda(producto.precio_credito), centroX, currentY, { align: "center" });
-            currentY += 3.8;
+            doc.text(formatearMoneda(producto.precio_credito), centroX, 17.6 + offsetY, { align: "center" });
           } else {
-            // Ambos precios (Contado y Crédito) más grandes y destacados
-            doc.setDrawColor(160, 160, 160);
+            // Línea separadora limpia
+            doc.setDrawColor(170, 170, 170);
             doc.setLineWidth(0.2);
-            doc.line(x + 2, currentY - 0.4, x + anchoEtiqueta - 2, currentY - 0.4);
+            doc.line(x + 2.5, ySeparador, x + anchoEtiqueta - 2.5, ySeparador);
 
+            // Precios en negrilla 7.6pt nítidos y destacados
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(7.8);
+            doc.setFontSize(7.6);
             doc.setTextColor(0, 0, 0);
-            doc.text(`CONT: ${formatearMoneda(producto.precio_contado)}`, centroX, currentY + 2.0, { align: "center" });
-            currentY += 3.0;
-
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(7.8);
-            doc.setTextColor(0, 0, 0);
-            doc.text(`CRED: ${formatearMoneda(producto.precio_credito)}`, centroX, currentY + 2.0, { align: "center" });
-            currentY += 3.2;
+            doc.text(`CONT: ${formatearMoneda(producto.precio_contado)}`, centroX, yContado, { align: "center" });
+            doc.text(`CRED: ${formatearMoneda(producto.precio_credito)}`, centroX, yCredito, { align: "center" });
           }
 
-          // 4. Código del producto (opcional, más visible)
+          // 4. Código del producto (opcional, anclado en la parte inferior)
           if (mostrarCodigo && producto.codigo_producto) {
             doc.setFont("courier", "bold");
-            doc.setFontSize(6.6);
+            doc.setFontSize(6.4);
             doc.setTextColor(30, 30, 30);
-            doc.text(`COD: ${producto.codigo_producto}`, centroX, currentY + 1.6, { align: "center" });
+            doc.text(`COD: ${producto.codigo_producto}`, centroX, 21.2 + offsetY, { align: "center" });
           }
         });
       });
@@ -369,7 +390,7 @@ export function ModalImprimirEtiquetas({
 
   // Generar HTML puro para la ventana de impresión en iframe aislado
   const generarHTMLImpresion = (): string => {
-    const margenIzqTotal = Math.max(0, 3.8 + offsetX);
+    const margenIzqTotal = Math.max(0, 2.0 + offsetX);
     const gapCol = Math.max(1, gapColumnas);
     const paddingTop = Math.max(0.5, 2.4 + offsetY);
 
@@ -912,14 +933,26 @@ export function ModalImprimirEtiquetas({
                             step="0.2"
                             value={gapColumnas}
                             onChange={(e) =>
-                              guardarCalibracion(offsetY, offsetX, parseFloat(e.target.value) || 2.5)
+                              guardarCalibracion(offsetY, offsetX, parseFloat(e.target.value) || 2.0)
                             }
                             className="h-7 text-xs text-center p-1 bg-background"
                           />
                           <span className="text-[10px] text-muted-foreground">mm</span>
                         </div>
-                        <span className="text-[9px] text-muted-foreground">(SAT: 2.5)</span>
+                        <span className="text-[9px] text-muted-foreground">(SAT: 2.0)</span>
                       </div>
+                    </div>
+                    <div className="flex justify-end pt-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => guardarCalibracion(0, 0, 2.0)}
+                        className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground gap-1"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        Restablecer a valores de fábrica (0, 0, 2.0)
+                      </Button>
                     </div>
                   </div>
                 )}

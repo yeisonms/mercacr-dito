@@ -21,6 +21,9 @@ import {
   Trash2,
   Receipt,
   MoreVertical,
+  ShoppingBag,
+  Package,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -73,6 +76,7 @@ import {
   buscarClientesParaEstadoCuenta,
   obtenerEstadoCuenta,
   aplicarPenalidadCredicontado,
+  type ProductoVendidoDetalle,
 } from "@/services/estadoCuentaService";
 import { formatearMoneda } from "@/services/producto.service";
 import { ModalPago } from "@/components/pago/ModalPago";
@@ -82,8 +86,8 @@ import {
 } from "@/components/pago/ComprobanteReciboModal";
 import { ModalCorregirRecaudo } from "@/components/pago/ModalCorregirRecaudo";
 import { ModalAnularRecaudo } from "@/components/pago/ModalAnularRecaudo";
+import { ModalDevolucionProducto } from "@/components/pago/ModalDevolucionProducto";
 import { Textarea } from "@/components/ui/textarea";
-import { anularVentaYDevolver } from "@/services/ventaService";
 
 export const Route = createFileRoute("/estado-cuenta")({
   head: () => ({
@@ -125,36 +129,11 @@ function EstadoCuentaPage() {
   const [dialogPenalidadOpen, setDialogPenalidadOpen] = useState(false);
   const [creditoAPenalizar, setCreditoAPenalizar] = useState<string | null>(null);
 
-  const [dialogDevolucionOpen, setDialogDevolucionOpen] = useState(false);
-  const [motivoDevolucion, setMotivoDevolucion] = useState("");
+  // Estados para Devolución al Almacén
+  const [modalDevolucionOpen, setModalDevolucionOpen] = useState(false);
+  const [itemADevolver, setItemADevolver] = useState<ProductoVendidoDetalle | null>(null);
 
   const queryClient = useQueryClient();
-
-  const mutationDevolucion = useMutation({
-    mutationFn: async (creditoId: string) => {
-      if (!motivoDevolucion.trim()) throw new Error("Debe ingresar un motivo");
-      await anularVentaYDevolver(creditoId, motivoDevolucion);
-    },
-    onSuccess: () => {
-      toast.success("Venta anulada correctamente", {
-        description: "El crédito y sus pagos han sido revertidos. El stock ha sido devuelto.",
-      });
-      setDialogDevolucionOpen(false);
-      setMotivoDevolucion("");
-      queryClient.invalidateQueries({ queryKey: ["estado-cuenta", selectedClienteId] });
-      queryClient.invalidateQueries({ queryKey: ["creditosCobro"] }); 
-      queryClient.invalidateQueries({ queryKey: ["kpis-dashboard"] });
-    },
-    onError: (err: any) => {
-      toast.error("Error al anular la venta", {
-        description: err.message,
-      });
-    },
-  });
-
-  const handleAnularVenta = (creditoId: string) => {
-    mutationDevolucion.mutate(creditoId);
-  };
 
   const mutationPenalidad = useMutation({
     mutationFn: aplicarPenalidadCredicontado,
@@ -397,10 +376,10 @@ function EstadoCuentaPage() {
         {selectedClienteId && estadoCuenta && !loadingEstado && (
           <div className="space-y-6">
             {/* ENCABEZADO Y RESUMEN FINANCIERO */}
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-12">
               {/* Card 1: Datos Básicos del Cliente */}
               {estadoCuenta.cliente && (
-                <Card className="md:col-span-2 border-border/60 shadow-sm hover:shadow-md transition-all">
+                <Card className="md:col-span-7 border-border/60 shadow-sm hover:shadow-md transition-all">
                   <CardHeader className="pb-3 flex flex-row items-start justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -458,46 +437,37 @@ function EstadoCuentaPage() {
               )}
 
               {/* Card 2: Mini Resumen del Crédito */}
-              <Card className="border-border/60 shadow-sm hover:shadow-md transition-all bg-muted/10">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Banknote className="h-4 w-4 text-primary shrink-0" />
-                      <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                        Crédito Actual
-                      </CardTitle>
-                    </div>
-                    {estadoCuenta?.credito && estadoCuenta.credito.estado !== "Finalizado" && estadoCuenta.credito.estado !== "Cancelado" && estadoCuenta.credito.estado !== "Devuelto" && (
-                      <div className="flex gap-2">
-                        {(perfil?.rol === "Administrador" || perfil?.rol === "Gerencia") && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => setDialogDevolucionOpen(true)}
-                            className="h-8 text-xs font-bold px-3 gap-1.5 shadow-sm"
-                          >
-                            <AlertTriangle className="h-3.5 w-3.5" />
-                            Anular / Devolver
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          onClick={() => setIsModalPagoOpen(true)}
-                          className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 gap-1.5 shadow-sm"
-                        >
-                          <Banknote className="h-3.5 w-3.5" />
-                          Registrar Abono Libre
-                        </Button>
-                      </div>
-                    )}
+              <Card className="md:col-span-5 border-border/60 shadow-sm hover:shadow-md transition-all bg-muted/10 flex flex-col justify-between">
+                <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2 border-b border-border/30">
+                  <div className="flex items-center gap-2">
+                    <Banknote className="h-4 w-4 text-primary shrink-0" />
+                    <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                      Crédito Actual
+                    </CardTitle>
                   </div>
+                  {estadoCuenta?.credito && (
+                    <Badge
+                      variant="outline"
+                      className={
+                        estadoCuenta.credito.estado === "Al día" || estadoCuenta.credito.estado === "Activo"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-semibold"
+                          : estadoCuenta.credito.estado === "Moroso" || estadoCuenta.credito.estado === "En Mora"
+                            ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20 font-semibold"
+                            : estadoCuenta.credito.estado === "Devuelto"
+                              ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20 font-semibold"
+                              : "bg-muted text-muted-foreground"
+                      }
+                    >
+                      {estadoCuenta.credito.estado}
+                    </Badge>
+                  )}
                 </CardHeader>
-                <CardContent className="space-y-3.5 pt-1.5">
+                <CardContent className="space-y-3.5 pt-4">
                   {estadoCuenta.credito ? (
                     <>
                       {estadoCuenta.credito.estado === "Devuelto" && (
                         <div className="bg-red-100 text-red-800 border border-red-500 rounded-lg p-3 text-sm font-bold text-center uppercase tracking-wide shadow-sm flex items-center justify-center gap-2">
-                          <AlertTriangle className="h-5 w-5" />
+                          <AlertTriangle className="h-5 w-5 shrink-0" />
                           <span>VENTA ANULADA POR DEVOLUCIÓN: {estadoCuenta.credito.motivoDevolucion || 'Sin motivo'}</span>
                         </div>
                       )}
@@ -580,7 +550,7 @@ function EstadoCuentaPage() {
                       </div>
 
                       {estadoCuenta.credito.tipoVenta === "Credicontado" && !estadoCuenta.credito.penalidadAplicada && (
-                        <div className="pt-3 mt-2 border-t border-border/50">
+                        <div className="pt-2">
                           <Button 
                             variant="destructive" 
                             size="sm" 
@@ -590,6 +560,33 @@ function EstadoCuentaPage() {
                             <AlertTriangle className="h-4 w-4 mr-1.5" />
                             Aplicar Penalidad (Incumplimiento)
                           </Button>
+                        </div>
+                      )}
+
+                      {estadoCuenta.credito.estado !== "Finalizado" && estadoCuenta.credito.estado !== "Cancelado" && estadoCuenta.credito.estado !== "Devuelto" && (
+                        <div className="pt-3 border-t border-border/50 flex flex-col sm:flex-row gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => setIsModalPagoOpen(true)}
+                            className="h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 gap-1.5 shadow-sm flex-1"
+                          >
+                            <Banknote className="h-4 w-4 shrink-0" />
+                            <span>Registrar Abono Libre</span>
+                          </Button>
+                          {(perfil?.rol === "Administrador" || perfil?.rol === "Gerencia") && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => {
+                                setItemADevolver(null);
+                                setModalDevolucionOpen(true);
+                              }}
+                              className="h-9 text-xs font-bold px-3 gap-1.5 shadow-sm flex-1"
+                            >
+                              <RotateCcw className="h-4 w-4 shrink-0" />
+                              <span>Anular / Devolver</span>
+                            </Button>
+                          )}
                         </div>
                       )}
                     </>
@@ -602,21 +599,29 @@ function EstadoCuentaPage() {
               </Card>
             </div>
 
-            {/* PANEL DE TABS PARA AMORTIZACIONES E RECAUDOS */}
+            {/* PANEL DE TABS PARA AMORTIZACIONES, RECAUDOS Y PRODUCTOS */}
             {estadoCuenta.credito && (
               <Tabs defaultValue="cuotas" className="w-full">
-                <TabsList className="grid grid-cols-3 max-w-2xl h-10 border border-border bg-muted/40 p-1">
-                  <TabsTrigger value="cuotas" className="text-xs flex items-center gap-1.5 py-1.5">
+                <TabsList className="grid grid-cols-4 max-w-3xl h-10 border border-border bg-muted/40 p-1">
+                  <TabsTrigger value="cuotas" className="text-xs flex items-center justify-center gap-1.5 py-1.5">
                     <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
                     <span className="hidden sm:inline">Plan de Pagos</span>
+                    <span className="sm:hidden">Plan</span>
                   </TabsTrigger>
-                  <TabsTrigger value="recaudos" className="text-xs flex items-center gap-1.5 py-1.5">
+                  <TabsTrigger value="recaudos" className="text-xs flex items-center justify-center gap-1.5 py-1.5">
                     <History className="h-3.5 w-3.5 shrink-0" />
                     <span className="hidden sm:inline">Historial Recaudos</span>
+                    <span className="sm:hidden">Recaudos</span>
                   </TabsTrigger>
-                  <TabsTrigger value="gestiones" className="text-xs flex items-center gap-1.5 py-1.5">
+                  <TabsTrigger value="productos" className="text-xs flex items-center justify-center gap-1.5 py-1.5">
+                    <ShoppingBag className="h-3.5 w-3.5 shrink-0" />
+                    <span className="hidden sm:inline">Artículos Llevados</span>
+                    <span className="sm:hidden">Artículos</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="gestiones" className="text-xs flex items-center justify-center gap-1.5 py-1.5">
                     <Clock className="h-3.5 w-3.5 shrink-0" />
                     <span className="hidden sm:inline">Historial Gestiones</span>
+                    <span className="sm:hidden">Gestiones</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -822,7 +827,152 @@ function EstadoCuentaPage() {
                   </Card>
                 </TabsContent>
 
-                {/* CONTENIDO PESTAÑA 3: HISTORIAL DE GESTIONES */}
+                {/* CONTENIDO PESTAÑA 3: HISTORIAL DE ARTÍCULOS Y VENTAS */}
+                <TabsContent value="productos" className="mt-4">
+                  <Card className="border-border/60 shadow-sm">
+                    <CardHeader className="pb-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                            <ShoppingBag className="w-4 h-4 text-primary" />
+                            Historial de Artículos y Ventas
+                          </CardTitle>
+                          <CardDescription>
+                            Detalle de productos adquiridos por el cliente, cantidades y precios que justifican el saldo de la deuda.
+                          </CardDescription>
+                        </div>
+                        {estadoCuenta.productosLlevados && estadoCuenta.productosLlevados.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs py-1">
+                              {estadoCuenta.productosLlevados.reduce((acc, item) => acc + item.cantidad, 0)} artículos en total
+                            </Badge>
+                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-xs py-1 font-bold">
+                              Total Facturado: {formatearMoneda(estadoCuenta.productosLlevados.reduce((acc, item) => acc + item.subtotal, 0))}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0 sm:p-6 sm:pt-0">
+                      {(!estadoCuenta.productosLlevados || estadoCuenta.productosLlevados.length === 0) ? (
+                        <div className="p-8 text-center border-t sm:border border-dashed border-border/60 sm:rounded-xl bg-muted/10 mx-0 sm:mx-0">
+                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 mb-3">
+                            <Package className="h-6 w-6" />
+                          </div>
+                          <h4 className="text-sm font-semibold text-foreground">Sin desglose de artículos individuales</h4>
+                          <p className="mt-1 text-xs text-muted-foreground max-w-lg mx-auto">
+                            Este crédito proviene de la migración inicial de cartera o fue creado como un saldo global de deuda anterior sin inventario ítem por ítem.
+                          </p>
+                          <div className="mt-4 inline-flex flex-wrap items-center justify-center gap-3 rounded-lg border border-border/60 bg-muted/40 px-4 py-2 text-xs">
+                            <span className="text-muted-foreground">Valor del Crédito Inicial:</span>
+                            <span className="font-bold text-foreground">{formatearMoneda(estadoCuenta.credito.valorCredito)}</span>
+                            <span className="text-muted-foreground">|</span>
+                            <span className="text-muted-foreground">Saldo Pendiente Actual:</span>
+                            <span className="font-bold text-primary">{formatearMoneda(estadoCuenta.credito.saldoPendiente)}</span>
+                          </div>
+                          <p className="mt-3 text-[11px] text-muted-foreground italic">
+                            Las nuevas ventas o refinanciaciones registrarán automáticamente cada producto llevado con su fecha y precio.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader className="bg-muted/40">
+                              <TableRow>
+                                <TableHead>Fecha Venta</TableHead>
+                                <TableHead>Factura</TableHead>
+                                <TableHead>Código</TableHead>
+                                <TableHead>Producto</TableHead>
+                                <TableHead className="text-center">Cant.</TableHead>
+                                <TableHead className="text-right">Precio Unitario</TableHead>
+                                <TableHead className="text-right">Subtotal</TableHead>
+                                <TableHead className="text-center">Crédito</TableHead>
+                                <TableHead className="text-right pr-4">Acción</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {estadoCuenta.productosLlevados.map((item) => (
+                                <TableRow key={item.id} className="hover:bg-muted/20">
+                                  <TableCell className="text-xs font-medium whitespace-nowrap">
+                                    {item.fechaVenta ? (
+                                      <span className="flex items-center gap-1.5">
+                                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                                        {(() => {
+                                          try {
+                                            return format(new Date(item.fechaVenta), "dd/MM/yyyy", { locale: es });
+                                          } catch {
+                                            return item.fechaVenta.split("T")[0];
+                                          }
+                                        })()}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground italic">Sin fecha</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-xs font-semibold whitespace-nowrap">
+                                    <span className="rounded bg-muted px-2 py-0.5 font-mono text-[11px] border border-border/50">
+                                      {item.numeroFactura}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">
+                                    {item.productoCodigo}
+                                  </TableCell>
+                                  <TableCell className="text-xs font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                      <span className="font-semibold text-foreground">{item.productoNombre}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-center font-bold">
+                                    <Badge variant="secondary" className="px-2 py-0.5 text-xs font-bold">
+                                      {item.cantidad}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-right whitespace-nowrap text-muted-foreground">
+                                    {formatearMoneda(item.precioAplicado)}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-right font-bold whitespace-nowrap text-foreground">
+                                    {formatearMoneda(item.subtotal)}
+                                  </TableCell>
+                                  <TableCell className="text-center whitespace-nowrap">
+                                    <Badge
+                                      variant="outline"
+                                      className={
+                                        item.creditoId === estadoCuenta.credito.id
+                                          ? "bg-primary/10 text-primary border-primary/20 text-[10px]"
+                                          : "bg-muted text-muted-foreground border-border text-[10px]"
+                                      }
+                                    >
+                                      {item.creditoId === estadoCuenta.credito.id ? "Crédito Actual" : item.estadoCredito}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right pr-4 whitespace-nowrap">
+                                    {(perfil?.rol === "Administrador" || perfil?.rol === "Gerencia") && estadoCuenta.credito.estado !== "Devuelto" && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          setItemADevolver(item);
+                                          setModalDevolucionOpen(true);
+                                        }}
+                                        className="h-7 text-[11px] font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1"
+                                      >
+                                        <RotateCcw className="h-3 w-3" />
+                                        Devolver
+                                      </Button>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* CONTENIDO PESTAÑA 4: HISTORIAL DE GESTIONES */}
                 <TabsContent value="gestiones" className="mt-4">
                   <Card className="border-border/60 shadow-sm">
                     <CardHeader className="pb-3">
@@ -969,53 +1119,29 @@ function EstadoCuentaPage() {
         </DialogContent>
       </Dialog>
 
-        <Dialog open={dialogDevolucionOpen} onOpenChange={setDialogDevolucionOpen}>
-          <DialogContent className="max-w-md rounded-2xl p-6">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-rose-600">
-                <AlertTriangle className="h-5 w-5" />
-                Procesar Devolución / Anular Venta
-              </DialogTitle>
-              <DialogDescription className="pt-2">
-                ¿Estás seguro de que deseas anular esta venta? Esta acción no se puede deshacer. Se regresará el producto al inventario y se revertirán los cobros.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="mt-2 space-y-3">
-              <label className="text-sm font-medium text-foreground">Motivo de la devolución (Obligatorio)</label>
-              <Textarea
-                placeholder="Escribe el motivo detallado de la anulación..."
-                className="w-full min-h-[100px] resize-none"
-                value={motivoDevolucion}
-                onChange={(e) => setMotivoDevolucion(e.target.value)}
-              />
-            </div>
-            <DialogFooter className="mt-4 sm:justify-between gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setDialogDevolucionOpen(false)}
-                disabled={mutationDevolucion.isPending}
-                className="flex-1 rounded-xl"
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => estadoCuenta?.credito?.id && handleAnularVenta(estadoCuenta.credito.id)}
-                disabled={mutationDevolucion.isPending || !motivoDevolucion.trim()}
-                className="flex-1 rounded-xl bg-rose-600 hover:bg-rose-700"
-              >
-                {mutationDevolucion.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Anulando...
-                  </>
-                ) : (
-                  "Sí, anular venta"
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* MODAL DE DEVOLUCIÓN DE PRODUCTO O ANULACIÓN */}
+        {estadoCuenta?.credito && estadoCuenta?.cliente && (
+          <ModalDevolucionProducto
+            isOpen={modalDevolucionOpen}
+            onClose={() => {
+              setModalDevolucionOpen(false);
+              setItemADevolver(null);
+            }}
+            creditoId={itemADevolver?.creditoId || estadoCuenta.credito.id}
+            clienteId={estadoCuenta.cliente.id}
+            clienteNombre={`${estadoCuenta.cliente.nombres} ${estadoCuenta.cliente.apellidos}`}
+            usuarioId={perfil?.id || ""}
+            itemProducto={itemADevolver}
+            productosEnCredito={(estadoCuenta?.productosLlevados || []).filter(
+              (p) => p.creditoId === (itemADevolver?.creditoId || estadoCuenta.credito.id)
+            )}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ["estado-cuenta", selectedClienteId] });
+              queryClient.invalidateQueries({ queryKey: ["creditosCobro"] });
+              queryClient.invalidateQueries({ queryKey: ["kpis-dashboard"] });
+            }}
+          />
+        )}
 
         {estadoCuenta?.credito && estadoCuenta?.cliente && (
         <ModalPago 

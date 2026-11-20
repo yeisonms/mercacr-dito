@@ -732,7 +732,8 @@ function CobranzaPage() {
       fotoDinero?: File | null;
       observaciones?: string;
       usuarioId?: string;
-    }) => registrarRecaudo(values),
+      origenPago?: "Ruta" | "Almacen" | "CuotaInicial";
+    }) => registrarRecaudo({ ...values, origenPago: "Ruta" }),
     onSuccess: (data, variables) => {
       if (variables.metodoPago === "Efectivo") {
         toast.success("Pago en efectivo procesado y aprobado");
@@ -1423,6 +1424,7 @@ function CobranzaPage() {
           onClose={() => setIsModalPagoLibreOpen(false)}
           onSuccess={() => refetch()}
           creditoSeleccionado={creditoLibre}
+          origenDefault="Ruta"
         />
       )}
 

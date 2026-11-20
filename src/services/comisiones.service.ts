@@ -123,6 +123,8 @@ export async function obtenerReporteComisionesCobranza(
     .select(`
       valor_recibido,
       estado,
+      origen_pago,
+      observaciones,
       usuarios:cobrador_id (
         id, 
         nombre_completo, 
@@ -140,6 +142,18 @@ export async function obtenerReporteComisionesCobranza(
   const map = new Map<string, ReporteComisionCobranzaRow>();
 
   for (const row of data || []) {
+    // Excluir cuotas iniciales de las comisiones de cobranza (tanto por origen_pago como por observaciones históricas)
+    const esCuotaInicial = 
+      row.origen_pago === "CuotaInicial" ||
+      (row.observaciones && (
+        row.observaciones.toLowerCase().includes("abono inicial") ||
+        row.observaciones.toLowerCase().includes("pago automático al crear la venta")
+      ));
+
+    if (esCuotaInicial) {
+      continue;
+    }
+
     const usuario = Array.isArray(row.usuarios) ? row.usuarios[0] : row.usuarios;
     
     if (!usuario) continue;

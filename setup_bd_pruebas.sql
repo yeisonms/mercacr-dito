@@ -12,6 +12,7 @@ DROP TABLE IF EXISTS historial_alertas CASCADE;
 DROP TABLE IF EXISTS configuracion_negocio CASCADE;
 DROP TABLE IF EXISTS promesas_pago CASCADE;
 DROP TABLE IF EXISTS registro_visitas CASCADE;
+DROP TABLE IF EXISTS devoluciones_productos CASCADE;
 DROP TABLE IF EXISTS recaudos CASCADE;
 DROP TABLE IF EXISTS cuotas CASCADE;
 DROP TABLE IF EXISTS detalles_venta CASCADE;
@@ -158,9 +159,10 @@ CREATE TABLE recaudos (
     soporte_foto_dinero_url VARCHAR(255),
     soporte_comprobante_url VARCHAR(255),
     observaciones TEXT,
-    estado VARCHAR(20) DEFAULT 'Pendiente' CHECK (estado IN ('Pendiente', 'Aprobado', 'Rechazado')),
+    estado VARCHAR(20) DEFAULT 'Pendiente' CHECK (estado IN ('Pendiente', 'Aprobado', 'Rechazado', 'Devuelto')),
     fecha_revision TIMESTAMPTZ,
-    metodo_pago VARCHAR(30) DEFAULT 'Efectivo'
+    metodo_pago VARCHAR(30) DEFAULT 'Efectivo',
+    origen_pago VARCHAR(30) DEFAULT 'Ruta' CHECK (origen_pago IN ('Ruta', 'Almacen', 'CuotaInicial'))
 );
 
 CREATE TABLE registro_visitas (
@@ -216,6 +218,23 @@ CREATE TABLE logs_auditoria (
     direccion_ip VARCHAR(50)
 );
 
+CREATE TABLE devoluciones_productos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    credito_id UUID REFERENCES creditos(id) ON DELETE CASCADE,
+    producto_id UUID REFERENCES productos(id) ON DELETE RESTRICT,
+    cliente_id UUID REFERENCES clientes(id) ON DELETE CASCADE,
+    usuario_id UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+    cantidad INT NOT NULL DEFAULT 1,
+    precio_producto NUMERIC(12, 2) NOT NULL,
+    subtotal_devuelto NUMERIC(12, 2) NOT NULL,
+    monto_dinero_reconocido NUMERIC(12, 2) DEFAULT 0,
+    destino_dinero VARCHAR(50) NOT NULL,
+    credito_destino_id UUID REFERENCES creditos(id) ON DELETE SET NULL,
+    motivo TEXT NOT NULL,
+    estado_fisico VARCHAR(50) DEFAULT 'Bueno',
+    fecha_devolucion TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ====================================================================================
 -- POLÍTICAS DE SEGURIDAD RLS (ACCESO TOTAL PERMITIDO)
 -- ====================================================================================
@@ -234,6 +253,7 @@ ALTER TABLE promesas_pago ENABLE ROW LEVEL SECURITY;
 ALTER TABLE configuracion_negocio ENABLE ROW LEVEL SECURITY;
 ALTER TABLE historial_alertas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE logs_auditoria ENABLE ROW LEVEL SECURITY;
+ALTER TABLE devoluciones_productos ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "anon_all_roles" ON roles FOR ALL TO public USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all_usuarios" ON usuarios FOR ALL TO public USING (true) WITH CHECK (true);
@@ -249,6 +269,7 @@ CREATE POLICY "anon_all_promesas_pago" ON promesas_pago FOR ALL TO public USING 
 CREATE POLICY "anon_all_configuracion_negocio" ON configuracion_negocio FOR ALL TO public USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all_historial_alertas" ON historial_alertas FOR ALL TO public USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all_logs_auditoria" ON logs_auditoria FOR ALL TO public USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_devoluciones_productos" ON devoluciones_productos FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- ====================================================================================
 -- DATOS SEMILLA BÁSICOS (ROLES Y CONFIGURACIÓN)

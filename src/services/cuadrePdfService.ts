@@ -15,6 +15,8 @@ export interface GenerarPdfCuadreParams {
   totalEfectivo: number;
   totalTransferencia: number;
   totalGeneral: number;
+  totalEfectivoRuta?: number;
+  totalAlmacen?: number;
 }
 
 /**
@@ -147,7 +149,7 @@ export async function descargarPdfCuadreCaja(params: GenerarPdfCuadreParams): Pr
 
   // 4. Preparar datos para la tabla
   const tableHead = [
-    ["FECHA", "CLIENTE / CÉDULA", "FACTURA", "COBRADOR", "MÉTODO", "RECAUDO", "ESTADO"]
+    ["FECHA", "CLIENTE / CÉDULA", "FACTURA", "COBRADOR", "ORIGEN", "MÉTODO", "RECAUDO", "ESTADO"]
   ];
 
   const tableBody = cobros.map((cobro) => {
@@ -159,12 +161,18 @@ export async function descargarPdfCuadreCaja(params: GenerarPdfCuadreParams): Pr
     }
 
     const clienteTexto = `${cobro.clienteNombres} ${cobro.clienteApellidos}\nCC: ${cobro.clienteCedula}`;
+    const origenTexto = cobro.origenPago === "Almacen" 
+      ? "Almacén" 
+      : cobro.origenPago === "CuotaInicial" 
+        ? "Cuota In." 
+        : "Ruta";
 
     return [
       fechaStr,
       clienteTexto,
       cobro.numeroFactura || "-",
       cobro.cobradorNombre || "-",
+      origenTexto,
       cobro.metodoPago,
       formatearMoneda(cobro.valorRecibido),
       cobro.estado,
@@ -176,6 +184,7 @@ export async function descargarPdfCuadreCaja(params: GenerarPdfCuadreParams): Pr
     tableBody.push([
       "-",
       "No hay recaudos para los filtros seleccionados",
+      "-",
       "-",
       "-",
       "-",
@@ -211,17 +220,18 @@ export async function descargarPdfCuadreCaja(params: GenerarPdfCuadreParams): Pr
       fillColor: [248, 250, 252],
     },
     columnStyles: {
-      0: { cellWidth: 26 }, // Fecha
-      1: { cellWidth: 48 }, // Cliente / Cédula
-      2: { cellWidth: 22 }, // Factura
-      3: { cellWidth: 28 }, // Cobrador
-      4: { cellWidth: 22 }, // Método
-      5: { cellWidth: 22, halign: "right", fontStyle: "bold" }, // Recaudo
-      6: { cellWidth: 14, halign: "center" }, // Estado
+      0: { cellWidth: 24 }, // Fecha
+      1: { cellWidth: 44 }, // Cliente / Cédula
+      2: { cellWidth: 20 }, // Factura
+      3: { cellWidth: 26 }, // Cobrador
+      4: { cellWidth: 18 }, // Origen
+      5: { cellWidth: 20 }, // Método
+      6: { cellWidth: 20, halign: "right", fontStyle: "bold" }, // Recaudo
+      7: { cellWidth: 14, halign: "center" }, // Estado
     },
     didDrawCell: (data) => {
       // Color especial para el estado
-      if (data.section === "body" && data.column.index === 6) {
+      if (data.section === "body" && data.column.index === 7) {
         // Estado
       }
     },
@@ -278,36 +288,36 @@ export async function descargarPdfCuadreCaja(params: GenerarPdfCuadreParams): Pr
   doc.setDrawColor(203, 213, 225); // slate-300
   doc.roundedRect(marginLeft, totalsY, contentWidth, 22, 2, 2, "FD");
 
-  // Columna 1: Total Efectivo
+  // Columna 1: Total Efectivo en Ruta (A entregar)
   const summaryCol1 = marginLeft + 6;
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(71, 85, 105);
-  doc.text("Total Efectivo:", summaryCol1, totalsY + 8);
+  doc.text("Efectivo Ruta (A entregar):", summaryCol1, totalsY + 8);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
+  doc.setFontSize(10);
   doc.setTextColor(22, 101, 52); // green-800
-  doc.text(formatearMoneda(totalEfectivo), summaryCol1, totalsY + 16);
+  doc.text(formatearMoneda(params.totalEfectivoRuta ?? totalEfectivo), summaryCol1, totalsY + 16);
 
-  // Columna 2: Total Transferencias
+  // Columna 2: Pagos en Almacén / Caja
   const summaryCol2 = marginLeft + (contentWidth * 0.35);
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(71, 85, 105);
-  doc.text("Total Transferencias:", summaryCol2, totalsY + 8);
+  doc.text("Pagos en Almacén / Caja:", summaryCol2, totalsY + 8);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
-  doc.setTextColor(126, 34, 206); // purple-700
-  doc.text(formatearMoneda(totalTransferencia), summaryCol2, totalsY + 16);
+  doc.setFontSize(10);
+  doc.setTextColor(29, 78, 216); // blue-700
+  doc.text(formatearMoneda(params.totalAlmacen ?? 0), summaryCol2, totalsY + 16);
 
-  // Columna 3: TOTAL RECAUDADO (VISIBLE)
+  // Columna 3: TOTAL GENERAL CARTERA
   const summaryCol3 = marginLeft + (contentWidth * 0.68);
-  doc.setFontSize(8.5);
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(67, 56, 202); // indigo-700
-  doc.text("TOTAL RECAUDADO (VISIBLE):", summaryCol3, totalsY + 8);
+  doc.text("TOTAL GENERAL CARTERA:", summaryCol3, totalsY + 8);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(12);
   doc.setTextColor(67, 56, 202); // indigo-700
   doc.text(formatearMoneda(totalGeneral), summaryCol3, totalsY + 16);
 

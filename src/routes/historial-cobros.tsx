@@ -49,6 +49,7 @@ function HistorialCobrosPage() {
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(defaultDateRange);
   const [cobradorId, setCobradorId] = useState<string>("all");
+  const [origenFiltro, setOrigenFiltro] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
 
   const isUserAdmin = perfil?.rol === "Administrador" || perfil?.rol === "Gerencia" || perfil?.rol === "Auxiliar";
@@ -72,11 +73,12 @@ function HistorialCobrosPage() {
   const queryEndDate = dateRange?.to || queryStartDate;
 
   const { data: historial = [], isLoading } = useQuery({
-    queryKey: ["historial-cobros", queryStartDate.toISOString(), queryEndDate.toISOString(), cobradorId],
+    queryKey: ["historial-cobros", queryStartDate.toISOString(), queryEndDate.toISOString(), cobradorId, origenFiltro],
     queryFn: () => obtenerHistorialCobros({
       fechaInicio: queryStartDate,
       fechaFin: queryEndDate,
       cobradorId: isUserAdmin ? cobradorId : perfil?.id, // Seguridad extra
+      origenPago: origenFiltro !== "all" ? origenFiltro : undefined,
     }),
     enabled: isSupabaseConfigured && !!perfil,
   });
@@ -95,15 +97,35 @@ function HistorialCobrosPage() {
   }, [historial, searchTerm]);
 
   // Cálculo de totales sobre los datos actualmente visibles
-  const { totalEfectivo, totalTransferencia, totalGeneral } = useMemo(() => {
+  const { totalEfectivoRuta, totalTransferenciaRuta, totalAlmacen, totalCuotaInicial, totalGeneral, totalEfectivo, totalTransferencia } = useMemo(() => {
     return historialFiltrado.reduce(
       (acc, cobro) => {
         acc.totalGeneral += cobro.valorRecibido;
         if (cobro.metodoPago === "Efectivo") acc.totalEfectivo += cobro.valorRecibido;
         if (cobro.metodoPago === "Transferencia") acc.totalTransferencia += cobro.valorRecibido;
+
+        if (cobro.origenPago === "Ruta") {
+          if (cobro.metodoPago === "Efectivo") {
+            acc.totalEfectivoRuta += cobro.valorRecibido;
+          } else {
+            acc.totalTransferenciaRuta += cobro.valorRecibido;
+          }
+        } else if (cobro.origenPago === "Almacen") {
+          acc.totalAlmacen += cobro.valorRecibido;
+        } else if (cobro.origenPago === "CuotaInicial") {
+          acc.totalCuotaInicial += cobro.valorRecibido;
+        }
         return acc;
       },
-      { totalEfectivo: 0, totalTransferencia: 0, totalGeneral: 0 }
+      { 
+        totalEfectivoRuta: 0, 
+        totalTransferenciaRuta: 0, 
+        totalAlmacen: 0, 
+        totalCuotaInicial: 0, 
+        totalGeneral: 0,
+        totalEfectivo: 0,
+        totalTransferencia: 0 
+      }
     );
   }, [historialFiltrado]);
 
@@ -156,6 +178,8 @@ function HistorialCobrosPage() {
         totalEfectivo,
         totalTransferencia,
         totalGeneral,
+        totalEfectivoRuta,
+        totalAlmacen,
       });
 
       toast.success("PDF generado y descargado correctamente", { id: "descarga-cuadre-pdf" });
@@ -202,7 +226,7 @@ function HistorialCobrosPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               
               {/* Filtro Rango de Fechas */}
               <div className="flex flex-col gap-1.5">
@@ -274,6 +298,22 @@ function HistorialCobrosPage() {
                 </div>
               )}
 
+              {/* Filtro Origen de Recaudo */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">Origen del Recaudo</span>
+                <Select value={origenFiltro} onValueChange={setOrigenFiltro}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los orígenes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los orígenes</SelectItem>
+                    <SelectItem value="Ruta">Ruta (Cobro en calle / Cobrador)</SelectItem>
+                    <SelectItem value="Almacen">Almacén / Oficina (Caja central)</SelectItem>
+                    <SelectItem value="CuotaInicial">Cuota Inicial (Al crear venta)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Buscador de Texto */}
               <div className="flex flex-col gap-1.5">
                 <span className="text-sm font-medium">Buscador</span>
@@ -303,6 +343,7 @@ function HistorialCobrosPage() {
                   <TableHead className="font-semibold uppercase text-xs tracking-wider">Cliente</TableHead>
                   <TableHead className="font-semibold uppercase text-xs tracking-wider">Factura</TableHead>
                   <TableHead className="font-semibold uppercase text-xs tracking-wider">Cobrador</TableHead>
+                  <TableHead className="font-semibold uppercase text-xs tracking-wider text-center">Origen</TableHead>
                   <TableHead className="font-semibold uppercase text-xs tracking-wider">Método</TableHead>
                   <TableHead className="font-semibold uppercase text-xs tracking-wider text-right">Recaudo</TableHead>
                   <TableHead className="font-semibold uppercase text-xs tracking-wider text-center">Estado</TableHead>
@@ -317,13 +358,14 @@ function HistorialCobrosPage() {
                       <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-16 mx-auto" /></TableCell>
                     </TableRow>
                   ))
                 ) : historialFiltrado.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
                       No se encontraron cobros para los filtros seleccionados.
                     </TableCell>
                   </TableRow>
@@ -342,6 +384,20 @@ function HistorialCobrosPage() {
                         </TableCell>
                         <TableCell className="font-mono text-sm">{cobro.numeroFactura}</TableCell>
                         <TableCell className="text-sm">{cobro.cobradorNombre}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge 
+                            variant="outline" 
+                            className={
+                              cobro.origenPago === "Almacen"
+                                ? "bg-blue-50/70 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border-blue-200"
+                                : cobro.origenPago === "CuotaInicial"
+                                ? "bg-amber-50/70 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border-amber-200"
+                                : "bg-emerald-50/70 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 border-emerald-200"
+                            }
+                          >
+                            {cobro.origenPago === "Almacen" ? "Almacén" : cobro.origenPago === "CuotaInicial" ? "Cuota Inicial" : "Ruta"}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           <Badge 
                             variant="outline" 
@@ -374,19 +430,31 @@ function HistorialCobrosPage() {
                       </TableRow>
                     ))}
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableCell colSpan={7} className="p-0">
-                        <div className="flex flex-col sm:flex-row items-end justify-between p-4 px-6">
-                          <div className="flex items-center gap-6 mb-2 sm:mb-0">
-                            <div className="text-sm">
-                              <span className="text-muted-foreground">Total Efectivo: </span>
-                              <span className="font-bold text-green-600 dark:text-green-400">
-                                {formatearMoneda(totalEfectivo)}
+                      <TableCell colSpan={8} className="p-0">
+                        <div className="flex flex-col lg:flex-row items-end justify-between p-4 px-6 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full lg:w-auto">
+                            <div className="text-xs border rounded-lg p-2.5 bg-emerald-500/5 border-emerald-500/20">
+                              <span className="text-muted-foreground block text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400">
+                                Efectivo Ruta (A entregar)
+                              </span>
+                              <span className="font-extrabold text-base text-emerald-700 dark:text-emerald-400">
+                                {formatearMoneda(totalEfectivoRuta)}
                               </span>
                             </div>
-                            <div className="text-sm">
-                              <span className="text-muted-foreground">Total Transferencias: </span>
-                              <span className="font-bold text-purple-600 dark:text-purple-400">
-                                {formatearMoneda(totalTransferencia)}
+                            <div className="text-xs border rounded-lg p-2.5 bg-blue-500/5 border-blue-500/20">
+                              <span className="text-muted-foreground block text-[10px] uppercase font-bold text-blue-700 dark:text-blue-400">
+                                Pagos en Almacén (Caja Central)
+                              </span>
+                              <span className="font-extrabold text-base text-blue-700 dark:text-blue-400">
+                                {formatearMoneda(totalAlmacen)}
+                              </span>
+                            </div>
+                            <div className="text-xs border rounded-lg p-2.5 bg-purple-500/5 border-purple-500/20">
+                              <span className="text-muted-foreground block text-[10px] uppercase font-bold text-purple-700 dark:text-purple-400">
+                                Transferencias en Ruta
+                              </span>
+                              <span className="font-extrabold text-base text-purple-700 dark:text-purple-400">
+                                {formatearMoneda(totalTransferenciaRuta)}
                               </span>
                             </div>
                           </div>

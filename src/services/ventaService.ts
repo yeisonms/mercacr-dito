@@ -330,18 +330,26 @@ export async function procesarVenta(input: ProcesarVentaInput): Promise<{
 
   // Paso E: Registrar la cuota inicial como un recaudo aprobado de tipo CuotaInicial
   if (input.tipoVenta !== "Contado" && input.cuotaInicial > 0) {
-    const { error: errorRecaudo } = await supabase
+    const payloadCuotaInicial: any = {
+      credito_id: creditoId,
+      cobrador_id: input.vendedorId,
+      valor_recibido: input.cuotaInicial,
+      metodo_pago: input.metodoPago || "Efectivo",
+      estado: "Aprobado",
+      observaciones: "Abono Inicial (Pago Automático al crear la venta)",
+      origen_pago: "CuotaInicial",
+      fecha_revision: new Date().toISOString()
+    };
+
+    let { error: errorRecaudo } = await supabase
       .from("recaudos")
-      .insert({
-        credito_id: creditoId,
-        cobrador_id: input.vendedorId,
-        valor_recibido: input.cuotaInicial,
-        metodo_pago: input.metodoPago || "Efectivo",
-        estado: "Aprobado",
-        observaciones: "Abono Inicial (Pago Automático al crear la venta)",
-        origen_pago: "CuotaInicial",
-        fecha_revision: new Date().toISOString()
-      });
+      .insert(payloadCuotaInicial);
+
+    if (errorRecaudo && (errorRecaudo.message?.includes("origen_pago") || errorRecaudo.code === "PGRST204")) {
+      delete payloadCuotaInicial.origen_pago;
+      const retry = await supabase.from("recaudos").insert(payloadCuotaInicial);
+      errorRecaudo = retry.error;
+    }
 
     if (errorRecaudo) {
       console.error("Error al registrar el recaudo del abono inicial:", errorRecaudo);

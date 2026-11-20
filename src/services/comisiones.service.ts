@@ -118,7 +118,7 @@ export async function obtenerReporteComisionesCobranza(
   const startDate = new Date(anio, mes - 1, 1).toISOString();
   const endDate = new Date(anio, mes, 0, 23, 59, 59, 999).toISOString();
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("recaudos")
     .select(`
       valor_recibido,
@@ -134,6 +134,27 @@ export async function obtenerReporteComisionesCobranza(
     .gte("fecha_recaudo", startDate)
     .lte("fecha_recaudo", endDate)
     .eq("estado", "Aprobado");
+
+  if (error && (error.message?.includes("origen_pago") || error.code === "PGRST204")) {
+    console.warn("Columna 'origen_pago' no detectada en comisiones, reintentando consulta compatible...");
+    const fallbackRes = await supabase
+      .from("recaudos")
+      .select(`
+        valor_recibido,
+        estado,
+        observaciones,
+        usuarios:cobrador_id (
+          id, 
+          nombre_completo, 
+          porcentaje_cobranza
+        )
+      `)
+      .gte("fecha_recaudo", startDate)
+      .lte("fecha_recaudo", endDate)
+      .eq("estado", "Aprobado");
+    data = fallbackRes.data;
+    error = fallbackRes.error;
+  }
 
   if (error) {
     throw new Error(`Error obteniendo reporte de comisiones de cobranza: ${error.message}`);

@@ -406,20 +406,35 @@ export async function registrarRecaudo(input: RegistrarRecaudoInput): Promise<st
 
   const origenPago = input.origenPago || "Ruta";
 
-  const { data, error } = await supabase
+  const payloadRecaudo: any = {
+    credito_id: input.creditoId,
+    cobrador_id: cobradorId,
+    valor_recibido: input.valorRecibido,
+    metodo_pago: input.metodoPago,
+    soporte_foto_dinero_url: fotoUrl,
+    observaciones: input.observaciones || null,
+    estado: "Pendiente",
+    origen_pago: origenPago,
+  };
+
+  let { data, error } = await supabase
     .from("recaudos")
-    .insert({
-      credito_id: input.creditoId,
-      cobrador_id: cobradorId,
-      valor_recibido: input.valorRecibido,
-      metodo_pago: input.metodoPago,
-      soporte_foto_dinero_url: fotoUrl,
-      observaciones: input.observaciones || null,
-      estado: "Pendiente",
-      origen_pago: origenPago,
-    })
+    .insert(payloadRecaudo)
     .select("id")
     .single();
+
+  // Fallback defensivo: Si la columna origen_pago aún no existe en la BD o falta en el schema cache de PostgREST
+  if (error && (error.message?.includes("origen_pago") || error.code === "PGRST204")) {
+    console.warn("Columna 'origen_pago' no detectada en la BD, reintentando inserción sin ese campo...");
+    delete payloadRecaudo.origen_pago;
+    const retry = await supabase
+      .from("recaudos")
+      .insert(payloadRecaudo)
+      .select("id")
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error || !data) {
     console.error("Error al insertar el recaudo:", error);

@@ -80,7 +80,37 @@ export async function obtenerHistorialCobros(
     query = query.eq("origen_pago", origenPago);
   }
 
-  const { data, error } = await query;
+  let { data, error } = await query;
+
+  if (error && (error.message?.includes("origen_pago") || error.code === "PGRST204")) {
+    console.warn("Columna 'origen_pago' no detectada en historial, reintentando consulta compatible...");
+    let fallbackQuery = supabase
+      .from("recaudos")
+      .select(`
+        id,
+        valor_recibido,
+        fecha_recaudo,
+        metodo_pago,
+        estado,
+        observaciones,
+        cobrador:usuarios!recaudos_cobrador_id_fkey(nombre_completo),
+        credito:creditos(
+          numero_factura,
+          cliente:clientes(nombres, apellidos, cedula)
+        )
+      `)
+      .neq("estado", "Devuelto")
+      .gte("fecha_recaudo", start.toISOString())
+      .lte("fecha_recaudo", end.toISOString())
+      .order("fecha_recaudo", { ascending: false });
+
+    if (cobradorId && cobradorId !== "all") {
+      fallbackQuery = fallbackQuery.eq("cobrador_id", cobradorId);
+    }
+    const fallbackRes = await fallbackQuery;
+    data = fallbackRes.data;
+    error = fallbackRes.error;
+  }
 
   if (error) {
     console.error("Error al obtener historial de cobros:", error);
